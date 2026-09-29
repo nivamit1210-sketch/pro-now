@@ -25,13 +25,15 @@ type Props = {
   onBack: () => void;
   onOpenAddresses: () => void;
   onSent: (jobId: string) => void;
+  /** What the customer typed on home before choosing; it starts the description (W5 QA #12). */
+  initialText?: string;
 };
 
-export function RequestComposer({ serviceId, media, onBack, onOpenAddresses, onSent }: Props) {
+export function RequestComposer({ serviceId, media, onBack, onOpenAddresses, onSent, initialText = "" }: Props) {
   const { width, height } = useFrame();
   const addresses = useQuery({ queryKey: ["addresses"], queryFn: api.getAddresses });
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [answers, setAnswers] = useState<Array<{ questionId: string; optionIds?: string[]; textValue?: string; numberValue?: number }>>([]);
   const [sending, setSending] = useState(false);
   const [errorHe, setErrorHe] = useState<string | null>(null);

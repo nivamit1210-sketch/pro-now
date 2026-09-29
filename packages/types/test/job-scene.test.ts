@@ -129,7 +129,8 @@ describe("visitMoneyLineHe", () => {
       expect(visitMoneyLineHe(s, fee)).not.toMatch(/הצעת מחיר תישלח|ההצעה תגיע/);
     }
     // Before the diagnosis: the visit fee is all the app charges.
-    expect(visitMoneyLineHe("PRO_EN_ROUTE", fee)).toMatch(/כל מה שמשולם באפליקציה/);
+    // No money in the app (D1): the fee is paid to the professional directly.
+    expect(visitMoneyLineHe("PRO_EN_ROUTE", fee)).toMatch(/משלמים ישירות למקצוען/);
     // During it: the repair is settled with the professional directly.
     expect(visitMoneyLineHe("DIAGNOSIS", fee)).toMatch(/ישירות מול המקצוען/);
     // Finished with no quote: the fee is what is paid.
@@ -313,5 +314,16 @@ describe("releasing a job", () => {
 
   it("says nothing about a job that has not started", () => {
     expect(releaseBlockedHe("SEARCHING")).toBeNull();
+  });
+});
+
+describe("no money in the app (D1)", () => {
+  const facts = { paidDirectly: true, approvedTotalHe: "‏320 ‏₪", visitFeeHe: "‏180 ‏₪" };
+  it("never says the customer approved or will release a payment", () => {
+    for (const status of ["IN_PROGRESS", "COMPLETION_PENDING"] as const) {
+      const line = visitMoneyLineHe(status, facts)!;
+      expect(line).toContain("ישירות למקצוען");
+      expect(line).not.toMatch(/אישרתם|אחרי שתאשרו|משחרר/);
+    }
   });
 });

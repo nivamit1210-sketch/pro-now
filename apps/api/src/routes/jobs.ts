@@ -101,9 +101,27 @@ export default async function jobsRoutes(app: FastifyInstance) {
     return reply.send({ job: refreshedJob, dispatch: outcome });
   });
 
+  /**
+   * The customer's own jobs, newest first: how the home screen finds the
+   * job still in progress after a reload or a new tab (docs/21 W6).
+   */
+  app.get("/v1/jobs", { onRequest: requireRole("CUSTOMER") }, async (req) => {
+    const jobs = await app.prisma.job.findMany({
+      where: { customer: { userId: req.user!.userId } },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: { id: true, status: true, createdAt: true, service: { select: { nameHe: true } } },
+    });
+    return {
+      jobs: jobs.map((j) => ({ id: j.id, status: j.status, createdAt: j.createdAt.toISOString(), serviceNameHe: j.service.nameHe })),
+    };
+  });
+
   app.get("/v1/jobs/:id", { onRequest: requireRole("CUSTOMER") }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const job = await customerJob(app.prisma, req.user!.userId, id, {
+      service: { select: { nameHe: true, code: true, priceModel: true } },
+      review: { select: { overallRating: true } },
       events: { orderBy: { createdAt: "asc" } },
       offers: true,
       quotes: { include: { lineItems: true } },
@@ -139,6 +157,9 @@ export default async function jobsRoutes(app: FastifyInstance) {
       priceContext,
       // What the work came to, when the job closed without money in the app (D1).
       receipt: receiptFromEvents(job.events),
+      // Why a cancelled job ended, in the server's words (e.g. NO_PROFESSIONAL_AVAILABLE).
+      cancellationReason: cancellationReasonOf(job.events),
+      ratingGiven: job.review?.overallRating ?? null,
       paymentsInApp: app.config.IN_APP_PAYMENTS !== "off",
     });
   });
@@ -284,4 +305,11 @@ export default async function jobsRoutes(app: FastifyInstance) {
       return reply.send({ ok: true, status: target, presenceState: presence.to ?? undefined });
     });
   }
+}
+
+function cancellationReasonOf(events: Array<{ type: string; actor: string; metadata: unknown }>): string | null {
+  const cancelled = [...events].reverse().find((e) => e.type === "JOB_CANCELLED");
+  if (!cancelled) return null;
+  const reason = (cancelled.metadata as { reason?: unknown } | null)?.reason;
+  return typeof reason === "string" ? reason : `CANCELLED_BY_${cancelled.actor}`;
 }

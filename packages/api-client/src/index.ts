@@ -11,7 +11,18 @@
  * readable here): every call goes with `credentials: "include"` and no
  * token. Same origin in development and in production.
  */
-import type { AddressView, CatalogResponse, DispatchResultView, GeocodingResult, JobView, RequestMatch } from "@pro-now/types";
+import type {
+  AddressView,
+  CatalogResponse,
+  CustomerJobResponse,
+  DispatchResultView,
+  GeocodingResult,
+  JobMatchView,
+  JobView,
+  MyJobSummary,
+  OutsideAppReceiptView,
+  RequestMatch,
+} from "@pro-now/types";
 import type { CreateAddressInput, CustomerOnboardingInput, MatchFeedbackInput, MeResponse } from "@pro-now/validation";
 
 export type UploadKind = "PHOTO" | "VOICE_NOTE" | "DOCUMENT";
@@ -77,6 +88,20 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
     me: () => request<MeResponse>("GET", "/me"),
     saveOnboarding: (input: CustomerOnboardingInput) => request<{ ok: true }>("PATCH", "/me/customer", input),
     getCatalog: () => request<CatalogResponse>("GET", "/catalog"),
+    /** The customer's own jobs, newest first (docs/21 W6). */
+    listMyJobs: () => request<{ jobs: MyJobSummary[] }>("GET", "/jobs"),
+    getJob: (id: string) => request<CustomerJobResponse>("GET", `/jobs/${encodeURIComponent(id)}`),
+    /** Who is coming, their ETA and their own price; 409 before anyone is assigned. */
+    getJobMatch: (id: string) => request<JobMatchView>("GET", `/jobs/${encodeURIComponent(id)}/match`),
+    cancelJob: (id: string) => request<{ ok: true }>("POST", `/jobs/${encodeURIComponent(id)}/cancel`, {}),
+    confirmCompletion: (id: string) =>
+      request<{ ok: true; status: string; receipt?: OutsideAppReceiptView }>(
+        "POST",
+        `/jobs/${encodeURIComponent(id)}/confirm-completion`,
+        {}
+      ),
+    submitReview: (id: string, input: { overallRating: number; text?: string }) =>
+      request<{ review: { id: string } }>("POST", `/jobs/${encodeURIComponent(id)}/reviews`, input),
     /** Which services a typed sentence could be (docs/21 W5). */
     matchRequest: (text: string) => request<RequestMatch & { classifier: string }>("POST", "/match", { text }),
     /** What was suggested for a sentence, and what the customer chose. */

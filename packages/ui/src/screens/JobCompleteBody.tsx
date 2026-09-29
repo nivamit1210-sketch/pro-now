@@ -139,9 +139,12 @@ export function JobCompleteBody({
           </Surface>
 
           <View style={styles.payRow}>
-            <Pressable onPress={onDownloadInvoice} accessibilityRole="button">
-              <Text style={styles.link}>חשבונית</Text>
-            </Pressable>
+            {/* No invoice without somewhere to get one (as JobClosedBody's "Quiet"). */}
+            {onDownloadInvoice ? (
+              <Pressable onPress={onDownloadInvoice} accessibilityRole="button">
+                <Text style={styles.link}>חשבונית</Text>
+              </Pressable>
+            ) : null}
             <Text style={styles.payMethod} numberOfLines={1}>
               {paymentMethodLabelHe ??
                 (paymentCaptured

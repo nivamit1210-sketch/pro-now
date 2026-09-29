@@ -175,7 +175,7 @@ export function jobProgressHe(
       /* Amit, 2026-09-29: the app charges the visit and the diagnosis; the repair is settled between you. */
       return opts.fixed
         ? `${who} ${g("בודק", "בודקת")} מה צריך. עוד רגע מתחילים לפי מה שהזמנתם.`
-        : `${who} ${t.workHe === "התיקון" ? g("מאבחן", "מאבחנת") : g("בודק", "בודקת")}. באפליקציה משלמים רק על ${t.feeSubjectHe} — את המחיר של ${t.workHe} סוגרים ישירות ${g("איתו", "איתה")}.`;
+        : `${who} ${t.workHe === "התיקון" ? g("מאבחן", "מאבחנת") : g("בודק", "בודקת")}. את ${t.feeSubjectHe} ואת המחיר של ${t.workHe} סוגרים ישירות ${g("איתו", "איתה")} — באפליקציה לא עובר כסף.`;
     case "WAITING_QUOTE_APPROVAL":
       return "הצעת המחיר מחכה לאישור שלכם. אפשר לאשר, לשאול או לסרב.";
     case "IN_PROGRESS":
@@ -343,11 +343,27 @@ export interface VisitMoneyFacts {
   kind?: PricingKind;
   /** HOURLY: the rate, formatted — "₪110". */
   hourlyRateHe?: string | null;
+  /**
+   * No money moves through the app (docs/21 §5 D1): every amount is paid
+   * to the professional directly, so no line may speak of approving,
+   * holding or releasing a payment.
+   */
+  paidDirectly?: boolean;
 }
 
 export function visitMoneyLineHe(status: JobState, facts: VisitMoneyFacts = {}): string | null {
   const fee = facts.visitFeeHe ?? null;
   const t = facts.terms ?? DEFAULT_VISIT_TERMS;
+  if (facts.paidDirectly) {
+    const agreed = facts.approvedTotalHe ?? facts.fixedTotalHe ?? null;
+    if (status === "IN_PROGRESS") {
+      return agreed ? `הצעת המחיר: ${agreed} · משלמים ישירות למקצוען` : "משלמים ישירות למקצוען · באפליקציה לא עובר כסף";
+    }
+    if (status === "COMPLETION_PENDING") {
+      const due = agreed ?? fee;
+      return due ? `${due} · לתשלום ישירות למקצוען` : "משלמים ישירות למקצוען · באפליקציה לא עובר כסף";
+    }
+  }
   /* By the hour: the rate while he works, the total once he is done. */
   if (facts.kind === "HOURLY") {
     switch (status) {
@@ -411,8 +427,8 @@ export function visitMoneyLineHe(status: JobState, facts: VisitMoneyFacts = {}):
     case "PRO_EN_ROUTE":
     case "PRO_ARRIVED":
       return fee
-        ? `${t.feeHe} ${fee} · זה כל מה שמשולם באפליקציה`
-        : `${t.feeHe} לפי המקצוען · זה כל מה שמשולם באפליקציה`;
+        ? `${t.feeHe} ${fee} · משלמים ישירות למקצוען`
+        : `${t.feeHe} לפי המקצוען · משלמים ישירות למקצוען`;
 
     /*
      * He is looking now. The promise is the same and its TIMING is what

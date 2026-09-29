@@ -257,7 +257,7 @@ const run = async () => {
   const early = await call("POST", `/api/v1/jobs/${jobId}/reviews`, {
     token: custToken,
     idem: "early-" + Date.now(),
-    body: { overallRating: 5, comment: "מוקדם מדי" },
+    body: { overallRating: 5, text: "מוקדם מדי" },
   });
   early.status === 409
     ? ok("a review before payment is refused")
@@ -343,7 +343,7 @@ const run = async () => {
   const review = await call("POST", `/api/v1/jobs/${jobId}/reviews`, {
     token: custToken,
     idem: "rev-" + Date.now(),
-    body: { overallRating: 5, comment: "הגיע מהר, פתר הכול" },
+    body: { overallRating: 5, text: "הגיע מהר, פתר הכול" },
   });
   review.status === 200
     ? ok("the customer reviews the job")

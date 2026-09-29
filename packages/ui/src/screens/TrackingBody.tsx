@@ -1054,12 +1054,14 @@ export function TrackingBody({
                 already went has no reason to be careful with it.
                 ---------------------------------------------------------- */}
             <Text style={styles.holdNote}>
-              {paymentPromiseHe("COMPLETION_PENDING", "customer")}
+              {money?.paidDirectly
+                ? "כאן מאשרים שהעבודה הסתיימה. באפליקציה לא עובר כסף — את הסכום משלמים ישירות לבעל המקצוע."
+                : paymentPromiseHe("COMPLETION_PENDING", "customer")}
             </Text>
             <Pressable
               onPress={onConfirmCompletion}
               accessibilityRole="button"
-              accessibilityLabel="אישור שהעבודה הושלמה, ומעבר לתשלום"
+              accessibilityLabel={money?.paidDirectly ? "אישור שהעבודה הושלמה" : "אישור שהעבודה הושלמה, ומעבר לתשלום"}
               style={({ pressed }) => [styles.confirmBtn, pressed && { opacity: 0.9 }]}
             >
               {/*
@@ -1078,7 +1080,9 @@ export function TrackingBody({
                 * given.
                 */}
               <Text style={styles.confirmLabel}>
-                {money?.approvedTotalHe
+                {money?.paidDirectly
+                  ? "אישור שהעבודה הסתיימה"
+                  : money?.approvedTotalHe
                   ? `אישור תשלום · ${money.approvedTotalHe}`
                   : money?.fixedTotalHe
                     ? `אישור תשלום · ${money.fixedTotalHe}`

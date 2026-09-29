@@ -34,7 +34,9 @@ describe("priceExplainer", () => {
     const out = priceExplainer(price);
     expect(out.headline).toContain("179");
     // The critical sentence: the repair itself is settled directly, not through the app.
-    expect(out.detail).toContain("ישירות מול המקצוען");
+    // No money in the app (D1): paid to the professional directly.
+    expect(out.detail).toContain("משלמים ישירות למקצוען");
+    expect(out.detail).not.toContain("משולם באפליקציה");
     expect(out.detail).not.toContain("מחיר קבוע");
   });
 
@@ -42,7 +44,7 @@ describe("priceExplainer", () => {
     const out = priceExplainer({ priceModel: "VISIT_QUOTE", currency: "ILS", visitFeeMinorUnits: 17900 }, { stage: "service" });
     expect(out.headline).not.toContain("179");
     expect(out.headline).toContain("לפי המקצוען");
-    expect(out.detail).toContain("כל מה שמשולם באפליקציה");
+    expect(out.detail).toContain("באפליקציה לא עובר כסף");
   });
 
   it("on the match, the fee is that professional's", () => {

@@ -602,3 +602,31 @@ export interface AreaAvailabilityView {
   staleAfterSeconds: number;
   services: ServiceAvailabilityView[];
 }
+
+/** `GET /api/v1/jobs`: the customer's own jobs, newest first. */
+export interface MyJobSummary {
+  id: string;
+  status: JobState;
+  createdAt: string;
+  serviceNameHe: string;
+}
+
+/** What the job closed with while no money moves through the app (D1). */
+export interface OutsideAppReceiptView {
+  paidInApp: false;
+  amountMinorUnits: number | null;
+  currency: string;
+  basis: string | null;
+  reason: string | null;
+}
+
+/** `GET /api/v1/jobs/:id`, for the customer. */
+export interface CustomerJobResponse {
+  job: JobView & { service: { nameHe: string; code: string; priceModel: PriceModel } };
+  priceContext: unknown;
+  receipt: OutsideAppReceiptView | null;
+  paymentsInApp: boolean;
+  cancellationReason: string | null;
+  /** The customer's own rating of this job, once given. */
+  ratingGiven: number | null;
+}

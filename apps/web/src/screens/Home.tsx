@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { View } from "react-native";
 import { useNavigate } from "react-router";
 import {
+  ActiveJobCapsule,
   AppHeader,
   AppMenuBody,
+  CAPSULE_HEIGHT,
   CustomerHomeBody,
   catalogHiddenServices,
   catalogHomeServices,
@@ -47,12 +50,21 @@ export function Home() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("home");
   const [requestServiceId, setRequestServiceId] = useState<string | null>(null);
+  // The sentence the service was chosen from, carried into the request.
+  const [typedText, setTypedText] = useState("");
   const me = useMe();
   const media = useWebMediaCapture();
   /* The face they chose, in the header, as in the demo; the glyph if none. */
   const chosen = avatarById(me.data?.customer?.avatarId ?? null);
   const avatarUri = chosen ? ((worldSources[chosen.portraitAssetId] as { uri?: string } | undefined)?.uri ?? null) : null;
-  const bodyH = height - HEADER_H;
+  /*
+   * A job still in progress is one tap away from home, after a reload or in
+   * a new tab (docs/21 W6). Closed and cancelled jobs are history, not a
+   * capsule.
+   */
+  const myJobs = useQuery({ queryKey: ["my-jobs"], queryFn: api.listMyJobs, refetchInterval: 30_000 });
+  const active = myJobs.data?.jobs.find((j) => j.status !== "CLOSED" && j.status !== "CANCELLED") ?? null;
+  const bodyH = height - HEADER_H - (active ? CAPSULE_HEIGHT : 0);
 
   const signOut = async () => {
     await authClient.signOut();
@@ -64,13 +76,18 @@ export function Home() {
       <RequestComposer
         serviceId={requestServiceId}
         media={media}
-        onBack={() => setRequestServiceId(null)}
+        initialText={typedText}
+        onBack={() => {
+          setTypedText("");
+          setRequestServiceId(null);
+        }}
         onOpenAddresses={() => navigate("/addresses")}
         onSent={(jobId) => {
           media.capture.onClearPhotos?.();
           media.capture.onDeleteVoice?.();
-          window.alert(`הקריאה נשלחה · ${jobId}`);
+          setTypedText("");
           setRequestServiceId(null);
+          navigate(`/jobs/${jobId}`);
         }}
       />
     );
@@ -133,6 +150,7 @@ export function Home() {
             capture={media.capture}
             onSelectService={setRequestServiceId}
             onTextChoice={(choice) => {
+              setTypedText(choice.text);
               // Feedback only; a failure here must never stand between the
               // customer and the service they chose.
               void api.sendMatchFeedback(choice).catch(() => {});
@@ -144,6 +162,29 @@ export function Home() {
           />
         )}
       </View>
+      {active ? (
+        <ActiveJobCapsule
+          textHe={`${active.serviceNameHe} · ${ACTIVE_LABEL_HE[active.status] ?? "בטיפול"}`}
+          live
+          onPress={() => navigate(`/jobs/${active.id}`)}
+          width={width}
+        />
+      ) : null}
     </View>
   );
 }
+
+/** What the capsule says for each stage, in the demo's words. */
+const ACTIVE_LABEL_HE: Partial<Record<string, string>> = {
+  DRAFT: "מחפשים מקצוען",
+  SEARCHING: "מחפשים מקצוען",
+  OFFERING: "מחפשים מקצוען",
+  PRO_ASSIGNED: "נמצא מקצוען",
+  PRO_EN_ROUTE: "בדרך אליך",
+  PRO_ARRIVED: "הגיע",
+  DIAGNOSIS: "בודק את הבעיה",
+  WAITING_QUOTE_APPROVAL: "הצעת מחיר",
+  IN_PROGRESS: "בעבודה",
+  COMPLETION_PENDING: "סיים — מחכה לאישורך",
+  REVIEW_PENDING: "איך היה?",
+};
