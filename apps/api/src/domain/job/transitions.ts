@@ -43,7 +43,13 @@ const TRANSITIONS: Record<JobState, JobState[]> = {
   WAITING_QUOTE_APPROVAL: ["IN_PROGRESS", "CANCELLED", "DISPUTED"],
   IN_PROGRESS: ["COMPLETION_PENDING", "CANCELLED", "DISPUTED"],
   COMPLETION_PENDING: ["COMPLETED"],
-  COMPLETED: ["PAYMENT_PENDING"],
+  /*
+   * COMPLETED → REVIEW_PENDING: no money moves through the app (D1,
+   * docs/21 §5). The customer pays the professional directly, the job
+   * records what was owed, and the review opens. Only
+   * `closeWithoutPayment` takes this edge.
+   */
+  COMPLETED: ["PAYMENT_PENDING", "REVIEW_PENDING"],
   PAYMENT_PENDING: ["PAYMENT_CAPTURED", "CANCELLED", "DISPUTED"],
   PAYMENT_CAPTURED: ["REVIEW_PENDING"],
   REVIEW_PENDING: ["CLOSED"],

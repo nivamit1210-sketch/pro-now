@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { createJobSchema } from "@pro-now/validation";
 import { triggerDispatch } from "../domain/dispatch/dispatch-service.js";
 import { capturePaymentForJob } from "../domain/payments/capture-payment.js";
+import { closeWithoutPayment, receiptFromEvents } from "../domain/payments/close-without-payment.js";
 import {
   advancePresence,
   releaseAfterCompletion,
@@ -133,7 +134,13 @@ export default async function jobsRoutes(app: FastifyInstance) {
         })
       : null;
 
-    return reply.send({ job, priceContext });
+    return reply.send({
+      job,
+      priceContext,
+      // What the work came to, when the job closed without money in the app (D1).
+      receipt: receiptFromEvents(job.events),
+      paymentsInApp: app.config.IN_APP_PAYMENTS !== "off",
+    });
   });
 
   /**
@@ -168,6 +175,12 @@ export default async function jobsRoutes(app: FastifyInstance) {
         metadata: {},
       },
     });
+
+    // No money in the app (D1): record what is owed and open the review.
+    if (app.config.IN_APP_PAYMENTS === "off") {
+      const receipt = await closeWithoutPayment(app.prisma, id);
+      return reply.send({ ok: true, status: "REVIEW_PENDING", receipt });
+    }
 
     const outcome = await capturePaymentForJob(
       app.prisma,

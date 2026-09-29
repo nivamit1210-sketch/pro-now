@@ -89,27 +89,26 @@ export default async function proJobsRoutes(app: FastifyInstance) {
      * The row is mapped rather than passed through: `QuoteView.createdAt`
      * is an ISO string and the line items are the part the screen shows.
      */
+    const toView = (q: (typeof job.quotes)[number]): QuoteView => ({
+      id: q.id,
+      jobId: q.jobId,
+      version: q.version,
+      versionHash: q.versionHash,
+      status: q.status,
+      totalMinorUnits: q.totalMinorUnits,
+      notes: q.notes,
+      createdAt: q.createdAt.toISOString(),
+      lineItems: q.lineItems.map((li) => ({
+        id: li.id,
+        quoteId: li.quoteId,
+        description: li.description,
+        quantity: li.quantity,
+        unitPriceMinorUnits: li.unitPriceMinorUnits,
+        kind: li.kind,
+      })),
+    });
     const sentQuote = job.quotes.find((q) => q.status === "SENT");
-    const pendingQuote: QuoteView | null = sentQuote
-      ? {
-          id: sentQuote.id,
-          jobId: sentQuote.jobId,
-          version: sentQuote.version,
-          versionHash: sentQuote.versionHash,
-          status: sentQuote.status,
-          totalMinorUnits: sentQuote.totalMinorUnits,
-          notes: sentQuote.notes,
-          createdAt: sentQuote.createdAt.toISOString(),
-          lineItems: sentQuote.lineItems.map((li) => ({
-            id: li.id,
-            quoteId: li.quoteId,
-            description: li.description,
-            quantity: li.quantity,
-            unitPriceMinorUnits: li.unitPriceMinorUnits,
-            kind: li.kind,
-          })),
-        }
-      : null;
+    const pendingQuote: QuoteView | null = sentQuote ? toView(sentQuote) : null;
 
     const etaSeconds = acceptedOffer?.etaSecondsSnapshot ?? null;
 
@@ -168,6 +167,9 @@ export default async function proJobsRoutes(app: FastifyInstance) {
       payoutMinorUnits,
       payoutIsEstimate,
       pendingQuote,
+      // The agreed quote. With no money in the app (D1) a quote is approved
+      // on sending, so this is where the professional sees what they sent.
+      approvedQuote: approvedQuote ? toView(approvedQuote) : null,
       media,
     };
 

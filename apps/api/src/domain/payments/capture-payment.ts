@@ -93,15 +93,12 @@ export async function workedMinutesFor(
   return minutes >= 0 ? Math.round(minutes) : null;
 }
 
-export async function capturePaymentForJob(
-  prisma: PrismaClient,
-  payments: PaymentProvider,
-  jobId: string,
-  idempotencyKey: string
-): Promise<CaptureOutcome> {
-  const existing = await prisma.payment.findUnique({ where: { idempotencyKey } });
-  if (existing) return { status: "ALREADY_SETTLED", paymentId: existing.id };
-
+/**
+ * What the job's work comes to, from the professional's own configured
+ * price, the approved quote and the measured work — or the reason it
+ * cannot be said. Shared by the ledger path and the no-money path (D1).
+ */
+export async function settlementForJob(prisma: PrismaClient, jobId: string) {
   const job = await prisma.job.findUniqueOrThrow({
     where: { id: jobId },
     include: { service: true, quotes: true },
@@ -120,7 +117,7 @@ export async function capturePaymentForJob(
 
   const approvedQuote = job.quotes.find((q) => q.id === job.approvedQuoteId) ?? null;
 
-  const settlement = settle({
+  return settle({
     priceModel: job.service.priceModel as PriceModel,
     basePriceMinorUnits: professionalService?.basePriceMinorUnits ?? null,
     minimumBillableMinutes: professionalService?.minimumBillableMinutes ?? null,
@@ -132,6 +129,19 @@ export async function capturePaymentForJob(
     // than guessing, which is why this is null and not zero.
     distanceKm: null,
   });
+}
+
+export async function capturePaymentForJob(
+  prisma: PrismaClient,
+  payments: PaymentProvider,
+  jobId: string,
+  idempotencyKey: string
+): Promise<CaptureOutcome> {
+  const existing = await prisma.payment.findUnique({ where: { idempotencyKey } });
+  if (existing) return { status: "ALREADY_SETTLED", paymentId: existing.id };
+
+  const job = await prisma.job.findUniqueOrThrow({ where: { id: jobId }, select: { customerId: true } });
+  const settlement = await settlementForJob(prisma, jobId);
 
   if (!settlement.ok) {
     await prisma.jobEvent.create({

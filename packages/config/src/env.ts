@@ -44,6 +44,14 @@ export const envSchema = z.object({
   // Vendor flags — 'sandbox' is the only supported value until a business
   // decision is made per /docs/18-ROADMAP.md §Open Decisions.
   PAYMENT_PROVIDER: z.enum(["sandbox"]).default("sandbox"),
+  /**
+   * Whether money moves through the app (docs/21 §5 D1, DECIDED
+   * 2026-09-29: not in the MVP). `off`: a quote is approved when it is
+   * sent, and a completed job goes to review with a receipt of what is
+   * owed to the professional directly. `sandbox`: the full ledger path
+   * against the sandbox provider, for developing payments.
+   */
+  IN_APP_PAYMENTS: z.enum(["off", "sandbox"]).default("off"),
   IDENTITY_PROVIDER: z.enum(["sandbox"]).default("sandbox"),
   MAPS_PROVIDER: z.enum(["sandbox", "google"]).default("sandbox"),
   GEOCODING_PROVIDER: z.enum(["nominatim", "fixture"]).default("nominatim"),

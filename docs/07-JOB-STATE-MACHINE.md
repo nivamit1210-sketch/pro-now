@@ -33,7 +33,10 @@ IN_PROGRESS
 COMPLETION_PENDING
   → COMPLETED
 COMPLETED
-  → PAYMENT_PENDING
+  → PAYMENT_PENDING   (IN_APP_PAYMENTS=sandbox: the ledger path)
+  → REVIEW_PENDING    (IN_APP_PAYMENTS=off, the MVP default, D1: no money moves;
+                       a SETTLED_OUTSIDE_APP event records what is owed to the
+                       professional directly, from the same settlement)
 PAYMENT_PENDING
   → PAYMENT_CAPTURED
   → (recoverable failure → retry → PAYMENT_CAPTURED, or CANCELLED/DISPUTED per policy)
@@ -42,6 +45,11 @@ PAYMENT_CAPTURED
 REVIEW_PENDING
   → CLOSED
 ```
+While no money moves through the app (docs/21 §5 D1), a quote is approved
+by the system when it is sent (`QUOTE_APPROVED`, actor `SYSTEM`), so
+`WAITING_QUOTE_APPROVAL` is passed through immediately. "Only the orderer
+approves" returns with in-app payments.
+
 Any cancellation/dispute transition requires an allowed
 `(source_state, actor, reason_code) → target_state` matrix entry — this
 matrix lives in `apps/api/src/domain/job/transitions.ts` and is unit-tested

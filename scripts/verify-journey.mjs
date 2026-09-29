@@ -19,7 +19,8 @@
  * Requires: the API on :4000, a seeded database, and demonstration
  * professionals (`npm run db:seed:dev`). Run: `npm run verify:journey`.
  */
-const API = "http://127.0.0.1:4000";
+// API_URL points it at a server on another port (e.g. beside a running dev server).
+const API = process.env.API_URL ?? "http://127.0.0.1:4000";
 
 let failures = 0;
 const line = (s) => console.log(s);
@@ -222,18 +223,25 @@ const run = async () => {
 
   // The bug fixed on the move: this used to be null forever.
   const proJob2 = await call("GET", `/api/v1/pro/jobs/${jobId}`, { token: proToken });
-  proJob2.json?.pendingQuote?.id === quoteId
-    ? ok("the pending quote is visible to the professional", `${proJob2.json.pendingQuote.lineItems?.length ?? 0} line items`)
+  (proJob2.json?.pendingQuote?.id ?? proJob2.json?.approvedQuote?.id) === quoteId
+    ? ok("the quote is visible to the professional", `${(proJob2.json.pendingQuote ?? proJob2.json.approvedQuote).lineItems?.length ?? 0} line items`)
     : bad("the pending quote is visible to the professional", JSON.stringify(proJob2.json?.pendingQuote));
 
-  const approve = await call("POST", `/api/v1/quotes/${quoteId}/approve`, {
-    token: custToken,
-    idem: "appr-" + Date.now(),
-    body: { quoteId, quoteVersionHash: versionHash },
-  });
-  approve.status === 200
-    ? ok("customer approves the quote")
-    : bad("customer approves the quote", `${approve.status} ${approve.text.slice(0, 200)}`);
+  // With no money in the app (IN_APP_PAYMENTS=off, D1) the quote is
+  // approved on sending; with payments on, the customer approves it.
+  const noMoney = quote.json?.autoApproved === true;
+  if (noMoney) {
+    ok("the quote is approved on sending (no money in the app, D1)");
+  } else {
+    const approve = await call("POST", `/api/v1/quotes/${quoteId}/approve`, {
+      token: custToken,
+      idem: "appr-" + Date.now(),
+      body: { quoteId, quoteVersionHash: versionHash },
+    });
+    approve.status === 200
+      ? ok("customer approves the quote")
+      : bad("customer approves the quote", `${approve.status} ${approve.text.slice(0, 200)}`);
+  }
 
   line("\n== THE END ==");
   // Approving the quote already moved the job to IN_PROGRESS — the work
@@ -271,7 +279,16 @@ const run = async () => {
     token: custToken,
     idem: "confirm-" + Date.now(),
   });
-  confirmed.status === 200 && confirmed.json?.status === "CAPTURED"
+  if (noMoney) {
+    confirmed.status === 200 && confirmed.json?.status === "REVIEW_PENDING" && confirmed.json?.receipt?.paidInApp === false
+      ? ok(
+          "the customer confirms; no money moves, the receipt says what is owed",
+          confirmed.json.receipt.amountMinorUnits === null
+            ? `no amount: ${confirmed.json.receipt.reason}`
+            : `₪${(confirmed.json.receipt.amountMinorUnits / 100).toFixed(2)} to the professional directly`
+        )
+      : bad("the customer confirms and the review opens", `${confirmed.status} ${confirmed.text.slice(0, 200)}`);
+  } else confirmed.status === 200 && confirmed.json?.status === "CAPTURED"
     ? ok(
         "the customer confirms and the payment is captured",
         `₪${(confirmed.json.amountMinorUnits / 100).toFixed(2)} · ${confirmed.json.ledgerRows} ledger row(s)`
@@ -293,13 +310,18 @@ const run = async () => {
    *
    * A ledger that is neither is the bug this is looking for.
    */
-  const rows = confirmed.json?.ledgerRows;
+  const rows = noMoney ? null : confirmed.json?.ledgerRows;
   const after = await call("GET", "/api/v1/pro/earnings", { token: proToken });
   const chargedHere = (after.json?.grossMinorUnits ?? 0) - grossBefore;
   const payableHere = (after.json?.netMinorUnits ?? 0) - netBefore;
   const amount = confirmed.json?.amountMinorUnits ?? 0;
+  const chargedHereOrZero = () => chargedHere;
 
-  if (rows === 1) {
+  if (noMoney) {
+    chargedHereOrZero() === 0
+      ? ok("no money in the app, so the earnings ledger did not move")
+      : bad("no money in the app, so the earnings ledger did not move", `gross moved by ${chargedHereOrZero()}`);
+  } else if (rows === 1) {
     chargedHere === amount && payableHere === 0
       ? ok(
           "no commission set, so nothing is invented",

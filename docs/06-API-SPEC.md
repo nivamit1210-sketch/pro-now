@@ -59,6 +59,12 @@ stores the key + response for replay.
 - Private **job channel**, authorized to job participants + admin only:
   offer/offer-expired, assignment, job-state, quote, approval, location
   stream, payment state.
+- **As built (W6, 2026-09-30):** the job channel sends `READY` on connect and
+  `JOB_EVENT {eventType, at}` for every `job_events` row written for the job,
+  by any writer (a Prisma query extension publishes to an in-process bus).
+  It carries no state: the client re-reads `GET /v1/jobs/:id`. A client
+  message is answered with `PONG` (keep-alive). Offer pushes, location and
+  the user channel are W9.
 - Events are versioned with sequence IDs to support dedupe/resync on
   reconnect. No sensitive broadcast rooms. Push notifications (FCM/APNs)
   are a wake/fallback mechanism only — the socket + a resync-from-server

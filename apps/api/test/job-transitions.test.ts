@@ -15,6 +15,8 @@ describe("job state machine — /docs/07-JOB-STATE-MACHINE.md", () => {
       ["IN_PROGRESS", "COMPLETION_PENDING"],
       ["COMPLETION_PENDING", "COMPLETED"],
       ["COMPLETED", "PAYMENT_PENDING"],
+      // No money in the app (D1): straight to review.
+      ["COMPLETED", "REVIEW_PENDING"],
       ["PAYMENT_PENDING", "PAYMENT_CAPTURED"],
       ["PAYMENT_CAPTURED", "REVIEW_PENDING"],
       ["REVIEW_PENDING", "CLOSED"],

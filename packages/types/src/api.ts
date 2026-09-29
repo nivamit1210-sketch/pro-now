@@ -280,6 +280,8 @@ export interface ProJobDetailView {
   payoutIsEstimate: boolean;
   /** The quote currently awaiting the customer, when there is one. */
   pendingQuote: QuoteView | null;
+  /** The quote that was approved, when there is one. */
+  approvedQuote: QuoteView | null;
   /** Signed URLs are minted only after this route has verified assignment. */
   media: JobMediaView[];
 }

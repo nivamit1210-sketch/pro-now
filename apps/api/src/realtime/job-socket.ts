@@ -3,11 +3,13 @@ import { jobParticipant } from "../auth/access.js";
 
 /**
  * Private, authorized-per-job WebSocket channel — see
- * /docs/06-API-SPEC.md §WebSocket channels. This delivery wires the
- * connection/auth/room shape; broadcasting real dispatch/job events onto
- * connected sockets is Epic 7 work tracked in /docs/EPIC-0-REPORT.md.
- * Push (FCM/APNs) remains a wake/fallback signal only — clients must
- * resync from REST on reconnect, never trust buffered socket state.
+ * /docs/06-API-SPEC.md §WebSocket channels.
+ *
+ * Only the job's customer and its assigned professional may listen. What
+ * they hear is that the job changed (`JOB_EVENT`, with the event's type);
+ * they re-read the job over REST, which is the only source of state. On
+ * connect a `READY` tells the client to do that once, so nothing that
+ * happened before the socket opened is missed.
  */
 export function registerJobSocket(app: FastifyInstance) {
   app.get("/v1/ws/jobs/:id", { websocket: true }, async (socket, req) => {
@@ -17,23 +19,23 @@ export function registerJobSocket(app: FastifyInstance) {
       socket.close(4401, "UNAUTHENTICATED");
       return;
     }
-    // Only the job's customer and its assigned professional may listen.
     if (!(await jobParticipant(app.prisma, req.user.userId, jobId))) {
       socket.close(4404, "JOB_NOT_FOUND");
       return;
     }
 
-    app.log.info({ jobId, userId: req.user.userId }, "Job socket connected");
+    const unsubscribe = app.jobEvents.subscribe(jobId, (notice) => {
+      if (socket.readyState === socket.OPEN) {
+        socket.send(JSON.stringify({ type: "JOB_EVENT", jobId, eventType: notice.type, at: notice.at }));
+      }
+    });
+    socket.send(JSON.stringify({ type: "READY", jobId }));
 
-    socket.on("message", (raw: unknown) => {
-      // Placeholder echo/ack — real event fan-out (offer/state/quote/
-      // location) lands in Epic 7 per /docs/18-ROADMAP.md.
-      socket.send(JSON.stringify({ type: "ACK", jobId, receivedAt: new Date().toISOString() }));
-      void raw;
+    // A client ping keeps proxies from closing an idle socket.
+    socket.on("message", () => {
+      socket.send(JSON.stringify({ type: "PONG", jobId, at: new Date().toISOString() }));
     });
 
-    socket.on("close", () => {
-      app.log.info({ jobId, userId: req.user?.userId }, "Job socket disconnected");
-    });
+    socket.on("close", unsubscribe);
   });
 }

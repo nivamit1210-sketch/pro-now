@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { JobState } from "@pro-now/types";
 import { createQuoteSchema, approveQuoteSchema } from "@pro-now/validation";
 import { buildQuoteVersion } from "../domain/pricing/quote-hash.js";
 import { assertTransition } from "../domain/job/transitions.js";
@@ -52,6 +53,17 @@ export default async function quotesRoutes(app: FastifyInstance) {
       data: { jobId, type: "QUOTE_SENT", actor: "PROFESSIONAL", metadata: { quoteId: quote.id, versionHash } },
     });
 
+    /*
+     * APPROVED ON SENDING, WHILE NO MONEY MOVES (docs/21 §5 D1). The quote
+     * is the record of what was agreed at the door; the customer pays the
+     * professional directly. "Only the orderer approves" returns with
+     * in-app payments, and this route then waits for them again.
+     */
+    if (app.config.IN_APP_PAYMENTS === "off") {
+      await approveQuote(app, { quoteId: quote.id, jobId, jobStatus: "WAITING_QUOTE_APPROVAL", actor: "SYSTEM", metadata: { auto: true, rule: "D1" } });
+      return reply.send({ quote: { ...quote, status: "APPROVED" }, autoApproved: true });
+    }
+
     return reply.send({ quote });
   });
 
@@ -77,17 +89,25 @@ export default async function quotesRoutes(app: FastifyInstance) {
       return reply.status(409).send({ code: "QUOTE_NOT_PENDING", message: `Quote status is ${quote.status}` });
     }
 
-    assertTransition(quote.job.status, "IN_PROGRESS", "CUSTOMER");
-
-    await app.prisma.quote.update({ where: { id: quoteId }, data: { status: "APPROVED" } });
-    await app.prisma.job.update({
-      where: { id: quote.jobId },
-      data: { status: "IN_PROGRESS", approvedQuoteId: quoteId },
+    await approveQuote(app, {
+      quoteId,
+      jobId: quote.jobId,
+      jobStatus: quote.job.status,
+      actor: "CUSTOMER",
+      metadata: { idempotencyKey },
     });
-    await app.prisma.jobEvent.create({
-      data: { jobId: quote.jobId, type: "QUOTE_APPROVED", actor: "CUSTOMER", metadata: { quoteId, idempotencyKey } },
-    });
-
     return reply.send({ ok: true });
+  });
+}
+
+async function approveQuote(
+  app: FastifyInstance,
+  a: { quoteId: string; jobId: string; jobStatus: JobState; actor: "CUSTOMER" | "SYSTEM"; metadata: Record<string, unknown> }
+) {
+  assertTransition(a.jobStatus, "IN_PROGRESS", a.actor);
+  await app.prisma.quote.update({ where: { id: a.quoteId }, data: { status: "APPROVED" } });
+  await app.prisma.job.update({ where: { id: a.jobId }, data: { status: "IN_PROGRESS", approvedQuoteId: a.quoteId } });
+  await app.prisma.jobEvent.create({
+    data: { jobId: a.jobId, type: "QUOTE_APPROVED", actor: a.actor, metadata: { quoteId: a.quoteId, ...a.metadata } },
   });
 }
