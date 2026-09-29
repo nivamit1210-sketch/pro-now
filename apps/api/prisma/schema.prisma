@@ -168,6 +168,9 @@ model ProfessionalProfile {
   user               User                @relation(fields: [userId], references: [id])
   legalName          String
   displayName        String
+  /// How the professional asked to be addressed in Hebrew ("M" or "F"), so
+  /// the screens never guess from a name (docs/21 W7). Null: not asked yet.
+  addressAs          String?
   profilePhotoRef    String?
   verificationStatus VerificationStatus  @default(DRAFT)
   presenceState      ProPresenceState    @default(OFFLINE)

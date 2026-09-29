@@ -273,3 +273,54 @@ export const matchFeedbackSchema = z
   })
   .strict();
 export type MatchFeedbackInput = z.infer<typeof matchFeedbackSchema>;
+
+// ---------------------------------------------------------------------
+// Joining as a professional (docs/21 W7)
+// ---------------------------------------------------------------------
+
+/** `POST /api/v1/pro/join`. */
+export const proJoinSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(40),
+    legalName: z.string().trim().min(2).max(80),
+    /** How to address them in Hebrew; asked, never guessed from a name. */
+    addressAs: z.enum(["M", "F"]),
+  })
+  .strict();
+export type ProJoinInput = z.infer<typeof proJoinSchema>;
+
+/** `PUT /api/v1/pro/application/services`: the services applied for (server ids). */
+export const proServicesSchema = z.object({ serviceIds: z.array(z.string().min(1)).min(1).max(20) }).strict();
+
+/** `PUT /api/v1/pro/application/area`: home and radius (Amit, 2026-09-29). */
+export const proAreaSchema = z
+  .object({
+    lat: z.number().min(29).max(34),
+    lng: z.number().min(34).max(36),
+    radiusKm: z.number().min(1).max(50),
+  })
+  .strict();
+
+/** Account-level documents everyone gives (the research, 2026-09-29). No criminal record: asking is an offence. */
+export const ACCOUNT_DOCUMENT_KINDS = ["GOVERNMENT_ID", "SELFIE", "TAX_FILE"] as const;
+
+/** `POST /api/v1/pro/application/documents`. */
+export const proDocumentSchema = z
+  .object({ kind: z.enum(ACCOUNT_DOCUMENT_KINDS), uploadId: z.string().min(1) })
+  .strict();
+
+/** `POST /api/v1/pro/application/credentials`: a licence or certificate a service requires. */
+export const proCredentialSchema = z
+  .object({
+    serviceId: z.string().min(1),
+    requirement: z.string().min(1).max(60),
+    number: z.string().trim().max(40).optional(),
+    uploadId: z.string().min(1),
+  })
+  .strict();
+
+/** `POST /api/v1/admin/...` decisions: a reason is required to refuse. */
+export const adminDecisionSchema = z
+  .object({ approve: z.boolean(), reason: z.string().trim().max(500).optional(), expiresAt: z.string().datetime().optional() })
+  .strict()
+  .refine((d) => d.approve || Boolean(d.reason), { message: "A refusal needs a reason", path: ["reason"] });

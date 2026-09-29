@@ -12,6 +12,7 @@ import jobLockPlugin from "./plugins/job-lock.js";
 import providersPlugin from "./plugins/providers.js";
 import dispatchSweeperPlugin from "./plugins/dispatch-sweeper.js";
 import mediaCleanupPlugin from "./plugins/media-cleanup.js";
+import presenceSweeperPlugin from "./plugins/presence-sweeper.js";
 import authPlugin from "./plugins/auth.js";
 import webAppPlugin from "./plugins/web-app.js";
 
@@ -22,6 +23,8 @@ import jobsRoutes from "./routes/jobs.js";
 import matchRoutes from "./routes/match.js";
 import requestMatchRoutes from "./routes/request-match.js";
 import onSiteRoutes from "./routes/on-site.js";
+import proOnboardingRoutes from "./routes/pro-onboarding.js";
+import adminProsRoutes from "./routes/admin-pros.js";
 import offersRoutes from "./routes/offers.js";
 import proRoutes from "./routes/pro.js";
 import proJobsRoutes from "./routes/pro-jobs.js";
@@ -85,6 +88,7 @@ export async function buildServer(opts: { logger?: boolean } = {}) {
   // After providers and prisma: the sweep needs both.
   await app.register(dispatchSweeperPlugin);
   await app.register(mediaCleanupPlugin);
+  await app.register(presenceSweeperPlugin);
   await app.register(authPlugin);
   await app.register(demoAuthRoutes);
 
@@ -167,6 +171,8 @@ export async function buildServer(opts: { logger?: boolean } = {}) {
   await app.register(matchRoutes, { prefix: API_PREFIX });
   await app.register(requestMatchRoutes, { prefix: API_PREFIX });
   await app.register(onSiteRoutes, { prefix: API_PREFIX });
+  await app.register(proOnboardingRoutes, { prefix: API_PREFIX });
+  await app.register(adminProsRoutes, { prefix: API_PREFIX });
   await app.register(offersRoutes, { prefix: API_PREFIX });
   await app.register(proRoutes, { prefix: API_PREFIX });
   await app.register(proJobsRoutes, { prefix: API_PREFIX });
