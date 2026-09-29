@@ -522,7 +522,7 @@ model MatchFeedback {
   userId              String?
   user                User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   text                String
-  suggestedServiceIds String[]
+  suggestedServiceIds String[] @default([])
   chosenServiceId     String?
   confidence          String
   classifier          String

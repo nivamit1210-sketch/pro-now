@@ -3,7 +3,7 @@ CREATE TABLE "match_feedback" (
     "id" TEXT NOT NULL,
     "userId" TEXT,
     "text" TEXT NOT NULL,
-    "suggestedServiceIds" TEXT[],
+    "suggestedServiceIds" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     "chosenServiceId" TEXT,
     "confidence" TEXT NOT NULL,
     "classifier" TEXT NOT NULL,
