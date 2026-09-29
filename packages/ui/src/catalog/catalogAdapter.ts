@@ -18,7 +18,6 @@ import type { HomeServiceItem } from "../screens/CustomerHomeBody";
 import type { ServiceDetailBodyProps } from "../screens/ServiceDetailBody";
 import type { ProServiceEligibility } from "../screens/ProVerificationBody";
 import type { ProServiceToggle } from "../screens/ProOnlineBody";
-import type { ServiceMatchRule } from "../service-match";
 
 /**
  * One catalogue, read by every screen — including the real app.
@@ -453,8 +452,8 @@ export const demoOpenServiceIds: ReadonlySet<string> = new Set(
  * it ("בקרוב"). The customer learns what exists; nothing is dispatched to a
  * service that is not open, because that is decided on the service page.
  */
-export const catalogMatchRules: ServiceMatchRule[] = allServices(pilotCatalog)
-  .map((s) => ({ serviceId: s.id, keywords: [s.nameHe, ...s.keywordsHe, ...s.symptomsHe], nameHe: s.nameHe }));
+/** Moved to `@pro-now/types` with the matcher (docs/21 W5). */
+export { catalogMatchRules } from "@pro-now/types";
 
 /**
  * The professional's side, derived from the same tree: which services a

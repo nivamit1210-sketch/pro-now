@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { matchServicesByText, urgentCareFor, type ServiceMatchRule } from "../src/service-match";
-import { catalogMatchRules } from "../src/catalog/catalogAdapter";
+import { catalogMatchRules, matchRequest, matchServicesByText, urgentCareFor, type ServiceMatchRule } from "../src/request-match";
 
 /**
  * The matcher's job is to route a sentence to a SERVICE. The tests below
@@ -177,5 +176,114 @@ describe("when the answer is not a service", () => {
     expect(urgentCareFor("הילד חולה")).toBeNull();
     expect(urgentCareFor("יש לכלב חום")).toBeNull();
     expect(urgentCareFor("המזגן מטפטף")).toBeNull();
+  });
+});
+
+/**
+ * W5 (docs/21): the three sentences that failed on 2026-09-29, and the
+ * rules they forced.
+ */
+describe("negation", () => {
+  const ids = (q: string) => matchServicesByText(q, catalogMatchRules).map((m) => m.serviceId);
+
+  it("takes back a trade the person says they do not need", () => {
+    expect(ids("לא צריך חשמלאי, צריך אינסטלטור")).not.toContain("svc-electric");
+    expect(ids("לא צריך חשמלאי, צריך אינסטלטור")).not.toContain("svc-socket");
+    expect(ids("לא צריך חשמלאי, צריך אינסטלטור")).toContain("svc-blockage");
+  });
+
+  it("reads a bare 'לא' before a trade's title", () => {
+    expect(ids("צריך אינסטלטור ולא חשמלאי")).not.toContain("svc-electric");
+    expect(ids("צריך אינסטלטור, לא חשמלאי")).toContain("svc-leak");
+  });
+
+  it("never treats a symptom's 'לא' as negation", () => {
+    expect(ids("המזגן לא מקרר")[0]).toBe("svc-ac");
+    expect(ids("המדיח לא נפתח")).toContain("svc-washer");
+    expect(ids("אין חשמל בבית")[0]).toBe("svc-electric");
+    expect(ids("אין מים חמים")[0]).toBe("svc-solar");
+  });
+
+  it("returns nothing when everything was taken back", () => {
+    expect(ids("לא צריך חשמלאי")).toEqual([]);
+  });
+});
+
+describe("context words", () => {
+  const ids = (q: string) => matchServicesByText(q, catalogMatchRules).map((m) => m.serviceId);
+
+  it("a car's door is not a washing machine's door", () => {
+    expect(ids("הדלת של הרכב לא נפתחת")).not.toContain("svc-washer");
+    expect(ids("הדלת של הרכב לא נפתחת")[0]).toBe("svc-car-lockout");
+  });
+
+  it("keeps the appliance meaning when no car is mentioned", () => {
+    expect(ids("הדלת של המדיח לא נפתחת")[0]).toBe("svc-washer");
+  });
+
+  it("locked in the car is the car locksmith, not the home one", () => {
+    expect(ids("ננעלתי ברכב")).toEqual(["svc-car-lockout"]);
+  });
+
+  it("lets a word that is not shared with the car keep its own meaning", () => {
+    expect(ids("הטלפון נפל ברכב ונשבר")[0]).toBe("svc-phone-fix");
+  });
+});
+
+describe("a word with two meanings", () => {
+  it("resolves by its neighbours", () => {
+    expect(matchServicesByText("העכבר של המחשב לא עובד", catalogMatchRules).map((m) => m.serviceId)).toEqual(["svc-computer"]);
+    expect(matchServicesByText("ראיתי עכבר במטבח", catalogMatchRules)[0]?.serviceId).toBe("svc-pest");
+    expect(matchServicesByText("יש עכבר במטבח", catalogMatchRules).map((m) => m.serviceId)).not.toContain("svc-carpentry");
+  });
+
+  it("asks, rather than guesses, when the neighbours do not say", () => {
+    const m = matchRequest("יש לי עכבר");
+    expect(m.confidence).toBe("low");
+    expect(m.clarify).toEqual({ questionHe: "עכבר של מחשב, או עכבר בבית?", options: ["svc-computer", "svc-pest"] });
+    expect(m.candidates.map((c) => c.serviceId).sort()).toEqual(["svc-computer", "svc-pest"]);
+  });
+
+  it("does not ask about a word that was taken back", () => {
+    expect(matchRequest("לא צריך עכבר").clarify).toBeUndefined();
+  });
+});
+
+describe("matchRequest confidence", () => {
+  it("is high for one clear answer", () => {
+    const m = matchRequest("המזגן לא מקרר");
+    expect(m.confidence).toBe("high");
+    expect(m.candidates[0]?.serviceId).toBe("svc-ac");
+  });
+
+  it("is medium for a single answer resting on one word", () => {
+    expect(matchRequest("גיזום").confidence).toBe("medium");
+  });
+
+  it("is medium for two close answers", () => {
+    const m = matchRequest("כיור מים", [
+      { serviceId: "a", keywords: ["כיור", "מים"] },
+      { serviceId: "b", keywords: ["כיור", "מים"] },
+    ]);
+    expect(m.confidence).toBe("medium");
+  });
+
+  it("asks one question when many answers are equally likely", () => {
+    const m = matchRequest("צריך אינסטלטור");
+    expect(m.confidence).toBe("low");
+    expect(m.clarify?.options.length).toBeGreaterThanOrEqual(2);
+    expect(m.clarify!.options.length).toBeLessThanOrEqual(3);
+  });
+
+  it("is none when nothing matched, and still flags a life at stake", () => {
+    expect(matchRequest("מה השעה")).toEqual({ candidates: [], confidence: "none", urgentCare: null });
+    expect(matchRequest("הילד נחנק").urgentCare).toBe("person");
+  });
+
+  it("only ever answers with service ids from the rules", () => {
+    const m = matchRequest("נזילה חשמל מנעול מזגן עכבר");
+    const known = new Set(catalogMatchRules.map((r) => r.serviceId));
+    for (const c of m.candidates) expect(known.has(c.serviceId)).toBe(true);
+    for (const o of m.clarify?.options ?? []) expect(known.has(o)).toBe(true);
   });
 });

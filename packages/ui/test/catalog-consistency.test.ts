@@ -26,6 +26,7 @@ import { catalogHiddenServices, catalogHomeServices, catalogMatchRules, catalogS
 import { lowestListed, previewPriceLists, previewQuoteLines, quoteLinesFor } from "../src/catalog/priceLists";
 import { priceExplainer } from "../src/pricing-copy";
 import { matchServicesByText } from "../src/service-match";
+import { contextCueFor } from "@pro-now/types";
 
 const services = allServices(pilotCatalog);
 const home = [...catalogHomeServices, ...catalogHiddenServices];
@@ -116,9 +117,14 @@ describe("search finds each service by its own name and words", () => {
   for (const s of services) {
     it(s.id, () => {
       expect(matchServicesByText(s.nameHe, catalogMatchRules)[0]?.serviceId, s.nameHe).toBe(s.id);
-      const lost = s.keywordsHe.filter(
-        (k) => !matchServicesByText(k, catalogMatchRules).slice(0, 4).some((m) => m.serviceId === s.id)
-      );
+      // A word a car shares with the home ("ננעל", "סוללה") is typed beside
+      // a car, which is how it leads to the car service (docs/21 W5).
+      const domain = catalogMatchRules.find((r) => r.serviceId === s.id)?.domain;
+      const lost = s.keywordsHe.filter((k) => {
+        const cue = contextCueFor(domain, k);
+        const typed = cue ? `${cue} ${k}` : k;
+        return !matchServicesByText(typed, catalogMatchRules).slice(0, 4).some((m) => m.serviceId === s.id);
+      });
       expect(lost, `keywords that do not lead to ${s.nameHe}`).toEqual([]);
     });
   }

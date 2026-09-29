@@ -1,0 +1,1161 @@
+{
+ "about": "The request-matching golden set (docs/21 W5). 'real' = typed by real people and already recorded in tests; 'plan' = the three failing sentences of 2026-09-29; 'dev-seed' = written by the development team to cover every service until Amit's collection of 300-500 real sentences replaces them. expect = acceptable service ids (any one is right; [] means nothing should match); forbid = ids that must never be suggested; ask = a clarifying question is the right answer.",
+ "rows": [
+  {
+   "text": "נחנחק לי החתול",
+   "expect": [
+    "svc-vet"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "נחנק לי החתול",
+   "expect": [
+    "svc-vet"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "החתול שלי לא אוכל כבר יומיים",
+   "expect": [
+    "svc-vet"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "הכלב צולע",
+   "expect": [
+    "svc-vet"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "הכלבה שלי מדממת מהרגל",
+   "expect": [
+    "svc-vet"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "צריך מישהו שיוציא את הכלב",
+   "expect": [
+    "svc-dog-walk"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "נוסעת לחו״ל מי ישמור על החתולה",
+   "expect": [
+    "svc-pet-sit"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "הכלב צריך מקלחת ותספורת",
+   "expect": [
+    "svc-pet-groom"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "לילד יש חום",
+   "expect": [
+    "svc-doctor"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "המזגן מטפטף",
+   "expect": [
+    "svc-ac"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "חם נורא בבית",
+   "expect": [
+    "svc-ac"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "נטרקה לי הדלת והמפתח בפנים",
+   "expect": [
+    "svc-lock"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "ננעלתי ברכב",
+   "expect": [
+    "svc-car-lockout"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "האוטו לא מתניע",
+   "expect": [
+    "svc-jump-start"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "הטלפון נפל ונשבר המסך",
+   "expect": [
+    "svc-phone-fix"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "יש ריח של גז",
+   "expect": [
+    "svc-gas"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "כואב לי הגב",
+   "expect": [
+    "svc-massage"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "צריך עזרה להרים מקרר",
+   "expect": [
+    "svc-hands"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "יש מים מתחת לכיור במטבח",
+   "expect": [
+    "svc-blockage",
+    "svc-leak"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "הדוד לא מחמם",
+   "expect": [
+    "svc-solar"
+   ],
+   "source": "real"
+  },
+  {
+   "text": "לא צריך חשמלאי, צריך אינסטלטור",
+   "expect": [
+    "svc-blockage",
+    "svc-leak",
+    "svc-tap"
+   ],
+   "forbid": [
+    "svc-electric",
+    "svc-socket"
+   ],
+   "source": "plan"
+  },
+  {
+   "text": "הדלת של הרכב לא נפתחת",
+   "expect": [
+    "svc-car-lockout"
+   ],
+   "forbid": [
+    "svc-washer"
+   ],
+   "source": "plan"
+  },
+  {
+   "text": "העכבר של המחשב לא עובד",
+   "expect": [
+    "svc-computer"
+   ],
+   "forbid": [
+    "svc-pest"
+   ],
+   "source": "plan"
+  },
+  {
+   "text": "האסלה סתומה",
+   "expect": [
+    "svc-blockage"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המים לא יורדים במקלחת",
+   "expect": [
+    "svc-blockage"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הכיור נסתם",
+   "expect": [
+    "svc-blockage"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "יש נזילה מהתקרה",
+   "expect": [
+    "svc-leak"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צינור התפוצץ במטבח",
+   "expect": [
+    "svc-leak"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "כתם רטוב על הקיר ומים על הרצפה",
+   "expect": [
+    "svc-leak"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הברז במטבח מטפטף ולא נסגר",
+   "expect": [
+    "svc-tap"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הניאגרה לא מפסיקה לזרום",
+   "expect": [
+    "svc-tap"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך להחליף ברז באמבטיה",
+   "expect": [
+    "svc-tap"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הפחת קופץ כל הזמן",
+   "expect": [
+    "svc-electric"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "אין חשמל בחצי בית",
+   "expect": [
+    "svc-electric"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "יש ריח שרוף מהלוח חשמל",
+   "expect": [
+    "svc-electric"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "השקע בסלון לא עובד",
+   "expect": [
+    "svc-socket"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך להתקין מנורה בתקרה",
+   "expect": [
+    "svc-socket"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המתג לא מדליק את האור",
+   "expect": [
+    "svc-socket"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "נשארתי בחוץ והמפתח בפנים",
+   "expect": [
+    "svc-lock"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הדלת נטרקה ואין לי מפתח",
+   "expect": [
+    "svc-lock"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "איבדתי את המפתח וצריך להחליף מנעול",
+   "expect": [
+    "svc-cylinder"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המנעול תקוע והמפתח לא מסתובב",
+   "expect": [
+    "svc-cylinder"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "עברנו דירה ורוצים צילינדר חדש",
+   "expect": [
+    "svc-cylinder"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הכיריים לא נדלקות",
+   "expect": [
+    "svc-gas"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מריח גז במטבח",
+   "expect": [
+    "svc-gas"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך לחבר תנור גז",
+   "expect": [
+    "svc-gas"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המזגן לא מקרר בכלל",
+   "expect": [
+    "svc-ac"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המזגן עושה רעש חזק",
+   "expect": [
+    "svc-ac"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך ניקוי מזגן",
+   "expect": [
+    "svc-ac"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המקרר לא קר",
+   "expect": [
+    "svc-fridge"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המקפיא הפשיר",
+   "expect": [
+    "svc-fridge"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "יש מים בתחתית המקרר",
+   "expect": [
+    "svc-fridge"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מכונת הכביסה מציפה",
+   "expect": [
+    "svc-washer"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המכונה לא מסתובבת",
+   "expect": [
+    "svc-washer"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המדיח לא מנקז",
+   "expect": [
+    "svc-washer"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך ניקיון לדירה אחרי אירוע",
+   "expect": [
+    "svc-clean"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מחפשת מנקה להיום",
+   "expect": [
+    "svc-clean"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הבית מלוכלך ובאים אורחים",
+   "expect": [
+    "svc-clean"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "ניקיון אחרי שיפוץ",
+   "expect": [
+    "svc-clean-reno"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "יש אבק בנייה בכל הבית",
+   "expect": [
+    "svc-clean-reno"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "יש ג׳וקים במטבח",
+   "expect": [
+    "svc-pest"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "נמלים בכל הבית",
+   "expect": [
+    "svc-pest"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך מדביר לפשפשים",
+   "expect": [
+    "svc-pest"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הדשא גבוה צריך לכסח",
+   "expect": [
+    "svc-garden"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך גנן לגזום עצים",
+   "expect": [
+    "svc-garden"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מערכת ההשקיה בגינה לא עובדת",
+   "expect": [
+    "svc-garden"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "רוצה להסתפר בבית",
+   "expect": [
+    "svc-haircut"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "תספורת לילד",
+   "expect": [
+    "svc-haircut"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צבע לשיער",
+   "expect": [
+    "svc-haircut"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מניקור ופדיקור",
+   "expect": [
+    "svc-nails"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "לק ג׳ל",
+   "expect": [
+    "svc-nails"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "ציפורן שבורה",
+   "expect": [
+    "svc-nails"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריכה מאפרת לחתונה",
+   "expect": [
+    "svc-makeup"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "איפור ערב לאירוע בעוד שעתיים",
+   "expect": [
+    "svc-makeup"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מחפש מאמן כושר אישי",
+   "expect": [
+    "svc-trainer"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "רוצה להתאמן בבית",
+   "expect": [
+    "svc-trainer"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "אימון פילאטיס",
+   "expect": [
+    "svc-trainer"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צוואר תפוס",
+   "expect": [
+    "svc-massage"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "רוצה עיסוי בבית",
+   "expect": [
+    "svc-massage"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "כאבי גב אחרי אימון",
+   "expect": [
+    "svc-massage"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הילדה מקיאה כל הלילה",
+   "expect": [
+    "svc-doctor"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך רופא עד הבית",
+   "expect": [
+    "svc-doctor"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "כאב גרון וחום גבוה",
+   "expect": [
+    "svc-doctor"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מחפש דוג ווקר",
+   "expect": [
+    "svc-dog-walk"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מישהו שיטייל עם הכלב בצהריים",
+   "expect": [
+    "svc-dog-walk"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מי יאכיל את החתולים כשאני בחופשה",
+   "expect": [
+    "svc-pet-sit"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך מישהו שישמור על הכלב בערב",
+   "expect": [
+    "svc-pet-sit"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הכלב צריך תספורת",
+   "expect": [
+    "svc-pet-groom"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "גזירת ציפורניים לכלב",
+   "expect": [
+    "svc-pet-groom"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "רחצה לכלב",
+   "expect": [
+    "svc-pet-groom"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "החתול מקיא",
+   "expect": [
+    "svc-vet"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הכלב משתעל",
+   "expect": [
+    "svc-vet"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "חיסון לגור",
+   "expect": [
+    "svc-vet"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "נגמר המצבר",
+   "expect": [
+    "svc-jump-start"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הרכב מת בחניה",
+   "expect": [
+    "svc-jump-start"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך כבלים להתנעה",
+   "expect": [
+    "svc-jump-start"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "יש לי פנצ׳ר",
+   "expect": [
+    "svc-flat-tyre"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הגלגל ריק",
+   "expect": [
+    "svc-flat-tyre"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך להחליף גלגל",
+   "expect": [
+    "svc-flat-tyre"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המפתחות נשארו ברכב",
+   "expect": [
+    "svc-car-lockout"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הילד נעול ברכב",
+   "expect": [
+    "svc-car-lockout"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך גרר",
+   "expect": [
+    "svc-towing"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הרכב לא זז אחרי תאונה",
+   "expect": [
+    "svc-towing"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "נתקעתי בדרך עם האוטו",
+   "expect": [
+    "svc-towing"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך שליח שיביא מסמכים",
+   "expect": [
+    "svc-courier"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "לשלוח חבילה עכשיו",
+   "expect": [
+    "svc-courier"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "שכחתי מעטפה בבית",
+   "expect": [
+    "svc-courier"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "להעביר ספה לדירה חדשה",
+   "expect": [
+    "svc-moving"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך הובלה קטנה",
+   "expect": [
+    "svc-moving"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "כמה ארגזים למעבר דירה",
+   "expect": [
+    "svc-moving"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המחשב לא נדלק",
+   "expect": [
+    "svc-computer"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הלפטופ איטי",
+   "expect": [
+    "svc-computer"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "האינטרנט לא עובד",
+   "expect": [
+    "svc-computer"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "האייפון לא נטען",
+   "expect": [
+    "svc-phone-fix"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המסך של הטלפון סדוק",
+   "expect": [
+    "svc-phone-fix"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הפלאפון נפל למים",
+   "expect": [
+    "svc-phone-fix"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך לתלות מדף ותמונה",
+   "expect": [
+    "svc-handyman"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "כמה תיקונים קטנים בבית",
+   "expect": [
+    "svc-handyman"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מחפש הנדימן לשעה",
+   "expect": [
+    "svc-handyman"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך מישהו שיעזור לסחוב",
+   "expect": [
+    "svc-hands"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "לסדר את המחסן",
+   "expect": [
+    "svc-hands"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "לארוז לפני מעבר",
+   "expect": [
+    "svc-hands"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מבחן במתמטיקה מחר",
+   "expect": [
+    "svc-tutor"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מורה פרטי לאנגלית",
+   "expect": [
+    "svc-tutor"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "עזרה בשיעורי בית",
+   "expect": [
+    "svc-tutor"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "לצבוע את החדר",
+   "expect": [
+    "svc-paint"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הצבע מתקלף מהקיר",
+   "expect": [
+    "svc-paint"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צביעת דירה",
+   "expect": [
+    "svc-paint"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מרצפת שבורה",
+   "expect": [
+    "svc-tiling"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הרובה מתפוררת",
+   "expect": [
+    "svc-tiling"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "אריח סדוק במקלחת",
+   "expect": [
+    "svc-tiling"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "יש חור בקיר",
+   "expect": [
+    "svc-drywall"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "לבנות מחיצת גבס",
+   "expect": [
+    "svc-drywall"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "סדק בתקרה",
+   "expect": [
+    "svc-drywall"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "דלת הארון נפלה",
+   "expect": [
+    "svc-carpentry"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המגירה לא נסגרת",
+   "expect": [
+    "svc-carpentry"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "צריך נגר",
+   "expect": [
+    "svc-carpentry"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "להרכיב ארון מאיקאה",
+   "expect": [
+    "svc-furniture"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הרכבת מיטה",
+   "expect": [
+    "svc-furniture"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "לפרק ולהרכיב שולחן",
+   "expect": [
+    "svc-furniture"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "לתלות טלוויזיה על הקיר",
+   "expect": [
+    "svc-tv"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "זרוע לטלוויזיה",
+   "expect": [
+    "svc-tv"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "להסתיר כבלים של המסך בסלון",
+   "expect": [
+    "svc-tv"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "להתקין וילונות",
+   "expect": [
+    "svc-curtains"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "המסילה של הווילון נפלה",
+   "expect": [
+    "svc-curtains"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "וילון רולר חדש",
+   "expect": [
+    "svc-curtains"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "חלון שבור",
+   "expect": [
+    "svc-glass"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "התריס תקוע",
+   "expect": [
+    "svc-glass"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "רשת קרועה בחלון",
+   "expect": [
+    "svc-glass"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "האזעקה מצפצפת ולא מפסיקה",
+   "expect": [
+    "svc-alarm"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "להתקין מצלמות אבטחה",
+   "expect": [
+    "svc-alarm"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "האינטרקום לא עובד",
+   "expect": [
+    "svc-alarm"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "רטיבות בקיר",
+   "expect": [
+    "svc-sealing"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הגג דולף",
+   "expect": [
+    "svc-sealing"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "עובש בפינה של החדר",
+   "expect": [
+    "svc-sealing"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "אין מים חמים",
+   "expect": [
+    "svc-solar"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הדוד דולף",
+   "expect": [
+    "svc-solar"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "הקולט שבור",
+   "expect": [
+    "svc-solar"
+   ],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מה השעה",
+   "expect": [],
+   "source": "dev-seed"
+  },
+  {
+   "text": "כרטיס טיסה לרומא",
+   "expect": [],
+   "source": "dev-seed"
+  },
+  {
+   "text": "שלום מה נשמע",
+   "expect": [],
+   "source": "dev-seed"
+  },
+  {
+   "text": "תזמין לי פיצה",
+   "expect": [],
+   "source": "dev-seed"
+  },
+  {
+   "text": "מה מזג האוויר מחר",
+   "expect": [],
+   "source": "dev-seed"
+  },
+  {
+   "text": "יש לי עכבר",
+   "expect": [],
+   "ask": true,
+   "source": "dev-seed"
+  },
+  {
+   "text": "המסך לא עובד",
+   "expect": [],
+   "ask": true,
+   "source": "dev-seed"
+  }
+ ]
+}
