@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
-import { credentialTypeFor } from "@pro-now/types";
+import { credentialTypeFor, type ProApplicationView } from "@pro-now/types";
 import {
   ACCOUNT_DOCUMENT_KINDS,
   proAreaSchema,
@@ -29,27 +29,6 @@ import { PILOT_MARKET_CODE } from "../config/market.js";
  * Nothing here sets a price or a commission (CLAUDE.md §4): prices are the
  * professional's own, through `PATCH /v1/pro/services/:id/pricing`.
  */
-export interface ProApplicationView {
-  profile: { id: string; displayName: string; legalName: string; addressAs: string | null; verificationStatus: string };
-  services: Array<{
-    serviceId: string;
-    code: string;
-    nameHe: string;
-    priceModel: string;
-    status: string;
-    priced: boolean;
-    requirements: Array<{
-      requirement: string;
-      mandatory: boolean;
-      credential: { id: string; status: string; number: string | null } | null;
-    }>;
-  }>;
-  area: { lat: number; lng: number; radiusKm: number } | null;
-  documents: Array<{ kind: string; status: string }>;
-  /** What stands between this application and review, as codes. Empty: ready. */
-  missing: string[];
-  submitted: boolean;
-}
 
 const UNDER_REVIEW = new Set(["SERVICE_REVIEW", "APPROVED", "LIMITED"]);
 
@@ -103,6 +82,7 @@ export async function applicationView(db: PrismaClient, professionalId: string):
         };
       });
     return {
+      id: ps.id,
       serviceId: ps.serviceId,
       code: ps.service.code,
       nameHe: ps.service.nameHe,
@@ -146,6 +126,19 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
       create: { userId, displayName: body.displayName, legalName: body.legalName, addressAs: body.addressAs },
     });
     return reply.send(await applicationView(app.prisma, profile.id));
+  });
+
+  /** What a professional may apply for: services open to professionals in the pilot market. */
+  app.get("/v1/pro/services/open", pro, async () => {
+    const open = await app.prisma.marketActivation.findMany({
+      where: { marketCode: PILOT_MARKET_CODE, providerOnboardingEnabled: true },
+      include: { service: { select: { id: true, code: true, nameHe: true, priceModel: true } } },
+    });
+    return {
+      services: open
+        .map((a) => a.service)
+        .sort((a, b) => a.nameHe.localeCompare(b.nameHe, "he")),
+    };
   });
 
   app.get("/v1/pro/application", pro, async (req, reply) => {

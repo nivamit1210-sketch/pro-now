@@ -650,3 +650,28 @@ export interface OnSiteView {
   /** Only once a professional is assigned. */
   doorCode: string | null;
 }
+
+/** `GET /api/v1/pro/application`: a professional's application and what it still lacks (docs/21 W7). */
+export interface ProApplicationView {
+  profile: { id: string; displayName: string; legalName: string; addressAs: string | null; verificationStatus: string };
+  services: Array<{
+    /** The application for this service (what an admin decides on). */
+    id: string;
+    serviceId: string;
+    code: string;
+    nameHe: string;
+    priceModel: string;
+    status: string;
+    priced: boolean;
+    requirements: Array<{
+      requirement: string;
+      mandatory: boolean;
+      credential: { id: string; status: string; number: string | null } | null;
+    }>;
+  }>;
+  area: { lat: number; lng: number; radiusKm: number } | null;
+  documents: Array<{ kind: string; status: string }>;
+  /** What stands between this application and review, as codes. Empty: ready. */
+  missing: string[];
+  submitted: boolean;
+}

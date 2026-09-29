@@ -113,4 +113,20 @@ describe("api client", () => {
       mediaRefs: ["upload1", "upload2"],
     });
   });
+
+  it("uploads straight to storage without sending the session cookie (W7 QA #1)", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    const fn = (async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      if (url.endsWith("/uploads")) {
+        return new Response(JSON.stringify({ upload: { id: "u1" }, uploadUrl: "https://storage.example/put?sig=1" }), { status: 201 });
+      }
+      if (url.startsWith("https://storage.example")) return new Response(null, { status: 200 });
+      return new Response(JSON.stringify({ upload: { id: "u1", status: "READY" } }), { status: 200 });
+    }) as unknown as typeof fetch;
+    await createApiClient({ fetch: fn }).uploadMedia({ kind: "DOCUMENT", mime: "application/pdf", body: new ArrayBuffer(4) });
+    const put = calls.find((c) => c.url.startsWith("https://storage.example"))!;
+    expect(put.init.method).toBe("PUT");
+    expect(put.init.credentials).toBe("omit");
+  });
 });

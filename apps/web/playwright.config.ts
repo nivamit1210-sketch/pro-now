@@ -46,6 +46,8 @@ export default defineConfig({
       PUBLIC_URL: ORIGIN,
       WEB_DIST_DIR: path.resolve(import.meta.dirname, "dist"),
       NODE_ENV: "test",
+      // The admin the W7 test approves with (the admin's screens are W8).
+      ADMIN_EMAILS: "e2e-admin@pronow.test",
       GEOCODING_PROVIDER: "fixture",
     },
     stdout: "ignore",

@@ -12,8 +12,9 @@ test("a visitor who is not signed in starts at the welcome screen", async ({ pag
   await page.goto("/");
   await expect(page).toHaveURL(/\/welcome$/);
   await expect(page.getByText("שבא עכשיו.")).toBeVisible();
-  // Not built yet (W7): shown, and disabled.
-  await expect(page.getByRole("button", { name: /אני בעל מקצוע/ })).toHaveAttribute("aria-disabled", "true");
+  // The professional's side opened in W7: it leads to their sign-in.
+  await page.getByRole("button", { name: /אני בעל מקצוע/ }).click();
+  await expect(page).toHaveURL(/\/sign-in\?side=pro$/);
 });
 
 test("sign in by email link, first run, reload, sign out", async ({ page }) => {

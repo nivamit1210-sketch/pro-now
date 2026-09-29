@@ -103,3 +103,12 @@ export class Professional {
     }
   }
 }
+
+/** The test server's admin (playwright.config.ts), signed in through the API. */
+export async function adminApi(baseURL: string) {
+  const api = await request.newContext({ baseURL, extraHTTPHeaders: { origin: baseURL } });
+  const email = "e2e-admin@pronow.test";
+  await api.post("/api/auth/sign-in/magic-link", { data: { email, callbackURL: "/" } });
+  await api.get(await linkFor(email), { maxRedirects: 5 });
+  return api;
+}

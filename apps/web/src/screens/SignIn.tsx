@@ -19,6 +19,7 @@ export function SignIn() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const side = params.get("side") === "pro" ? "pro" : "customer";
+  // A professional lands on their own side (docs/21 W7): the application, or their work.
   const { width, height } = useFrame();
 
   const [email, setEmail] = useState("");
@@ -49,7 +50,7 @@ export function SignIn() {
     setError(null);
     const { error: failed } = await authClient.signIn.magicLink({
       email: email.trim(),
-      callbackURL: "/",
+      callbackURL: side === "pro" ? "/pro" : "/",
       errorCallbackURL: "/sign-in?expired=1",
     });
     setBusy(false);
@@ -67,7 +68,7 @@ export function SignIn() {
     setError(null);
     const { error: failed } = await authClient.signIn.social({
       provider: "google",
-      callbackURL: "/",
+      callbackURL: side === "pro" ? "/pro" : "/",
       errorCallbackURL: "/sign-in?expired=1",
     });
     // On success the browser is already leaving for Google.

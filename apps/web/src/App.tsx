@@ -9,6 +9,8 @@ import { ErrorScreen, LoadingScreen } from "./states";
 import { Home } from "./screens/Home";
 import { Job } from "./screens/Job";
 import { OnSite } from "./screens/OnSite";
+import { ProHome } from "./screens/pro/ProHome";
+import { ProJoin } from "./screens/pro/ProJoin";
 import { Addresses } from "./screens/Addresses";
 import { Avatar, Intro } from "./screens/Onboarding";
 import { SignIn } from "./screens/SignIn";
@@ -40,6 +42,11 @@ function FirstRun({ children }: { children: ReactNode }) {
   const me = useMe();
   if (me.isPending) return <LoadingScreen />;
   if (me.isError) return <ErrorScreen offline={!navigator.onLine} onRetry={() => void me.refetch()} />;
+  // Someone registered as a professional lands on their own page (Amit,
+  // 2026-09-30); "?as=customer" is how a professional orders for themselves.
+  if (me.data.roles.includes("PROFESSIONAL") && new URLSearchParams(location.search).get("as") !== "customer") {
+    return <Navigate to="/pro" replace />;
+  }
   const c = me.data.customer;
   if (c && !c.introSeen) return <Navigate to="/intro" replace />;
   if (c && !c.avatarAnswered) return <Navigate to="/avatar" replace />;
@@ -58,6 +65,9 @@ export function App() {
             <Route path="/avatar" element={<SignedIn><Avatar /></SignedIn>} />
             <Route path="/addresses" element={<SignedIn><Addresses /></SignedIn>} />
             <Route path="/jobs/:id" element={<SignedIn><Job /></SignedIn>} />
+            {/* The professional's side (docs/21 W7). */}
+            <Route path="/pro" element={<SignedIn><ProHome /></SignedIn>} />
+            <Route path="/pro/join" element={<SignedIn><ProJoin /></SignedIn>} />
             {/* The person at home: no account (docs/21 W6). */}
             <Route path="/s/:token" element={<OnSite />} />
             <Route path="/" element={<SignedIn><FirstRun><Home /></FirstRun></SignedIn>} />

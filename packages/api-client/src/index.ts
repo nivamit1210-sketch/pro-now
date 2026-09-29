@@ -21,6 +21,7 @@ import type {
   JobView,
   MyJobSummary,
   OnSiteView,
+  ProApplicationView,
   OutsideAppReceiptView,
   RequestMatch,
 } from "@pro-now/types";
@@ -108,6 +109,24 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
       request<{ url: string; expiresAt: string }>("POST", `/jobs/${encodeURIComponent(id)}/on-site-link`, {}),
     /** The page the person at home opens: no account, no address, no price. */
     getOnSite: (token: string) => request<OnSiteView>("GET", `/on-site/${encodeURIComponent(token)}`),
+    // --- The professional (docs/21 W7) ---
+    proJoin: (input: { displayName: string; legalName: string; addressAs: "M" | "F" }) =>
+      request<ProApplicationView>("POST", "/pro/join", input),
+    proApplication: () => request<ProApplicationView>("GET", "/pro/application"),
+    proOpenServices: () =>
+      request<{ services: Array<{ id: string; code: string; nameHe: string; priceModel: string }> }>("GET", "/pro/services/open"),
+    proSetServices: (serviceIds: string[]) => request<ProApplicationView>("PUT", "/pro/application/services", { serviceIds }),
+    proSetArea: (input: { lat: number; lng: number; radiusKm: number }) =>
+      request<ProApplicationView>("PUT", "/pro/application/area", input),
+    proAddDocument: (input: { kind: "GOVERNMENT_ID" | "SELFIE" | "TAX_FILE"; uploadId: string }) =>
+      request<ProApplicationView>("POST", "/pro/application/documents", input),
+    proAddCredential: (input: { serviceId: string; requirement: string; number?: string; uploadId: string }) =>
+      request<ProApplicationView>("POST", "/pro/application/credentials", input),
+    proSetPricing: (
+      serviceId: string,
+      input: { basePriceMinorUnits?: number | null; minimumBillableMinutes?: number | null; perKmMinorUnits?: number | null; minimumFareMinorUnits?: number | null }
+    ) => request<unknown>("PATCH", `/pro/services/${encodeURIComponent(serviceId)}/pricing`, input),
+    proSubmitApplication: () => request<ProApplicationView>("POST", "/pro/application/submit", {}),
     /** Which services a typed sentence could be (docs/21 W5). */
     matchRequest: (text: string) => request<RequestMatch & { classifier: string }>("POST", "/match", { text }),
     /** What was suggested for a sentence, and what the customer chose. */
@@ -146,9 +165,15 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
         uploadUrl: string;
       }>("POST", "/uploads", { kind: input.kind, mime: input.mime, bytes });
 
+      /*
+       * Straight to storage, WITHOUT credentials. The signed URL is the
+       * authorisation; our session cookie must never travel to another
+       * host, and storage (correctly) refuses a credentialed cross-origin
+       * request, which failed every browser upload until W7 (QA #1).
+       */
       const putResponse = await doFetch(prepared.uploadUrl, {
         method: "PUT",
-        credentials: "include",
+        credentials: "omit",
         headers: { "Content-Type": input.mime },
         body: input.body,
       });
