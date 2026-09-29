@@ -5,6 +5,7 @@ export * from "./availability";
 export * from "./catalog";
 export * from "./policy";
 export * from "./providers/payment-provider";
+export * from "./providers/request-classifier";
 export * from "./providers/identity-verification-provider";
 export * from "./providers/maps-routing-provider";
 export * from "./providers/geocoding-provider";

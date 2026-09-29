@@ -49,6 +49,12 @@ export const envSchema = z.object({
   GEOCODING_PROVIDER: z.enum(["nominatim", "fixture"]).default("nominatim"),
   EXTERNAL_REPUTATION_PROVIDER: z.enum(["sandbox", "google"]).default("sandbox"),
 
+  /**
+   * Which classifiers read a typed request, in order (docs/21 W5). Only the
+   * keyword matcher exists; a model-backed one waits for decision D2.
+   */
+  REQUEST_CLASSIFIERS: z.enum(["keyword"]).default("keyword"),
+
   GOOGLE_MAPS_API_KEY: z.string().optional(),
   NOMINATIM_URL: z.string().url().default("https://nominatim.openstreetmap.org"),
   NOMINATIM_USER_AGENT: z.string().min(1).default("PRO-NOW/0.1"),

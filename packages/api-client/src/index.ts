@@ -11,8 +11,8 @@
  * readable here): every call goes with `credentials: "include"` and no
  * token. Same origin in development and in production.
  */
-import type { AddressView, CatalogResponse, DispatchResultView, GeocodingResult, JobView } from "@pro-now/types";
-import type { CreateAddressInput, CustomerOnboardingInput, MeResponse } from "@pro-now/validation";
+import type { AddressView, CatalogResponse, DispatchResultView, GeocodingResult, JobView, RequestMatch } from "@pro-now/types";
+import type { CreateAddressInput, CustomerOnboardingInput, MatchFeedbackInput, MeResponse } from "@pro-now/validation";
 
 export type UploadKind = "PHOTO" | "VOICE_NOTE" | "DOCUMENT";
 export interface UploadRecord {
@@ -77,6 +77,10 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
     me: () => request<MeResponse>("GET", "/me"),
     saveOnboarding: (input: CustomerOnboardingInput) => request<{ ok: true }>("PATCH", "/me/customer", input),
     getCatalog: () => request<CatalogResponse>("GET", "/catalog"),
+    /** Which services a typed sentence could be (docs/21 W5). */
+    matchRequest: (text: string) => request<RequestMatch & { classifier: string }>("POST", "/match", { text }),
+    /** What was suggested for a sentence, and what the customer chose. */
+    sendMatchFeedback: (input: MatchFeedbackInput) => request<void>("POST", "/match/feedback", input),
     getAddresses: () => request<{ addresses: AddressView[] }>("GET", "/me/addresses"),
     createAddress: (input: CreateAddressInput) => request<{ address: AddressView }>("POST", "/me/addresses", input),
     searchAddresses: (query: string) => request<{ results: GeocodingResult[] }>("GET", `/geo/search?q=${encodeURIComponent(query)}`),

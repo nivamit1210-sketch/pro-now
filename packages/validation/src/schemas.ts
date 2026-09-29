@@ -241,3 +241,21 @@ export const clientErrorReportSchema = z
   .strict();
 
 export type ClientErrorReport = z.infer<typeof clientErrorReportSchema>;
+
+/** `POST /api/v1/match` (docs/21 W5). */
+export const matchRequestSchema = z.object({ text: z.string().trim().min(1).max(500) }).strict();
+export type MatchRequestInput = z.infer<typeof matchRequestSchema>;
+
+/**
+ * `POST /api/v1/match/feedback`: what was suggested for a sentence, and
+ * what the customer chose (null: they chose nothing from the suggestions).
+ */
+export const matchFeedbackSchema = z
+  .object({
+    text: z.string().trim().min(1).max(500),
+    suggestedServiceIds: z.array(z.string().min(1).max(60)).max(10),
+    chosenServiceId: z.string().min(1).max(60).nullable(),
+    confidence: z.enum(["high", "medium", "low", "none"]),
+  })
+  .strict();
+export type MatchFeedbackInput = z.infer<typeof matchFeedbackSchema>;

@@ -103,6 +103,8 @@ export default async function meRoutes(app: FastifyInstance) {
       await tx.account.deleteMany({ where: { userId } });
       await tx.verification.deleteMany({ where: { identifier: before.email } });
       await tx.userRole.deleteMany({ where: { userId } });
+      // What they typed to find a service: personal, and nobody else's record.
+      await tx.matchFeedback.deleteMany({ where: { userId } });
 
       const customer = await tx.customerProfile.findUnique({ where: { userId } });
       if (customer) {

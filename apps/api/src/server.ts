@@ -20,6 +20,7 @@ import addressesRoutes from "./routes/addresses.js";
 import geoRoutes from "./routes/geo.js";
 import jobsRoutes from "./routes/jobs.js";
 import matchRoutes from "./routes/match.js";
+import requestMatchRoutes from "./routes/request-match.js";
 import offersRoutes from "./routes/offers.js";
 import proRoutes from "./routes/pro.js";
 import proJobsRoutes from "./routes/pro-jobs.js";
@@ -161,6 +162,7 @@ export async function buildServer(opts: { logger?: boolean } = {}) {
   await app.register(geoRoutes, { prefix: API_PREFIX });
   await app.register(jobsRoutes, { prefix: API_PREFIX });
   await app.register(matchRoutes, { prefix: API_PREFIX });
+  await app.register(requestMatchRoutes, { prefix: API_PREFIX });
   await app.register(offersRoutes, { prefix: API_PREFIX });
   await app.register(proRoutes, { prefix: API_PREFIX });
   await app.register(proJobsRoutes, { prefix: API_PREFIX });

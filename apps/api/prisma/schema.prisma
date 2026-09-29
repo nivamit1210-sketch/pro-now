@@ -44,6 +44,7 @@ model User {
   professionalProfile ProfessionalProfile?
   adminUser           AdminUser?
   uploads             Upload[]
+  matchFeedback       MatchFeedback[]
 
   @@map("users")
 }
@@ -511,6 +512,27 @@ model Address {
 
   @@map("addresses")
   @@index([customerId])
+}
+
+/// What a typed sentence was matched to, and what the customer chose
+/// (docs/21 W5). Reviewed in admin (W8) and fed into the golden set. The
+/// text is personal data: kept 4 days (decision D3), then swept.
+model MatchFeedback {
+  id                  String   @id @default(cuid())
+  userId              String?
+  user                User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  text                String
+  suggestedServiceIds String[]
+  chosenServiceId     String?
+  confidence          String
+  classifier          String
+  /// Set when the professional reports on arrival that the service was wrong (W7).
+  proFlaggedWrong     Boolean?
+  createdAt           DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@map("match_feedback")
 }
 
 model GeocodeCache {
