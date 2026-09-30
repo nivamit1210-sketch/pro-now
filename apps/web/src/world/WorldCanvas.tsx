@@ -3,8 +3,11 @@ import * as THREE from "three";
 
 import type { WorldMode, WorldMoveCommand, WorldRouteModel, WorldSceneModel } from "./types";
 import { detectWorldCapabilities, shouldPauseWorld } from "./worldCapabilities";
-import { useWorldInput } from "./worldInput";
+import { movementFromPointer, useWorldInput } from "./worldInput";
 import "./WorldCanvas.css";
+
+/** How far a drag must travel from its start for full walking speed, in px. */
+const DRAG_RADIUS = 60;
 
 export type WorldEvent =
   | { type: "EXIT" }
@@ -144,12 +147,40 @@ export function WorldCanvas({
       paused = shouldPauseWorld(document.visibilityState);
     };
     document.addEventListener("visibilitychange", onVisibility);
+
+    // Drag on the street to walk — a phone has no keys. The finger's offset
+    // from where it touched down is a held direction until it lifts.
+    const canvas = renderer.domElement;
+    let drag: { x: number; y: number; id: number } | null = null;
+    const onPointerDown = (event: PointerEvent) => {
+      const mode = modelRef.current.mode;
+      if (mode !== "EXPLORE" && mode !== "ROUTE") return;
+      drag = { x: event.clientX, y: event.clientY, id: event.pointerId };
+      canvas.setPointerCapture?.(event.pointerId);
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (drag?.id !== event.pointerId) return;
+      handle.move(movementFromPointer(event.clientX - drag.x, event.clientY - drag.y, DRAG_RADIUS));
+    };
+    const onPointerEnd = (event: PointerEvent) => {
+      if (drag?.id !== event.pointerId) return;
+      drag = null;
+      handle.move({ x: 0, z: 0, sprint: false });
+    };
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointermove", onPointerMove);
+    canvas.addEventListener("pointerup", onPointerEnd);
+    canvas.addEventListener("pointercancel", onPointerEnd);
     resize();
     frame = window.requestAnimationFrame(render);
 
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("visibilitychange", onVisibility);
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerEnd);
+      canvas.removeEventListener("pointercancel", onPointerEnd);
       resizeObserver.disconnect();
       handle.dispose();
       sceneHandleRef.current = null;

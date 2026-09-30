@@ -11,6 +11,7 @@ const matchWithEta = (etaSeconds: number | null, computedAtMs = 0): JobMatchView
     id: "pro-1",
     displayName: "מקצוען",
     profilePhotoUrl: null,
+    portraitKind: null,
     verifications: [],
     proNowCompletedJobs: 0,
     proNowRatingAverage: null,

@@ -98,6 +98,7 @@ export function createWorldScene({ renderer, scene, camera, model: initialModel,
   let lastMs = performance.now();
   let nearbyShopId: string | null = null;
   let insideShopId: string | null = null;
+  let moveCommand: WorldMoveCommand = { x: 0, z: 0, sprint: false };
 
   const emitNear = () => {
     const shop = nearestShop(player.x, player.z);
@@ -155,13 +156,10 @@ export function createWorldScene({ renderer, scene, camera, model: initialModel,
       }
       updateVehicle();
     },
+    // A held key or drag is a command applied every frame (render), not a
+    // step per input event: a key held without auto-repeat must still walk.
     move(command: WorldMoveCommand) {
-      if (insideShopId) return;
-      const now = performance.now();
-      const delta = Math.min(0.05, Math.max(0, (now - lastMs) / 1000));
-      lastMs = now;
-      movePlayer(player, command, delta || 1 / 60);
-      emitNear();
+      moveCommand = command;
     },
     enter: enterShop,
     render(nowMs) {
@@ -170,6 +168,10 @@ export function createWorldScene({ renderer, scene, camera, model: initialModel,
         camera.position.lerp(new THREE.Vector3(0, 3.4, 8.8), reducedMotion ? 1 : 0.06);
         camera.lookAt(0, 2.8, 0);
       } else if (model.mode === "EXPLORE" || model.mode === "ROUTE") {
+        if (moveCommand.x !== 0 || moveCommand.z !== 0) {
+          movePlayer(player, moveCommand, Math.min(0.05, Math.max(0, (nowMs - lastMs) / 1000)));
+          emitNear();
+        }
         followCharacter(camera, player.group.position, reducedMotion);
       } else {
         frameStreet(camera, reducedMotion);

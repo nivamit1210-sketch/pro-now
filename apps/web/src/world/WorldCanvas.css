@@ -15,6 +15,9 @@
 }
 
 .world-canvas__surface canvas {
+  /* The canvas itself takes drags (walking); the rest of the surface does not. */
+  pointer-events: auto;
+  touch-action: none;
   display: block;
   width: 100%;
   height: 100%;

@@ -7,9 +7,10 @@ const catalog: CatalogResponse = {
   marketCode: "IL",
   departments: [
     {
-      code: "HOME_URGENT",
-      nameHe: "בית דחוף",
-      nameEn: "Home urgent",
+      // The database's department code, which is not the pilot's HOME_URGENT.
+      code: "HOME_REPAIRS",
+      nameHe: "תיקונים בבית",
+      nameEn: "Home repairs",
       categories: [
         {
           code: "PLUMBING",
@@ -19,7 +20,8 @@ const catalog: CatalogResponse = {
             {
               id: "db-leak",
               code: "HOME_PLUMB_LEAK",
-              nameHe: "נזילה או דליפת מים",
+              // The seeded row's own name; shops show the customer-facing one.
+              nameHe: "נזילה/פיצוץ בצנרת",
               nameEn: "Leak",
               priceModel: "VISIT_QUOTE",
               trustTier: "C",
@@ -51,7 +53,7 @@ describe("worldTradesFromCatalog", () => {
       interiorAssetId: "home_workshop_hero",
     });
     expect(trades.home!.services).toEqual([
-      { id: "svc-leak", nameHe: "נזילה או דליפת מים", descriptionHe: null },
+      { id: "svc-leak", nameHe: "נזילה או דליפת מים", descriptionHe: "מים שמופיעים איפה שהם לא אמורים." },
     ]);
     expect(Object.keys(trades)).toEqual(["home"]);
   });

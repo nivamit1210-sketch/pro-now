@@ -1,5 +1,5 @@
 import type { CatalogResponse, DepartmentCode } from "@pro-now/types";
-import { pilotServiceIdForDatabaseCode } from "@pro-now/types";
+import { pilotServiceById, pilotServiceIdForDatabaseCode } from "@pro-now/types";
 import { departmentCodeByServiceId } from "@pro-now/ui";
 
 import { WORLD_SHOPS } from "./scene/street";
@@ -16,27 +16,36 @@ const INTERIOR_BY_DEPARTMENT: Partial<Record<DepartmentCode, string>> = {
 
 /**
  * Adapts the server's market catalogue into the shops the world can render.
- * The API's database code remains authoritative; the pilot id is only used
- * to reuse the customer app's existing request composer contract.
+ * The server decides which services exist; each one is placed by its
+ * customer-facing department (the pilot catalogue's), not by the database's
+ * department, whose codes (`HOME_REPAIRS`, `AUTO`, …) are a different set.
+ * The pilot id is also what the customer app's request composer expects.
  */
 export function worldTradesFromCatalog(catalog: CatalogResponse): Readonly<Record<string, WorldTrade>> {
   const shopsByDepartment = new Map(WORLD_SHOPS.map((shop) => [shop.departmentCode, shop]));
-  const trades: Record<string, WorldTrade> = {};
+  const servicesByDepartment = new Map<DepartmentCode, WorldTrade["services"][number][]>();
 
   for (const department of catalog.departments) {
-    const departmentCode = department.code as DepartmentCode;
-    const shop = shopsByDepartment.get(departmentCode);
-    if (!shop) continue;
-
-    const services = department.categories.flatMap((category) =>
-      category.services.flatMap((service) => {
+    for (const category of department.categories) {
+      for (const service of category.services) {
         const pilotId = pilotServiceIdForDatabaseCode(service.code);
-        if (!pilotId || departmentCodeByServiceId[pilotId] !== departmentCode) return [];
-        return [{ id: pilotId, nameHe: service.nameHe, descriptionHe: null }];
-      })
-    );
-    if (services.length === 0) continue;
+        const departmentCode = pilotId ? departmentCodeByServiceId[pilotId] : undefined;
+        if (!pilotId || !departmentCode) continue;
+        // The customer-facing name, as on every other screen; the server's
+        // row name only when the pilot catalogue has none.
+        const pilot = pilotServiceById[pilotId];
+        const services = servicesByDepartment.get(departmentCode) ?? [];
+        services.push({ id: pilotId, nameHe: pilot?.nameHe ?? service.nameHe, descriptionHe: pilot?.descriptionHe ?? null });
+        servicesByDepartment.set(departmentCode, services);
+      }
+    }
+  }
 
+  // In the street's own order, so the first shop is the first one you pass.
+  const trades: Record<string, WorldTrade> = {};
+  for (const [departmentCode, shop] of shopsByDepartment) {
+    const services = servicesByDepartment.get(departmentCode);
+    if (!services) continue;
     trades[shop.shopId] = {
       shopId: shop.shopId,
       departmentCode,
