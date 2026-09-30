@@ -3,7 +3,15 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@pro-now/api-client";
-import { catalogMatchRules, databaseCodeForPilotService, matchServicesByText, type ProApplicationView } from "@pro-now/types";
+import {
+  catalogMatchRules,
+  databaseCodeForPilotService,
+  documentConditionHe,
+  documentInfoFor,
+  matchServicesByText,
+  pilotServiceIdForDatabaseCode,
+  type ProApplicationView,
+} from "@pro-now/types";
 import { PrimaryAction, customerDarkTheme, spacing, type as t } from "@pro-now/ui";
 
 import { api } from "../../api";
@@ -51,12 +59,10 @@ const PRICE_FIELDS: Record<string, Array<{ key: "basePriceMinorUnits" | "minimum
     { key: "perKmMinorUnits", labelHe: "לכל ק״מ (₪)" },
   ],
 };
-/** The requirement codes, in the words a professional reads. */
-const REQUIREMENT_HE: Record<string, string> = {
-  LICENSE: "רישיון",
-  CERTIFICATE: "תעודה מקצועית",
-  INSURANCE: "ביטוח",
-};
+/** A service requirement in the professional's words (D4: the research's list, service-documents.ts). */
+function requirementHe(requirement: string): string {
+  return documentInfoFor(requirement)?.nameHe ?? "מסמך";
+}
 
 function missingHe(code: string, view: ProApplicationView): string {
   const [kind, a, b] = code.split(":");
@@ -69,7 +75,7 @@ function missingHe(code: string, view: ProApplicationView): string {
     case "PRICE": return `מחיר ל${svc(a)}`;
     case "PORTRAIT": return "תמונה או דמות";
     case "TAX_STATUS": return "איך אתם רשומים במס";
-    case "CREDENTIAL": return `${REQUIREMENT_HE[(b ?? "").split(":")[0] ?? ""] ?? "מסמך"} ל${svc(a)}`;
+    case "CREDENTIAL": return `${requirementHe(b ?? "")} ל${svc(a)}`;
     default: return code;
   }
 }
@@ -329,21 +335,26 @@ function Documents({ view, busy, save, onNext }: { view: ProApplicationView; bus
       ))}
       {credentialRows.map(({ service, r }) => {
         const key = `${service.serviceId}:${r.requirement}`;
-        const label = `${REQUIREMENT_HE[r.requirement.split(":")[0] ?? ""] ?? "מסמך"} · ${service.nameHe}`;
+        const info = documentInfoFor(r.requirement);
+        const pilotId = pilotServiceIdForDatabaseCode(service.code);
+        const whenHe = pilotId ? documentConditionHe(pilotId, r.requirement) : null;
+        const label = `${requirementHe(r.requirement)} · ${service.nameHe}`;
+        // Mandatory: the law, always. Otherwise the law in some cases (said when), or recommended.
+        const levelHe = r.mandatory ? "" : whenHe ? ` (${whenHe})` : " (מומלץ)";
         return (
           <View key={key} style={styles.docRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.listText}>{label}{r.mandatory ? "" : " (מומלץ)"}</Text>
+              <Text style={styles.listText}>{label}{levelHe}</Text>
               <TextInput
                 value={numbers[key] ?? r.credential?.number ?? ""}
                 onChangeText={(v) => setNumbers((n) => ({ ...n, [key]: v }))}
-                placeholder="מספר רישיון"
+                placeholder={info?.numberLabelHe ?? "מספר (אם יש)"}
                 accessibilityLabel={`מספר · ${label}`}
                 placeholderTextColor={colors.textSecondary}
                 style={styles.input}
                 maxLength={40}
               />
-              <Text style={styles.note}>{r.credential ? "✓ הועלה · ממתין לבדיקה" : "צילום או PDF של המסמך"}</Text>
+              <Text style={styles.note}>{r.credential ? "✓ הועלה · ממתין לבדיקה" : info?.checkHe ?? "צילום או PDF של המסמך"}</Text>
             </View>
             <Chip
               labelHe={r.credential ? "להחליף" : "העלאה"}

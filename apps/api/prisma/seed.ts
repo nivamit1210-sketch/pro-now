@@ -11,6 +11,7 @@ import { departments, categories, services, PILOT_MARKET_CODE } from "./seed-dat
 import { createPrisma } from "../src/db/prisma-client.js";
 import {
   PILOT_TO_DATABASE_SERVICE_CODE,
+  documentRequirementsFor,
   pilotServiceById,
   requirementsForService,
 } from "@pro-now/types";
@@ -125,8 +126,19 @@ async function main() {
     const serviceId = serviceIdByCode.get(databaseCode);
     if (!serviceId) continue;
 
+    /*
+     * Documents come from the research's list (D4, Dvir 2026-09-30:
+     * service-documents.ts). The catalogue still contributes its
+     * account-level labels (identity, business, the lockout's property
+     * policy), which the engine reports and does not gate on, but never a
+     * "background check": demanding a criminal record is an offence in
+     * Israel, and the research's list has none.
+     */
     const catalogService = pilotServiceById[pilotServiceId];
-    const rows = requirementsForService(catalogService?.requiredCredentials ?? []);
+    const accountLevel = requirementsForService(catalogService?.requiredCredentials ?? []).filter(
+      (r) => !r.isDocument && r.requirement !== "BACKGROUND_CHECK"
+    );
+    const rows = [...accountLevel, ...documentRequirementsFor(pilotServiceId).map((r) => ({ requirement: r.requirement, mandatory: r.mandatory }))];
 
     await prisma.serviceRequirement.deleteMany({ where: { serviceId } });
     if (rows.length === 0) continue;

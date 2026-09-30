@@ -48,6 +48,7 @@ export * from "./world-routing";
 export * from "./vehicle-motion";
 export * from "./catalog-bridge";
 export * from "./credential-requirements";
+export * from "./service-documents";
 export * from "./sponsor-shops";
 export * from "./support";
 export * from "./walk-cycle";
