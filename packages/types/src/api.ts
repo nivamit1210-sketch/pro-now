@@ -676,6 +676,8 @@ export interface ProApplicationView {
     legalName: string;
     addressAs: string | null;
     verificationStatus: string;
+    /** Trading name (optional) and tax status; null until answered. Entered, not verified. */
+    business: { tradingName: string | null; taxStatus: "EXEMPT" | "LICENSED" | "COMPANY" } | null;
     /** Their own photo, or their trade's character. Null: not chosen yet. */
     portrait: { kind: "PHOTO" | "CHARACTER" } | null;
   };

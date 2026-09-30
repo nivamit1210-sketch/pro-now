@@ -84,6 +84,24 @@ describe("delete my account", () => {
     expect(audit).toHaveLength(1);
   });
 
+  it("a professional's names, trading name and chosen face go too", async () => {
+    const { jar, userId } = await customerWithAddress("pro-leaver");
+    const pro = await db.professionalProfile.create({
+      data: { userId, legalName: "יוסי כהן", displayName: "יוסי", portraitKind: "CHARACTER" },
+    });
+    await db.businessProfile.create({ data: { professionalId: pro.id, tradingName: "יוסי אינסטלציה", taxStatus: "EXEMPT" } });
+
+    expect((await deleteMe(jar)).statusCode).toBe(200);
+
+    expect(await db.professionalProfile.findUniqueOrThrow({ where: { id: pro.id } })).toMatchObject({
+      legalName: "[נמחק]",
+      displayName: "[נמחק]",
+      portraitKind: null,
+      portraitUploadId: null,
+    });
+    expect(await db.businessProfile.findUniqueOrThrow({ where: { professionalId: pro.id } })).toMatchObject({ tradingName: null, taxStatus: "EXEMPT" });
+  });
+
   it("the same email later signs up as a new, unrelated person", async () => {
     const { email, jar, userId } = await customerWithAddress("returner");
     expect((await deleteMe(jar)).statusCode).toBe(200);

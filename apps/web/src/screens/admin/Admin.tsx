@@ -124,6 +124,11 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
       <Pressable onPress={onBack} accessibilityRole="button"><Text style={styles.link}>› חזרה לרשימה</Text></Pressable>
       <Text style={styles.title}>{a.profile.displayName} · {a.profile.legalName}</Text>
       <Text style={styles.soft}>{v.email} · פנייה: {a.profile.addressAs === "F" ? "נקבה" : a.profile.addressAs === "M" ? "זכר" : "—"} · {a.area ? `רדיוס ${a.area.radiusKm} ק״מ` : "בלי אזור"}</Text>
+      <Text style={styles.soft}>
+        {a.profile.business
+          ? `${a.profile.business.tradingName ?? "בלי שם עסק"} · ${({ EXEMPT: "עוסק פטור", LICENSED: "עוסק מורשה", COMPANY: "חברה בע״מ" } as const)[a.profile.business.taxStatus]} · לא נבדק`
+          : "פרטי העסק: לא מולאו"}
+      </Text>
       <Field label="סיבה (חובה לסירוב, נשמרת ביומן)" value={reason} onChange={setReason} />
 
       <Text style={styles.section}>החשבון והמסמכים</Text>

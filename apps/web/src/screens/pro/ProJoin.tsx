@@ -67,6 +67,7 @@ function missingHe(code: string, view: ProApplicationView): string {
     case "DOCUMENT": return ACCOUNT_DOCS.find((d) => d.kind === a)?.labelHe ?? "מסמך";
     case "PRICE": return `מחיר ל${svc(a)}`;
     case "PORTRAIT": return "תמונה או דמות";
+    case "TAX_STATUS": return "איך אתם רשומים במס";
     case "CREDENTIAL": return `${REQUIREMENT_HE[(b ?? "").split(":")[0] ?? ""] ?? "מסמך"} ל${svc(a)}`;
     default: return code;
   }
@@ -126,7 +127,17 @@ export function ProJoin() {
 
   const stepBody = (() => {
     switch (step) {
-      case 0: return <Details view={view} busy={busy} onSave={(d) => save(() => api.proJoin(d), 1)} />;
+      case 0:
+        return (
+          <Details
+            view={view}
+            busy={busy}
+            onSave={({ business, ...details }) => save(async () => {
+              await api.proJoin(details);
+              return api.proSetBusiness(business);
+            }, 1)}
+          />
+        );
       case 1: return view ? <Services view={view} open={openServices.data?.services ?? null} busy={busy} onSave={(ids) => save(() => api.proSetServices(ids), 2)} /> : null;
       case 2: return view ? <Area view={view} busy={busy} onSave={(a) => save(() => api.proSetArea(a), 3)} /> : null;
       case 3: return view ? <Documents view={view} busy={busy} save={save} onNext={() => setStep(4)} /> : null;
@@ -168,11 +179,29 @@ export function ProJoin() {
   );
 }
 
-function Details({ view, busy, onSave }: { view: ProApplicationView | null; busy: boolean; onSave: (d: { displayName: string; legalName: string; addressAs: "M" | "F" }) => void }) {
+type TaxStatus = "EXEMPT" | "LICENSED" | "COMPANY";
+const TAX_STATUS_HE: ReadonlyArray<readonly [TaxStatus, string]> = [
+  ["EXEMPT", "עוסק פטור"],
+  ["LICENSED", "עוסק מורשה"],
+  ["COMPANY", "חברה בע״מ"],
+];
+
+function Details({
+  view,
+  busy,
+  onSave,
+}: {
+  view: ProApplicationView | null;
+  busy: boolean;
+  onSave: (d: { displayName: string; legalName: string; addressAs: "M" | "F"; business: { tradingName: string | null; taxStatus: TaxStatus } }) => void;
+}) {
   const [displayName, setDisplayName] = useState(view?.profile.displayName ?? "");
   const [legalName, setLegalName] = useState(view?.profile.legalName ?? "");
   const [addressAs, setAddressAs] = useState<"M" | "F" | null>((view?.profile.addressAs as "M" | "F" | null) ?? null);
-  const ok = displayName.trim().length > 0 && legalName.trim().length > 1 && addressAs;
+  // The demo's step 2 (Amit, 2026-09-30): a business name if they have one, and how they are registered for tax.
+  const [tradingName, setTradingName] = useState(view?.profile.business?.tradingName ?? "");
+  const [taxStatus, setTaxStatus] = useState<TaxStatus | null>(view?.profile.business?.taxStatus ?? null);
+  const ok = displayName.trim().length > 0 && legalName.trim().length > 1 && addressAs && taxStatus;
   return (
     <View style={styles.section}>
       <Text style={styles.title}>ברוכים הבאים ל־PRO NOW</Text>
@@ -185,7 +214,26 @@ function Details({ view, busy, onSave }: { view: ProApplicationView | null; busy
           <Chip key={k} labelHe={he} on={addressAs === k} onPress={() => setAddressAs(k)} />
         ))}
       </View>
-      <PrimaryAction labelHe="המשך" disabled={!ok || busy} onPress={() => ok && onSave({ displayName: displayName.trim(), legalName: legalName.trim(), addressAs })} />
+      <Field label="שם העסק (לא חובה)" value={tradingName} onChange={setTradingName} max={40} placeholder="למשל: יוסי אינסטלציה" />
+      <Text style={styles.label}>איך אתם רשומים במס?</Text>
+      <View style={styles.row}>
+        {TAX_STATUS_HE.map(([k, he]) => (
+          <Chip key={k} labelHe={he} on={taxStatus === k} onPress={() => setTaxStatus(k)} />
+        ))}
+      </View>
+      <PrimaryAction
+        labelHe="המשך"
+        disabled={!ok || busy}
+        onPress={() =>
+          ok &&
+          onSave({
+            displayName: displayName.trim(),
+            legalName: legalName.trim(),
+            addressAs,
+            business: { tradingName: tradingName.trim() || null, taxStatus },
+          })
+        }
+      />
     </View>
   );
 }
@@ -415,7 +463,7 @@ function Portrait({ view, busy, save, onNext }: { view: ProApplicationView; busy
 
 function Send({ view, busy, onSubmit, onGoTo }: { view: ProApplicationView; busy: boolean; onSubmit: () => void; onGoTo: (step: number) => void }) {
   const stepOf = (code: string) =>
-    code === "ADDRESS_AS" ? 0 : code === "SERVICES" ? 1 : code === "AREA" ? 2 : code.startsWith("PRICE") ? 4 : code === "PORTRAIT" ? 5 : 3;
+    code === "ADDRESS_AS" || code === "TAX_STATUS" ? 0 : code === "SERVICES" ? 1 : code === "AREA" ? 2 : code.startsWith("PRICE") ? 4 : code === "PORTRAIT" ? 5 : 3;
   return (
     <View style={styles.section}>
       <Text style={styles.title}>שליחה לאישור</Text>

@@ -77,7 +77,8 @@ describe("joining as a professional", () => {
     expect(res.statusCode, res.body).toBe(200);
     proId = res.json().profile.id;
     expect(res.json().profile).toMatchObject({ addressAs: "F", verificationStatus: "DRAFT" });
-    expect(res.json().missing).toEqual(expect.arrayContaining(["SERVICES", "AREA", "DOCUMENT:GOVERNMENT_ID", "DOCUMENT:SELFIE", "DOCUMENT:TAX_FILE", "PORTRAIT"]));
+    expect(res.json().missing).toEqual(expect.arrayContaining(["SERVICES", "AREA", "DOCUMENT:GOVERNMENT_ID", "DOCUMENT:SELFIE", "DOCUMENT:TAX_FILE", "PORTRAIT", "TAX_STATUS"]));
+    expect(res.json().profile.business).toBeNull();
     expect(res.json().profile.portrait).toBeNull();
     expect(res.json().missing.join()).not.toMatch(/CRIMINAL/);
   });
@@ -95,6 +96,23 @@ describe("joining as a professional", () => {
     expect(res.statusCode).toBe(409);
     expect(res.json().missing).toEqual(expect.arrayContaining([`PRICE:${approvedSvc.code}`, "AREA"]));
     expect(res.json().missing.some((m: string) => m.startsWith(`CREDENTIAL:${approvedSvc.code}:`))).toBe(true);
+  });
+
+  it("the business: an optional trading name and how they are registered for tax (Amit, 2026-09-30)", async () => {
+    const put = (payload: object) => app.inject({ method: "PUT", url: "/api/v1/pro/application/business", headers: as(applicant), payload });
+    expect((await put({ tradingName: "רוני אינסטלציה" })).statusCode).toBe(400);
+    expect((await put({ taxStatus: "SOMETHING_ELSE" })).statusCode).toBe(400);
+
+    const res = await put({ tradingName: "  רוני אינסטלציה ", taxStatus: "LICENSED" });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().profile.business).toEqual({ tradingName: "רוני אינסטלציה", taxStatus: "LICENSED" });
+    expect(res.json().missing).not.toContain("TAX_STATUS");
+
+    // No name is an answer too; and entering details verifies nothing (docs/10: the badge has its own status).
+    const bare = await put({ tradingName: null, taxStatus: "EXEMPT" });
+    expect(bare.json().profile.business).toEqual({ tradingName: null, taxStatus: "EXEMPT" });
+    const row = await db.businessProfile.findUniqueOrThrow({ where: { professionalId: proId } });
+    expect(row.verificationStatus).toBe("UNVERIFIED");
   });
 
   it("the portrait is a photo of their own, or the trade's character (Amit, 2026-09-30: required)", async () => {

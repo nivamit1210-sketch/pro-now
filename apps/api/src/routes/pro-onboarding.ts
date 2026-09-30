@@ -4,6 +4,7 @@ import { credentialTypeFor, type ProApplicationView } from "@pro-now/types";
 import {
   ACCOUNT_DOCUMENT_KINDS,
   proAreaSchema,
+  proBusinessSchema,
   proCredentialSchema,
   proDocumentSchema,
   proJoinSchema,
@@ -53,6 +54,7 @@ export async function applicationView(db: PrismaClient, professionalId: string):
       services: { include: { service: { include: { requirements: true } } }, orderBy: { createdAt: "asc" } },
       documents: true,
       credentials: true,
+      businessProfile: true,
     },
   });
   const area = await db.serviceArea.findFirst({ where: { professionalId }, orderBy: { id: "desc" } });
@@ -61,6 +63,7 @@ export async function applicationView(db: PrismaClient, professionalId: string):
   if (!pro.addressAs) missing.push("ADDRESS_AS");
   if (pro.services.length === 0) missing.push("SERVICES");
   if (!area) missing.push("AREA");
+  if (!pro.businessProfile?.taxStatus) missing.push("TAX_STATUS");
   if (!pro.portraitKind) missing.push("PORTRAIT");
   for (const kind of ACCOUNT_DOCUMENT_KINDS) {
     if (!pro.documents.some((d) => d.kind === kind && d.status !== "REJECTED")) missing.push(`DOCUMENT:${kind}`);
@@ -102,6 +105,9 @@ export async function applicationView(db: PrismaClient, professionalId: string):
       legalName: pro.legalName,
       addressAs: pro.addressAs,
       verificationStatus: pro.verificationStatus,
+      business: pro.businessProfile?.taxStatus
+        ? { tradingName: pro.businessProfile.tradingName, taxStatus: pro.businessProfile.taxStatus as "EXEMPT" | "LICENSED" | "COMPANY" }
+        : null,
       portrait: pro.portraitKind === "PHOTO" || pro.portraitKind === "CHARACTER" ? { kind: pro.portraitKind } : null,
     },
     services,
@@ -212,6 +218,20 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
         create: { professionalId: p.id, serviceId, status: "DRAFT" },
       });
     }
+    return reply.send(await applicationView(app.prisma, p.id));
+  });
+
+  /**
+   * The business behind the professional. Entering it verifies nothing: the
+   * customer-facing "עסק אומת" comes only from `verificationStatus`, which an
+   * admin or a registry sets (docs/10 §Onboarding step 3).
+   */
+  app.put("/v1/pro/application/business", pro, async (req, reply) => {
+    const p = await professionalOf(app, req, reply);
+    if (!p) return;
+    const body = proBusinessSchema.parse(req.body);
+    const data = { tradingName: body.tradingName?.trim() || null, taxStatus: body.taxStatus };
+    await app.prisma.businessProfile.upsert({ where: { professionalId: p.id }, update: data, create: { professionalId: p.id, ...data } });
     return reply.send(await applicationView(app.prisma, p.id));
   });
 

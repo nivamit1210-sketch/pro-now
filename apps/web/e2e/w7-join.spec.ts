@@ -25,6 +25,9 @@ test("a professional joins, is reviewed, and is approved for one service", async
   await page.getByRole("textbox", { name: "השם שהלקוחות יראו" }).fill("מיכל");
   await page.getByRole("textbox", { name: "שם מלא כפי שבתעודה" }).fill("מיכל לוי");
   await page.getByRole("button", { name: "בלשון נקבה" }).click();
+  // How she is registered for tax is required; a business name is not.
+  await expect(page.getByRole("button", { name: "המשך" })).toBeDisabled();
+  await page.getByRole("button", { name: "עוסק פטור" }).click();
   await page.getByRole("button", { name: "המשך" }).click();
 
   // 2 · in her own words; the matcher marks what fits.

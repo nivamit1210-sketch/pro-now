@@ -127,6 +127,8 @@ export default async function meRoutes(app: FastifyInstance) {
         where: { userId },
         data: { legalName: ERASED, displayName: ERASED, profilePhotoRef: null, portraitKind: null, portraitUploadId: null, presenceState: "OFFLINE" },
       });
+      // A trading name is often the person's own ("יוסי אינסטלציה").
+      await tx.businessProfile.updateMany({ where: { professional: { userId } }, data: { tradingName: null } });
 
       await tx.auditLog.create({
         data: { actorId: userId, action: "ACCOUNT_DELETED", targetType: "user", targetId: userId, requestId: req.id },

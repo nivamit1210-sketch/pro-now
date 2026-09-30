@@ -289,6 +289,21 @@ export const proJoinSchema = z
   .strict();
 export type ProJoinInput = z.infer<typeof proJoinSchema>;
 
+/**
+ * How a professional is registered for tax, in the demo's three answers
+ * (Amit, 2026-09-30): עוסק פטור · עוסק מורשה · חברה בע״מ. Asked, never
+ * inferred; what it means for invoices is still a decision (CLAUDE.md §4).
+ */
+export const TAX_STATUSES = ["EXEMPT", "LICENSED", "COMPANY"] as const;
+
+/** `PUT /api/v1/pro/application/business`: an optional trading name, and the tax status. */
+export const proBusinessSchema = z
+  .object({
+    tradingName: z.string().trim().max(40).nullable().optional(),
+    taxStatus: z.enum(TAX_STATUSES),
+  })
+  .strict();
+
 /** `PUT /api/v1/pro/application/services`: the services applied for (server ids). */
 export const proServicesSchema = z.object({ serviceIds: z.array(z.string().min(1)).min(1).max(20) }).strict();
 

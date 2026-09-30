@@ -123,6 +123,8 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
       request<ProApplicationView>("PUT", "/pro/application/area", input),
     proAddDocument: (input: { kind: "GOVERNMENT_ID" | "SELFIE" | "TAX_FILE"; uploadId: string }) =>
       request<ProApplicationView>("POST", "/pro/application/documents", input),
+    proSetBusiness: (input: { tradingName?: string | null; taxStatus: "EXEMPT" | "LICENSED" | "COMPANY" }) =>
+      request<ProApplicationView>("PUT", "/pro/application/business", input),
     proSetPortrait: (input: { kind: "PHOTO"; uploadId: string } | { kind: "CHARACTER" }) =>
       request<ProApplicationView>("PUT", "/pro/application/portrait", input),
     proAddCredential: (input: { serviceId: string; requirement: string; number?: string; uploadId: string }) =>
