@@ -48,6 +48,10 @@ export interface OnboardingResult {
   shopSkipped: boolean;
   city: string;
   radiusKm: number;
+  /** What he charges, per service: the visit fee, hourly rate or base fare he set. */
+  pricesMinorUnits?: Record<string, number>;
+  /** His own price-list lines, per service. */
+  priceLines?: Record<string, Array<{ id: string; nameHe: string; amountMinorUnits: number }>>;
 }
 
 export interface ProOnboardingBodyProps {
@@ -103,9 +107,13 @@ export function ProOnboardingBody({
 }: ProOnboardingBodyProps) {
   const [step, setStep] = useState(startStep ?? (initial ? 7 : 0));
   const [shopSkipped, setShopSkipped] = useState(initial?.shopSkipped ?? false);
+  /* For demonstrations only (Amit, 2026-09-30): documents may wait, and say so. */
+  const [docsSkipped, setDocsSkipped] = useState(false);
   /* 1 — what you do */
   const [about, setAbout] = useState("");
-  const [picked, setPicked] = useState<string[]>(initial?.serviceIds ?? []);
+  /* What he chose by hand, and what he took off the list we understood. */
+  const [manual, setManual] = useState<string[]>(initial?.serviceIds ?? []);
+  const [removed, setRemoved] = useState<string[]>([]);
   const [custom, setCustom] = useState<string[]>(initial?.customServicesHe ?? []);
   const [customDraft, setCustomDraft] = useState("");
   const [browse, setBrowse] = useState(false);
@@ -133,19 +141,45 @@ export function ProOnboardingBody({
   const [useCharacter, setUseCharacter] = useState(Boolean(initial) && !initial?.photoUri);
 
   const byId = useMemo(() => Object.fromEntries(services.map((s) => [s.id, s])), [services]);
-  const visitIds = useMemo(() => picked.filter((id) => byId[id]?.kind === "VISIT"), [picked, byId]);
   const suggestions = useMemo(() => {
     if (about.trim().length < 3) return [];
     return matchServicesByText(about, matchRules).slice(0, 8).map((m) => m.serviceId).filter((id) => byId[id]);
   }, [about, matchRules, byId]);
-  /* What was understood is ticked for him; he untangles, never types it twice. */
-  const seen = useRef(new Set<string>());
-  useEffect(() => {
-    const fresh = suggestions.filter((id) => !seen.current.has(id));
-    fresh.forEach((id) => seen.current.add(id));
-    if (fresh.length) setPicked((p) => [...new Set([...p, ...fresh])]);
-  }, [suggestions]);
+  /*
+   * WHAT WAS UNDERSTOOD FOLLOWS WHAT IS WRITTEN — NOW, NOT WHILE TYPING.
+   *
+   * Amit, as a vet: *"רשמתי וטרינר … חייב אותי עדיין לבחור … פתיחת סתימה."*
+   * A tick used to stick the moment any half-typed word matched something,
+   * and stayed after the words changed. Now the understood services are
+   * worked out from the text as it stands; only what he picks by hand, or
+   * takes off by hand, is remembered.
+   */
+  const picked = useMemo(
+    () => [...new Set([...suggestions.filter((id) => !removed.includes(id)), ...manual])],
+    [suggestions, removed, manual]
+  );
+  const unpick = (id: string) => {
+    setManual((m) => m.filter((x) => x !== id));
+    if (suggestions.includes(id)) setRemoved((r) => [...r, id]);
+  };
+  const addPick = (id: string) => {
+    setManual((m) => [...new Set([...m, id])]);
+    setRemoved((r) => r.filter((x) => x !== id));
+  };
+  /* The full list starts with his own trade, never with plumbing. */
+  const browseList = useMemo(() => {
+    const cats = new Set(picked.map((id) => byId[id]?.categoryHe));
+    const rest = services.filter((x) => !picked.includes(x.id));
+    return [...rest.filter((x) => cats.has(x.categoryHe)), ...rest.filter((x) => !cats.has(x.categoryHe))];
+  }, [services, picked, byId]);
+  /* "שירות חדש" only when it really is new: a trade we have is added as itself. */
+  const addCustom = (t: string) => {
+    const known = matchServicesByText(t, matchRules).map((m) => m.serviceId).filter((id) => byId[id]);
+    if (known.length) known.forEach(addPick);
+    else setCustom((p) => [...new Set([...p, t])]);
+  };
 
+  const visitIds = useMemo(() => picked.filter((id) => byId[id]?.kind === "VISIT"), [picked, byId]);
   const docs: OnboardingDoc[] = useMemo(() => onboardingDocsFor(picked), [picked]);
   const firstTrade = picked[0] ?? null;
   const shop = shopFor(firstTrade);
@@ -169,7 +203,7 @@ export function ProOnboardingBody({
     true,
     picked.length + custom.length > 0,
     name.trim().length > 1 && Boolean(dealer) && city.trim().length > 1,
-    mustLeft === 0,
+    mustLeft === 0 || docsSkipped,
     pricesMissing === 0,
     shopName.trim().length > 0,
     Boolean(photo) || useCharacter,
@@ -186,6 +220,22 @@ export function ProOnboardingBody({
     "",
   ][step];
 
+  /* The number each service will be charged at — the same rule the prices step checks. */
+  const priceOf = () =>
+    Object.fromEntries(
+      picked
+        .map((id) => {
+          const x = byId[id];
+          const v =
+            x?.kind === "VISIT" ? (splitVisit ? prices[id] ?? x.visitFee : prices.__visit ?? byId[visitIds[0]!]?.visitFee)
+            : x?.kind === "HOURLY" ? prices[id] ?? x.hourly
+            : x?.kind === "DISTANCE" ? prices[id] ?? x.deliveryBase
+            : x?.kind === "LIST" ? (lines[id] ?? x.list ?? [])[0]?.amountMinorUnits
+            : undefined;
+          return [id, v] as const;
+        })
+        .filter((e): e is readonly [string, number] => typeof e[1] === "number")
+    );
   const pick = async (key: string) => {
     const f = await onPickFile?.();
     if (!f) return null;
@@ -252,17 +302,25 @@ export function ProOnboardingBody({
             <TextInput
               value={about}
               onChangeText={setAbout}
-              placeholder="למשל: אינסטלטור, פותח סתימות ומחליף ברזים, עושה גם דודי שמש"
+              placeholder="למשל: וטרינר · מספרה ניידת לכלבים · חשמלאי, מתקין שקעים"
               placeholderTextColor="rgba(247,243,250,0.48)"
               multiline
               accessibilityLabel="תיאור חופשי של העבודה שלך"
               style={[s.input, s.textarea]}
               textAlign="right"
             />
+            {about.trim().length >= 3 && suggestions.length === 0 && picked.length === 0 && custom.length === 0 ? (
+              <View style={s.nomatch}>
+                <Text style={s.nomatchText}>לא מצאנו את זה אצלנו. בחר מהרשימה, או שנוסיף את זה כשירות חדש.</Text>
+                <Pressable onPress={() => setCustom((p) => [...new Set([...p, about.trim()])])} accessibilityRole="button" style={s.linkRow}>
+                  <Text style={s.link}>{`+ להוסיף ״${about.trim().slice(0, 40)}״ כשירות חדש`}</Text>
+                </Pressable>
+              </View>
+            ) : null}
             {picked.length > 0 ? <Text style={s.section}>{picked.length === 1 ? "זיהינו שירות אחד" : `זיהינו ${picked.length} שירותים`} — הקש כדי להסיר</Text> : null}
             <View style={s.wrap}>
               {picked.map((id) => (
-                <Chip key={id} onPress={() => setPicked((p) => p.filter((x) => x !== id))} labelHe={`הסרת ${byId[id]?.nameHe ?? ""}`}>
+                <Chip key={id} onPress={() => unpick(id)} labelHe={`הסרת ${byId[id]?.nameHe ?? ""}`}>
                   <Text style={s.svcCheck}>✓</Text>
                   <View>
                     <Text style={s.svcName}>{byId[id]?.nameHe}</Text>
@@ -286,8 +344,8 @@ export function ProOnboardingBody({
             </Pressable>
             {browse ? (
               <View style={s.wrap}>
-                {services.filter((x) => !picked.includes(x.id)).map((x) => (
-                  <Pressable key={x.id} onPress={() => setPicked((p) => [...p, x.id])} accessibilityRole="checkbox" accessibilityState={{ checked: false }} style={s.svc}>
+                {browseList.map((x) => (
+                  <Pressable key={x.id} onPress={() => addPick(x.id)} accessibilityRole="checkbox" accessibilityState={{ checked: false }} style={s.svc}>
                     <Text style={[s.svcCheck, { opacity: 0.35 }]}>+</Text>
                     <View>
                       <Text style={s.svcName}>{x.nameHe}</Text>
@@ -303,7 +361,7 @@ export function ProOnboardingBody({
               <Pressable
                 onPress={() => {
                   const t = customDraft.trim();
-                  if (t) setCustom((p) => [...new Set([...p, t])]);
+                  if (t) addCustom(t);
                   setCustomDraft("");
                 }}
                 disabled={!customDraft.trim()}
@@ -558,7 +616,7 @@ export function ProOnboardingBody({
             {[
               { t: "שירותים", v: `${picked.length + custom.length}`, to: 1 },
               { t: "אזור", v: `${city || "—"} · ${radius} ק״מ`, to: 2 },
-              { t: "מסמכים", v: `${mustDocs.length - mustLeft}/${mustDocs.length} חובה${Object.keys(files).filter((k) => docs.some((d) => d.id === k && d.level === "RECOMMENDED")).length ? " · + מומלצים" : ""}`, to: 3 },
+              { t: "מסמכים", v: docsSkipped && mustLeft > 0 ? `${mustDocs.length - mustLeft}/${mustDocs.length} · דולג בהדגמה` : `${mustDocs.length - mustLeft}/${mustDocs.length} חובה${Object.keys(files).filter((k) => docs.some((d) => d.id === k && d.level === "RECOMMENDED")).length ? " · + מומלצים" : ""}`, to: 3 },
               { t: "מחירים", v: visitIds.length ? `דמי ביקור ${ils(prices.__visit ?? byId[visitIds[0]!]?.visitFee)}` : "לפי המחירון שלך", to: 4 },
               { t: "החנות", v: shopSkipped ? `${shopName} · עיצוב ברירת מחדל, אפשר אחר כך` : shopName, to: 5 },
             ].map((r) => (
@@ -604,8 +662,25 @@ export function ProOnboardingBody({
         {body}
       </ScrollView>
       <View style={s.foot}>
-        {/* Only the shop's design may wait (Amit, 2026-09-30): everything
+        {/* The shop's design may wait (Amit, 2026-09-30); everything else
             required stays required — prices included. */}
+        {/* Documents and the photo may be skipped too — for demonstrations
+            only, until the app runs for real (Amit, 2026-09-30). The
+            summary says they were skipped; nothing pretends they arrived. */}
+        {(step === 3 && mustLeft > 0) || (step === 6 && !photo && !useCharacter) ? (
+          <Pressable
+            onPress={() => {
+              if (step === 3) setDocsSkipped(true);
+              else setUseCharacter(true);
+              setStep((n) => n + 1);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="דלג לעכשיו — להדגמה בלבד"
+            style={s.skip}
+          >
+            <Text style={s.skipText}>דלג לעכשיו (הדגמה)</Text>
+          </Pressable>
+        ) : null}
         {step === 5 ? (
           <Pressable
             onPress={() => {
@@ -622,7 +697,7 @@ export function ProOnboardingBody({
           onPress={() => {
             if (!canNext) return;
             if (step === STEPS.length - 1) {
-              onDone({ nameHe: name, businessHe: business, serviceIds: picked, customServicesHe: custom, shopNameHe: shopName, brandColor: color, shopSkipped, logoUri: logo, photoUri: useCharacter ? null : photo ?? files.SELFIE?.uri ?? null, city, radiusKm: radius });
+              onDone({ nameHe: name, businessHe: business, serviceIds: picked, customServicesHe: custom, shopNameHe: shopName, brandColor: color, shopSkipped, logoUri: logo, photoUri: useCharacter ? null : photo ?? files.SELFIE?.uri ?? null, city, radiusKm: radius, pricesMinorUnits: priceOf(), priceLines: Object.fromEntries(picked.filter((id) => byId[id]?.kind === "LIST").map((id) => [id, [...(lines[id] ?? byId[id]?.list ?? [])]])) });
               return;
             }
             setStep((n) => n + 1);
@@ -743,6 +818,8 @@ const s = StyleSheet.create({
   svcName: { color: "#fff", fontSize: scale.meta, fontWeight: "800", textAlign: "right" },
   svcCat: { color: "rgba(247,243,250,0.55)", fontSize: scale.micro, textAlign: "right" },
   linkRow: { minHeight: 44, justifyContent: "center" },
+  nomatch: { marginTop: 12, padding: 12, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.05)" },
+  nomatchText: { color: "rgba(247,243,250,0.82)", fontSize: scale.meta, textAlign: "right", writingDirection: "rtl" },
   link: { color: "#FF9A6B", fontSize: scale.meta, fontWeight: "800", textAlign: "right" },
   addBtn: { minHeight: 48, paddingHorizontal: 16, borderRadius: 14, justifyContent: "center", backgroundColor: "#8B5CF6" },
   addBtnText: { color: "#fff", fontSize: scale.meta, fontWeight: "800" },

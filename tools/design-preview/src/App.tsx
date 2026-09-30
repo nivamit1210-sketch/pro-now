@@ -387,6 +387,36 @@ const SERVICE_PAGES: typeof catalogServicePages = Object.fromEntries(
     demoOpenServiceIds.has(id) ? { ...page, comingSoon: false, scheduledOnly: false } : page,
   ])
 );
+/*
+ * A SAMPLE CALL IN THE PROFESSIONAL'S OWN TRADE.
+ *
+ * Amit, joined as a vet: *"כל המלל פה לא קשור למקצוען שבניתי."* The demo
+ * call ("שלח אליי עכשיו קריאה לדוגמה") was always the plumbing leak. For a
+ * professional who joined, it is his first service, at the demo's own
+ * sample address, with nothing the customer did not say.
+ */
+function sampleRequestFor(serviceId: string): LiveRequest {
+  const page = SERVICE_PAGES[serviceId]!;
+  const def = pilotServiceById[serviceId];
+  return {
+    serviceId,
+    serviceNameHe: page.nameHe,
+    serviceCode: def?.code ?? serviceId,
+    markName: page.mark,
+    priceModel: page.price.priceModel,
+    intakeBrief: [],
+    items: page.price.priceModel === "FIXED" ? priceListFor(serviceId).slice(0, 1) : undefined,
+    quoteFirst: Boolean(def?.quoteBeforeDispatch),
+    destinationHe: def?.needsDestination ? "רמת גן" : null,
+    addressHe: "רחוב הברזל 12, רמת אביב, תל אביב · קומה 3, דירה 9 · קוד כניסה 1408",
+    textHe: "",
+    photos: 0,
+    voiceSeconds: null,
+    areaLabelHe: "רמת אביב, תל אביב",
+    typicalMinutes: def?.typicalMinutes ?? null,
+    createdAtMs: Date.now(),
+  };
+}
 /* The same opening for the lists the service pages are reached from. */
 /**
  * The code the professional says at the door. In production it comes from
@@ -761,6 +791,8 @@ export function App() {
   /* "פנוי בעוד XX דקות", set on the professional's side and read on the customer's. */
   const [proAvailableAt, setProAvailableAt] = useState<number | null>(null);
   const [proName, setProName] = useState<string | null>(null);
+  /* Who joined on this device, as he described himself — the pro app is his. */
+  const [joinedPro, setJoinedPro] = useState<OnboardingResult | null>(() => loadSession()?.joinedPro ?? null);
   /* The professional's own prices, as he set them — what the customer is shown. */
   const [proPrices, setProPrices] = useState<{ byService: Record<string, number | null>; afterHoursPct: number | null }>({ byService: {}, afterHoursPct: null });
   /* A price agreed before he came (fixed/hourly): it is the job's total. */
@@ -1088,6 +1120,8 @@ export function App() {
             facadeUri={onboardShopFor(gate.result.serviceIds[0] ?? null).facadeUri}
             onDesign={gate.result.shopSkipped ? () => setGate({ name: "onboard", initial: gate.result, startStep: 5, approved: true }) : undefined}
             onStart={() => {
+              setJoinedPro(gate.result);
+              saveSession({ joinedPro: gate.result });
               setSide("pro");
               setGate(null);
             }}
@@ -1265,7 +1299,8 @@ export function App() {
             onJobChange={setProJobState}
             availableAtMs={proAvailableAt}
             onAvailableAtChange={setProAvailableAt}
-            selfNameHe={proName}
+            selfNameHe={joinedPro ? joinedPro.nameHe.trim().split(/\s+/)[0] || proName : proName}
+            joined={joinedPro}
             onPricesChange={setProPrices}
             onAgreedStart={(amount, nameHe) => {
               setQuoteTotal(amount);
@@ -1448,7 +1483,10 @@ const ONBOARD_SERVICES: OnboardingService[] = Object.keys(SERVICE_PAGES).map((id
 /* The trade's own shopfront and drawn professional, for "your shop in our street". */
 function onboardShopFor(serviceId: string | null): { facadeUri: string; characterUri: string } {
   const dept = serviceId ? departmentCodeByServiceId[serviceId] ?? "" : "";
-  const shop = (dept && DEPT_SHOP[dept]) || "home";
+  /* A trade with its own house in the street stands in front of it — the vet
+     has a clinic, not the pet shop (Amit, joining as a vet, 2026-09-30). */
+  const own: Record<string, string> = { "svc-vet": "vet", "svc-nails": "nails" };
+  const shop = (serviceId && own[serviceId]) || (dept && DEPT_SHOP[dept]) || "home";
   const drawn = ["appliance", "auto", "build", "care", "hair", "help", "home", "move", "pets", "tech", "well"];
   /* An electrician is not the plumber with a wrench: the tool-belt technician stands in. */
   const figure = serviceId && /svc-(electric|socket|alarm|solar)/.test(serviceId) ? "appliance" : shop;
@@ -4889,6 +4927,7 @@ function ProApp({
   availableAtMs = null,
   onAvailableAtChange,
   selfNameHe = null,
+  joined = null,
   onPricesChange,
   onAgreedStart,
   onCompletionSeen,
@@ -4961,6 +5000,8 @@ function ProApp({
   onAvailableAtChange?: (at: number | null) => void;
   /** Who this professional is, as the customer saw him. */
   selfNameHe?: string | null;
+  /** The professional who joined on this device: his services, prices and trade. */
+  joined?: OnboardingResult | null;
   /** His prices, for the customer's side to show. */
   onPricesChange?: (p: { byService: Record<string, number | null>; afterHoursPct: number | null }) => void;
   /** Work starts at a price agreed in advance: tell the shell what it is. */
@@ -5067,13 +5108,20 @@ function ProApp({
   /* Night/Shabbat surcharge and the price list — his, set on "המחירים שלך". */
   const [afterHoursPct, setAfterHoursPct] = useState<number | null>(null);
   /* The demo account's own list, so a quote can be built from it out of the box. */
-  const [priceList, setPriceList] = useState<PriceListItem[]>(() => [
+  const [priceList, setPriceList] = useState<PriceListItem[]>(() => Object.values(joined?.priceLines ?? {})[0]?.map((l) => ({ ...l })) ?? [
     { id: "d1", nameHe: "החלפת אטם בברז", amountMinorUnits: 18000 },
     { id: "d2", nameHe: "החלפת סיפון", amountMinorUnits: 25000 },
     { id: "d3", nameHe: "פתיחת סתימה בכיור", amountMinorUnits: 30000 },
     { id: "d4", nameHe: "החלפת ברז מטבח", amountMinorUnits: 32000 },
   ]);
+  const joinedIds = joined?.serviceIds.length ? joined.serviceIds : null;
+  /* Approved means approved for what he offers: those services' own credentials. */
+  const joinedCreds = joinedIds
+    ? ([...new Set([...DEMO_VERIFIED, ...joinedIds.flatMap((id) => pilotServiceById[id]?.requiredCredentials ?? [])])] as Parameters<typeof togglesFor>[0])
+    : null;
   const [pricing, setPricing] = useState<ProPricingRow[]>(() => {
+    if (joinedIds && joinedCreds)
+      return pricingRowsFor(joinedCreds, joinedIds).map((r) => ({ ...r, amountMinorUnits: joined?.pricesMinorUnits?.[r.serviceId] ?? r.amountMinorUnits }));
     // The prices a professional typed are theirs and are tedious to retype;
     // the eligibility that sits beside them is the server's and is rebuilt
     // from the catalogue every time rather than restored from a browser.
@@ -5136,6 +5184,7 @@ function ProApp({
     return FEMALE_FIGURE.has((DEPT_SHOPS[d] ?? [DEPT_SHOP[d] ?? "home"])[0]!);
   })();
   const proServices = useMemo(() => {
+    if (joinedIds && joinedCreds) return togglesFor(joinedCreds, joinedIds);
     if (!tradeServiceId) return DEFAULT_PRO_SERVICES;
     const category = categoryNameByServiceId[tradeServiceId];
     const ids = Object.keys(categoryNameByServiceId).filter((id) => categoryNameByServiceId[id] === category);
@@ -6021,7 +6070,7 @@ function ProApp({
          * has no area demand reading. The screen must therefore render two
          * lines, not three, and must not fill the gap.
          */
-        briefing={{ peersOnline: 2, lastWeekNetMinorUnits: 384000, lastWeekOnlineMinutes: 1215 }}
+        briefing={joined ? {} : { peersOnline: 2, lastWeekNetMinorUnits: 384000, lastWeekOnlineMinutes: 1215 }}
         services={proServices.map((s) => ({
           id: s.id,
           nameHe: s.nameHe,
@@ -6145,7 +6194,7 @@ function ProApp({
            */
           label={request ? "הקריאה ששלחת בצד הלקוח ממתינה" : "שלח אליי עכשיו קריאה לדוגמה"}
           onPress={() => {
-            setTakenRequest(request);
+            setTakenRequest(request ?? (joinedIds ? sampleRequestFor(joinedIds[0]!) : null));
             if (request) onTakeRequest();
             setOfferAt(Date.now());
           }}

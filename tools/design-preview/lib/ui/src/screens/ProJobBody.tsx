@@ -283,7 +283,13 @@ function StageBand({ status, kind = "VISIT", female = false, workHe = "התיק�
         Animated.timing(toast, { toValue: 0, duration: 450, useNativeDriver: true }),
       ]).start(() => setDoneHe(null));
     }
-  }, [status, st, enter, fill, toast]);
+    /*
+     * ONCE PER STEP, NOT ONCE PER SECOND. `st` is a fresh object on every
+     * render, and the job screen re-renders every second for its clocks —
+     * so with `st` in the list the card faded in again every second. Amit:
+     * *"לא מפסיק להבהב ומעצבן בעיניים."* It enters when the step changes.
+     */
+  }, [status, st?.n, st?.titleHe]);
   if (!st) return null;
   return (
     <Animated.View

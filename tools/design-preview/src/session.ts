@@ -98,6 +98,8 @@ export interface SavedSession {
   introSeenSides?: Array<"customer" | "pro">;
   /** The professional finished joining (ProOnboardingBody) on this device. */
   proOnboarded?: boolean;
+  /** The professional who joined on this device, as he described himself. */
+  joinedPro?: import("@pro-now/demo-ui").OnboardingResult | null;
   /** Phone numbers that finished signing up, per side — they skip the explanations next time. */
   registered?: Record<string, { customer?: boolean; pro?: boolean }>;
 }

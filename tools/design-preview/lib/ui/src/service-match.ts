@@ -210,6 +210,7 @@ export function matchServicesByText(text: string, rules: ServiceMatchRule[]): Se
 
   const scored: ServiceMatch[] = [];
   const exactBy = new Map<string, number>();
+  const slipOnly = new Set<string>();
   for (const rule of rules) {
     const covered = new Map<number, number>();
     for (const keyword of rule.keywords)
@@ -224,6 +225,7 @@ export function matchServicesByText(text: string, rules: ServiceMatchRule[]): Se
     }
     scored.push({ serviceId: rule.serviceId, score: Math.round(score * 10) / 10 });
     exactBy.set(rule.serviceId, exact);
+    if ([...covered.values()].every((w) => w < 1)) slipOnly.add(rule.serviceId);
   }
 
   const ranked = scored.sort(
@@ -254,7 +256,17 @@ export function matchServicesByText(text: string, rules: ServiceMatchRule[]): Se
    */
   const top = ranked[0]?.score ?? 0;
   const floor = top >= 2 ? Math.max(2, Math.ceil(top / 2)) : top >= 1 ? 1 : top;
-  return ranked.filter((m) => m.score >= floor);
+  const kept = ranked.filter((m) => m.score >= floor);
+  /*
+   * A WORD SPELLED EXACTLY BEATS ONE THAT ONLY LOOKS LIKE IT.
+   *
+   * "ספרית" (a hairdresser) is one letter from "ספריה" (a bookcase), and the
+   * two scored the same — so a hairdresser joining was offered furniture
+   * assembly. When something matched properly, a match made of near-spellings
+   * alone is dropped.
+   */
+  if (kept.some((m) => !slipOnly.has(m.serviceId))) return kept.filter((m) => !slipOnly.has(m.serviceId));
+  return kept;
 }
 
 /**
