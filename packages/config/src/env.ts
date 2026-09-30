@@ -113,6 +113,13 @@ export const envSchema = z.object({
   ALERT_THROTTLE_MINUTES: z.coerce.number().int().positive().default(10),
   /** A storm stops here; what was dropped is counted on the next alert. */
   ALERT_MAX_PER_HOUR: z.coerce.number().int().positive().default(30),
+  /**
+   * The free-tier limits the admin's usage page measures against (docs/21
+   * W8). Unset: the page shows the numbers without a limit — the vendors
+   * and plans are a human decision (CLAUDE.md §4), not a default here.
+   */
+  STORAGE_LIMIT_BYTES: z.coerce.number().int().positive().optional(),
+  DATABASE_LIMIT_BYTES: z.coerce.number().int().positive().optional(),
   /** Set by Render at build and run time; tags every report with the deployed commit. */
   RENDER_GIT_COMMIT: z.string().optional(),
 

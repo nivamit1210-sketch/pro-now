@@ -10,11 +10,17 @@ interface CleanupUpload {
 
 export interface UploadCleanupStore {
   upload: {
-    findMany(args: { where: { status: string; createdAt: { lt: Date } } }): Promise<CleanupUpload[]>;
+    findMany(args: { where: { status: string; createdAt: { lt: Date }; id?: { notIn: string[] } } }): Promise<CleanupUpload[]>;
     delete(args: { where: { id: string } }): Promise<unknown>;
   };
   jobMedia: { deleteMany(args: { where: { uploadId: string } }): Promise<unknown> };
-  professionalDocument: { updateMany(args: { where: { uploadId: string }; data: { uploadId: null } }): Promise<unknown> };
+  professionalDocument: {
+    updateMany(args: { where: { uploadId: string }; data: { uploadId: null } }): Promise<unknown>;
+    findMany(args: { where: { uploadId: { not: null } }; select: { uploadId: true } }): Promise<Array<{ uploadId: string | null }>>;
+  };
+  professionalCredential: {
+    findMany(args: { where: { documentRef: { not: null } }; select: { documentRef: true } }): Promise<Array<{ documentRef: string | null }>>;
+  };
 }
 
 export interface MediaCleanupResult {
@@ -31,8 +37,20 @@ export async function cleanupUploads(
   const pending = await store.upload.findMany({
     where: { status: "PENDING", createdAt: { lt: new Date(now.getTime() - PENDING_MAX_AGE_MS) } },
   });
+  /*
+   * THE 4 DAYS ARE FOR WHAT A CUSTOMER SENT (D3: photos, voice, text),
+   * not for the documents a professional's approval rests on. W7 stores
+   * those as uploads too, and a sweep by age alone deleted an ID or a
+   * licence four days after it arrived — before review, or right after
+   * approval, taking the evidence with it. Their retention is part of the
+   * open data-retention decision (docs/18 §Open decisions).
+   */
+  const evidence = [
+    ...(await store.professionalDocument.findMany({ where: { uploadId: { not: null } }, select: { uploadId: true } })).map((d) => d.uploadId),
+    ...(await store.professionalCredential.findMany({ where: { documentRef: { not: null } }, select: { documentRef: true } })).map((c) => c.documentRef),
+  ].filter((id): id is string => Boolean(id));
   const retained = await store.upload.findMany({
-    where: { status: "READY", createdAt: { lt: new Date(now.getTime() - READY_RETENTION_MS) } },
+    where: { status: "READY", createdAt: { lt: new Date(now.getTime() - READY_RETENTION_MS) }, id: { notIn: evidence } },
   });
   const result: MediaCleanupResult = { pendingDeleted: 0, retainedDeleted: 0, failed: 0 };
 

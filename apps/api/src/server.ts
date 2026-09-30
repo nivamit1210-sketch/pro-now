@@ -25,6 +25,7 @@ import requestMatchRoutes from "./routes/request-match.js";
 import onSiteRoutes from "./routes/on-site.js";
 import proOnboardingRoutes from "./routes/pro-onboarding.js";
 import adminProsRoutes from "./routes/admin-pros.js";
+import adminRoutes from "./routes/admin.js";
 import offersRoutes from "./routes/offers.js";
 import proRoutes from "./routes/pro.js";
 import proJobsRoutes from "./routes/pro-jobs.js";
@@ -42,6 +43,7 @@ import { registerJobSocket } from "./realtime/job-socket.js";
 declare module "fastify" {
   interface FastifyInstance {
     config: ReturnType<typeof loadEnv>;
+    routeIndex: Array<{ method: string; url: string }>;
   }
 }
 
@@ -78,6 +80,14 @@ export async function buildServer(opts: { logger?: boolean } = {}) {
   const config = loadEnv();
   const app = Fastify({ logger: opts.logger ?? true });
   app.decorate("config", config);
+
+  // Every route, as registered: how a test proves a rule holds for ALL of
+  // them (e.g. 403 on every /api/v1/admin/* route, docs/21 W8).
+  const routeIndex: Array<{ method: string; url: string }> = [];
+  app.addHook("onRoute", (r) => {
+    for (const method of [r.method].flat()) routeIndex.push({ method: String(method), url: r.url });
+  });
+  app.decorate("routeIndex", routeIndex);
 
   await app.register(observabilityPlugin);
   await app.register(corsPlugin);
@@ -173,6 +183,7 @@ export async function buildServer(opts: { logger?: boolean } = {}) {
   await app.register(onSiteRoutes, { prefix: API_PREFIX });
   await app.register(proOnboardingRoutes, { prefix: API_PREFIX });
   await app.register(adminProsRoutes, { prefix: API_PREFIX });
+  await app.register(adminRoutes, { prefix: API_PREFIX });
   await app.register(offersRoutes, { prefix: API_PREFIX });
   await app.register(proRoutes, { prefix: API_PREFIX });
   await app.register(proJobsRoutes, { prefix: API_PREFIX });

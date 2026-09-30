@@ -1,3 +1,4 @@
+import { PILOT_MARKET_CODE } from "../../config/market.js";
 import type { PrismaClient } from "@prisma/client";
 import type { JobState, MapsRoutingProvider } from "@pro-now/types";
 import { evaluateServiceCredentials } from "./credential-eligibility.js";
@@ -43,6 +44,17 @@ export async function triggerDispatch(
     where: { id: jobId },
     include: { address: true, service: { include: { requirements: true } } },
   });
+
+  /*
+   * THE MARKET SWITCH IS REAL (W8). This was hard-coded to true, so the
+   * admin's "dispatch on/off" per service would have changed nothing. A
+   * service not dispatch-enabled in the market reaches nobody; its
+   * customers are told nobody is available, which is true.
+   */
+  const activation = await prisma.marketActivation.findUnique({
+    where: { marketCode_serviceId: { marketCode: PILOT_MARKET_CODE, serviceId: job.serviceId } },
+  });
+  const marketActive = activation?.dispatchEnabled ?? false;
 
   /*
    * The job moves to SEARCHING only if the machine allows it from where it
@@ -130,7 +142,7 @@ export async function triggerDispatch(
         isRiskLimitedForService: false,
         isBlockedAgainstCustomer: false,
         equipmentMatches: true,
-        marketActive: true,
+        marketActive,
       },
       { locationFreshnessThresholdSeconds }
     );

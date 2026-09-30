@@ -14,7 +14,8 @@ describe("cleanupUploads", () => {
         delete: vi.fn().mockResolvedValue({}),
       },
       jobMedia: { deleteMany: vi.fn().mockResolvedValue({}) },
-      professionalDocument: { updateMany: vi.fn().mockResolvedValue({}) },
+      professionalDocument: { updateMany: vi.fn().mockResolvedValue({}), findMany: vi.fn().mockResolvedValue([]) },
+      professionalCredential: { findMany: vi.fn().mockResolvedValue([]) },
     };
 
     await expect(
@@ -33,12 +34,25 @@ describe("cleanupUploads", () => {
         delete: vi.fn(),
       },
       jobMedia: { deleteMany: vi.fn() },
-      professionalDocument: { updateMany: vi.fn() },
+      professionalDocument: { updateMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      professionalCredential: { findMany: vi.fn().mockResolvedValue([]) },
     };
 
     await expect(
       cleanupUploads(store, { delete: vi.fn().mockRejectedValue(new Error("temporary storage outage")) }, new Date())
     ).resolves.toEqual({ pendingDeleted: 0, retainedDeleted: 0, failed: 1 });
     expect(store.upload.delete).not.toHaveBeenCalled();
+  });
+
+  it("never sweeps a professional's documents: an approval rests on them (W8)", async () => {
+    const findMany = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const store = {
+      upload: { findMany, delete: vi.fn() },
+      jobMedia: { deleteMany: vi.fn() },
+      professionalDocument: { updateMany: vi.fn(), findMany: vi.fn().mockResolvedValue([{ uploadId: "id-card" }]) },
+      professionalCredential: { findMany: vi.fn().mockResolvedValue([{ documentRef: "licence" }]) },
+    };
+    await cleanupUploads(store, { delete: vi.fn() }, new Date());
+    expect(findMany.mock.calls[1]![0].where.id).toEqual({ notIn: ["id-card", "licence"] });
   });
 });

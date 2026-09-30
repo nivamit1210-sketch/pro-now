@@ -324,3 +324,21 @@ export const adminDecisionSchema = z
   .object({ approve: z.boolean(), reason: z.string().trim().max(500).optional(), expiresAt: z.string().datetime().optional() })
   .strict()
   .refine((d) => d.approve || Boolean(d.reason), { message: "A refusal needs a reason", path: ["reason"] });
+
+/** `POST /api/v1/admin/users/:id/roles`. ADMIN is not grantable here: only the ADMIN_EMAILS allowlist (docs/21 W1). */
+export const adminRoleChangeSchema = z
+  .object({ role: z.enum(["CUSTOMER", "PROFESSIONAL"]), grant: z.boolean(), reason: z.string().trim().min(3).max(500) })
+  .strict();
+
+/** `PATCH /api/v1/admin/market/:id`: which way a service is open in a market. */
+export const adminMarketChangeSchema = z
+  .object({
+    customerVisible: z.boolean().optional(),
+    providerOnboardingEnabled: z.boolean().optional(),
+    dispatchEnabled: z.boolean().optional(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict()
+  .refine((d) => d.customerVisible !== undefined || d.providerOnboardingEnabled !== undefined || d.dispatchEnabled !== undefined, {
+    message: "Change at least one switch",
+  });
