@@ -394,7 +394,10 @@ export interface ExternalReputationView {
 export interface ProfessionalSummaryView {
   id: string;
   displayName: string;
+  /** Their photo, through a short-lived link; null for a character or no choice. */
   profilePhotoUrl: string | null;
+  /** What they chose while joining: "CHARACTER" means draw the job's trade character. */
+  portraitKind: "PHOTO" | "CHARACTER" | null;
   verifications: VerificationBadgeKind[];
   /** Jobs completed through PRO NOW. Never an imported or invented count. */
   proNowCompletedJobs: number;
@@ -649,8 +652,16 @@ export interface OnSiteView {
   ordererNameHe: string;
   onSiteNameHe: string;
   serviceNameHe: string;
+  /** For drawing the trade's character when that is the professional's chosen face. */
+  serviceCode: string;
   stage: "searching" | "coming" | "at_door" | "inside" | "done" | "cancelled";
-  professional: { displayName: string; photoUrl: string | null; verifications: VerificationBadgeKind[] } | null;
+  professional: {
+    displayName: string;
+    /** Their photo, through a short-lived link (D1). */
+    photoUrl: string | null;
+    portraitKind: "PHOTO" | "CHARACTER" | null;
+    verifications: VerificationBadgeKind[];
+  } | null;
   etaSeconds: number | null;
   /** Only once a professional is assigned. */
   doorCode: string | null;

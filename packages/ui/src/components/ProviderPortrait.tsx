@@ -24,6 +24,13 @@ import { palette, radii, type } from "../theme";
  * composition nobody has ever seen is suddenly in production. A monogram
  * occupies exactly the space a photograph will, so the layout is already
  * the final one and only the content arrives.
+ *
+ * DECIDED 2026-09-30 (Dvir, D1 in docs/sync/SYNC-2026-09-30.md): after the
+ * match, `photoUri` is the face the professional chose while joining —
+ * their photo, approved as it is for now, or their trade's drawn character.
+ * The character is their own choice, not an invented stand-in, so it is
+ * shown. Before the match there is still no face, and the monogram remains
+ * for anyone who never chose one.
  */
 
 export interface ProviderPortraitProps {

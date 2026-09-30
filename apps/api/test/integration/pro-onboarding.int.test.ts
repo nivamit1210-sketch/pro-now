@@ -136,8 +136,7 @@ describe("joining as a professional", () => {
     expect(seen.statusCode, seen.body).toBe(200);
     expect(seen.json().portrait).toMatchObject({ kind: "PHOTO", mime: "image/jpeg" });
     expect(seen.json().portrait.url).toMatch(/^https?:\/\//);
-    // Not yet to customers: a professional's face reaches a customer only once a photo can be approved.
-    expect((await db.professionalProfile.findUniqueOrThrow({ where: { id: proId } })).profilePhotoRef).toBeNull();
+    // What customers see of it is portrait-customers.int.test.ts (D1).
   });
 
   it("with everything required, it goes to review", async () => {

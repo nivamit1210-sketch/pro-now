@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { externalReputationDisplay } from "../domain/reputation/external-display.js";
+import { portraitForViewer } from "../domain/portrait.js";
 import { customerJob, notFound, requireRole } from "../auth/access.js";
 import {
   MIN_REVIEWS_FOR_RATING,
@@ -32,6 +33,7 @@ export default async function matchRoutes(app: FastifyInstance) {
           include: {
             identityVerification: true,
             businessProfile: true,
+            portraitUpload: true,
             credentials: true,
             services: true,
             externalProfiles: { include: { source: true, snapshots: { orderBy: { createdAt: "desc" }, take: 1 } } },
@@ -130,10 +132,13 @@ export default async function matchRoutes(app: FastifyInstance) {
         })
       : null;
 
+    const face = await portraitForViewer(app.providers.storage, pro);
     const professional: ProfessionalSummaryView = {
       id: pro.id,
       displayName: pro.displayName,
-      profilePhotoUrl: pro.profilePhotoRef ?? null,
+      // The face chosen while joining (D1): only for the customer this professional was sent to.
+      profilePhotoUrl: face.photoUrl,
+      portraitKind: face.portraitKind,
       verifications,
       proNowCompletedJobs: completedJobs,
       proNowRatingAverage: ratingAverage,

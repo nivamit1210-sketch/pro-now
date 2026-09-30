@@ -23,6 +23,7 @@ import { api } from "../api";
 import { CityHero } from "../art/CityHero";
 import { useFrame } from "../frame";
 import { ErrorScreen, LoadingScreen } from "../states";
+import { tradeCharacterFor } from "../tradeCharacter";
 import { useJobSocket } from "../useJobSocket";
 
 /**
@@ -199,7 +200,11 @@ export function Job() {
     if (match.isError) return <ErrorScreen offline={!navigator.onLine} onRetry={() => void match.refetch()} />;
     return <LoadingScreen />;
   }
-  const professional = m.professional;
+  // Their chosen face (D1): the photo's link, or the drawn character of this job's trade.
+  const professional = {
+    ...m.professional,
+    profilePhotoUrl: m.professional.portraitKind === "CHARACTER" ? tradeCharacterFor(data.service.code) : m.professional.profilePhotoUrl,
+  };
   const approvedQuote = data.quotes?.find((q) => q.id === data.approvedQuoteId) ?? null;
 
   if (data.status === "REVIEW_PENDING") {

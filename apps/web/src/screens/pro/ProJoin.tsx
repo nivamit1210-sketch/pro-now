@@ -407,8 +407,8 @@ function Prices({ view, busy, save, onNext }: { view: ProApplicationView; busy: 
 
 /**
  * Their own photo, or their trade's drawn character (the demo's step 6).
- * Required: "המשך" waits for one of the two. The photo stays with the
- * application for the admin; customers do not see it yet.
+ * Required: "המשך" waits for one of the two. The customer they are sent to
+ * sees it (D1, Dvir 2026-09-30), and so does the admin.
  */
 function Portrait({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<void>; onNext: () => void }) {
   const chosen = view.profile.portrait?.kind ?? null;

@@ -6,6 +6,7 @@ import { OnSiteBody, customerDarkTheme, spacing, type as t } from "@pro-now/ui";
 
 import { api } from "../api";
 import { useFrame } from "../frame";
+import { tradeCharacterFor } from "../tradeCharacter";
 import { ErrorScreen, LoadingScreen } from "../states";
 
 /**
@@ -55,7 +56,7 @@ export function OnSite() {
       onSiteNameHe={v.onSiteNameHe}
       serviceNameHe={v.serviceNameHe}
       proNameHe={v.professional.displayName}
-      proPhotoUri={v.professional.photoUrl}
+      proPhotoUri={v.professional.portraitKind === "CHARACTER" ? tradeCharacterFor(v.serviceCode) : v.professional.photoUrl}
       verifiedHe={verifiedHe}
       stage={v.stage}
       minutesAway={v.etaSeconds === null ? null : Math.max(1, Math.round(v.etaSeconds / 60))}

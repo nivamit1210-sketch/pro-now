@@ -175,8 +175,9 @@ model ProfessionalProfile {
   profilePhotoRef    String?
   /// The face they chose while joining (Amit, 2026-09-30: required): "PHOTO"
   /// (their own, in `portraitUpload`) or "CHARACTER" (their trade's drawn
-  /// character). Null: not chosen yet. Seen by the admin only; it is not
-  /// `profilePhotoRef`, which customers see and which needs an approval.
+  /// character). Null: not chosen yet. The customer they are sent to sees it
+  /// (D1, Dvir 2026-09-30: a photo is approved as it is, for now), through
+  /// `domain/portrait.ts`. `profilePhotoRef` is unused and older.
   portraitKind       String?
   portraitUploadId   String?
   portraitUpload     Upload?            @relation("ProfessionalPortrait", fields: [portraitUploadId], references: [id], onDelete: SetNull)

@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { JobState, OnSiteView } from "@pro-now/types";
 import { customerJob, notFound, requireRole } from "../auth/access.js";
+import { portraitForViewer } from "../domain/portrait.js";
 
 /**
  * ORDERING FOR SOMEONE ELSE (docs/21 W6; Amit, 2026-09-28): a plumber for
@@ -59,25 +60,29 @@ export default async function onSiteRoutes(app: FastifyInstance) {
     const job = await app.prisma.job.findUnique({
       where: { onSiteTokenHash: hash(token) },
       include: {
-        service: { select: { nameHe: true } },
+        service: { select: { nameHe: true, code: true } },
         customer: { include: { user: { select: { name: true } } } },
-        assignedProfessional: { include: { identityVerification: true } },
+        assignedProfessional: { include: { identityVerification: true, portraitUpload: true } },
         offers: { where: { status: "ACCEPTED" }, orderBy: { offeredAt: "desc" }, take: 1 },
       },
     });
     if (!job || !job.onSiteName || !job.onSiteTokenExpiresAt || job.onSiteTokenExpiresAt < new Date()) return gone();
 
     const pro = job.assignedProfessional;
+    // Who is coming, as they chose to be seen (D1): most useful to the person opening the door.
+    const face = pro ? await portraitForViewer(app.providers.storage, pro) : null;
     const view: OnSiteView = {
       // The orderer's first name only: the person at home knows who they are.
       ordererNameHe: (job.customer.fullName ?? job.customer.user.name ?? "").trim().split(/\s+/)[0] || "מי שהזמין",
       onSiteNameHe: job.onSiteName,
       serviceNameHe: job.service.nameHe,
+      serviceCode: job.service.code,
       stage: STAGE[job.status] ?? "coming",
       professional: pro
         ? {
             displayName: pro.displayName,
-            photoUrl: null,
+            photoUrl: face?.photoUrl ?? null,
+            portraitKind: face?.portraitKind ?? null,
             // A sandbox check is not a verification (see routes/match.ts).
             verifications:
               pro.identityVerification?.status === "VERIFIED" && pro.identityVerification.isSandbox === false

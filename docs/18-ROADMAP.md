@@ -44,8 +44,9 @@ SLA · data retention periods · chat/call masking vendor · analytics vendor
 Added 2026-09-29 by `/docs/21-PRODUCTION-PLAN.md §5` (D1–D8): how the
 professional is paid in the MVP · AI model/vendor for understanding
 requests · retention of photos/voice/text · SMS vendor · routing/ETA
-provider · whether the 3D city is in the product app · admin inside
-`apps/web` · mandatory documents per service.
+provider · whether the 3D city is in the product app (**decided 2026-09-30: yes,
+soon**) · admin inside `apps/web` · mandatory documents per service (**decided
+2026-09-30: the research's list**). Both are answered in the 2026-09-30 entry below.
 
 Added 2026-09-30 by W10 (`/docs/11-SECURITY.md §Security review`): admin
 MFA · malware scanning of uploads (vendor) · Neon plan, i.e. how far back
@@ -215,6 +216,21 @@ Also worth recording, because it is the goal behind the original request
 and no screen achieves it: *"מחיר נח לכל כיס עם מקצוענים מקסימום"* is a
 supply-and-price-level strategy. Fairness is the part that can be built
 without inventing a business rule.
+
+### DECIDED 2026-09-30 (Dvir) — how a professional joins: faces, the street, new services, documents
+Answers to D1–D4 of `docs/sync/SYNC-2026-09-30.md`:
+- **D1 — faces.** A professional's photo is approved as it is, for now. Customers see
+  the photo or, when that was the choice, the trade's drawn character. The customer the
+  professional is sent to sees it on the match, tracking and review screens, and so does
+  the person at the door on the on-site page. Before the match there is still no face.
+- **D2 — the street.** The 3D street will be part of the product soon. The shop is
+  stored now and is placed in the street when the city arrives.
+- **D3 — services beyond our list.** On hold. We may not support proposing new services
+  through the system at all.
+- **D4 — documents per trade.** The research's list (`onboardingDocsFor`, Amit
+  2026-09-29) is the product's rule for which documents are mandatory per service. The
+  demo will apply it soon as well. This answers "mandatory documents per service" in
+  Open Decisions.
 
 ### DECIDED 2026-09-29 (Dvir) — error tracking is Sentry, alerts go to Telegram
 For the tester phase, the product stores errors in Sentry's free plan and

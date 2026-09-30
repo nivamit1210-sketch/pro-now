@@ -86,6 +86,7 @@ describe("ordering for someone else", () => {
       ordererNameHe: "יוסי",
       onSiteNameHe: "סבא יוסף",
       serviceNameHe: expect.any(String),
+      serviceCode: expect.any(String),
       stage: "searching",
       professional: null,
       etaSeconds: null,
@@ -107,7 +108,7 @@ describe("ordering for someone else", () => {
     expect(proView.onSiteNameHe).toBe("סבא יוסף");
 
     const page = (await app.inject({ method: "GET", url: `/api/v1/on-site/${token()}` })).json();
-    expect(page).toMatchObject({ stage: "coming", doorCode: proView.doorCodeHe, professional: { displayName: "Pat" } });
+    expect(page).toMatchObject({ stage: "coming", doorCode: proView.doorCodeHe, professional: { displayName: "Pat", photoUrl: null, portraitKind: null } });
 
     const mine = (await app.inject({ method: "GET", url: `/api/v1/jobs/${jobId}`, headers: as(customer) })).json();
     expect(mine.onSite).toEqual({ name: "סבא יוסף", doorCode: proView.doorCodeHe });

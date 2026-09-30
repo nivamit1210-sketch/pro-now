@@ -262,8 +262,8 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
 
   /**
    * The face they join with: a ready photo of their own, or their trade's
-   * character. It stays with the application; customers do not see it
-   * until a photo can be approved (`profilePhotoRef` is that later step).
+   * character. The customer they are sent to sees it (D1, Dvir 2026-09-30:
+   * a photo is approved as it is, for now; `domain/portrait.ts`).
    */
   app.put("/v1/pro/application/portrait", pro, async (req, reply) => {
     const p = await professionalOf(app, req, reply);
