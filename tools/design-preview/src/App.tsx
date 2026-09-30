@@ -6873,43 +6873,6 @@ const styles = StyleSheet.create({
  * the professionals of every trade standing together.
  */
 /*
- * THE BRIGHT SIDE OF THE CITY.
- *
- * Amit: *"במסך הראשון צריך שיהיה משהו יותר שמח, לא מסך כהה מדי — זוויות
- * יפות של העולם שלנו."* The night street is moody and the words sit on
- * the dark part of every screen, so the top of the welcome and the home
- * page now cycle through the brightest places in the city — the pink
- * salon from the front and from the side, the boutique, and the rooms
- * inside them — each held for four seconds, drifting slowly, warmed a
- * touch. Stills taken from this build, not paintings of it.
- */
-const SHOW_ALL = ["salon_front", "lust_front", "salon_in", "salon_side", "lust_in", "lust_side"] as const;
-const SHOW_CSS =
-  "@keyframes pnShow{0%{opacity:0;transform:scale(1.1)}5%{opacity:1}17%{opacity:1}22%{opacity:0;transform:scale(1.0)}100%{opacity:0}}";
-function Showcase({ shots = SHOW_ALL, focus = "50% 55%", lift = 0 }: { shots?: readonly string[]; focus?: string; lift?: number }) {
-  const per = 4;
-  const cycle = shots.length * per;
-  return (
-    <div aria-hidden style={{ position: "absolute", inset: 0, overflow: "hidden", background: "#2a1830" }}>
-      <style>{SHOW_CSS.replace("17%", `${Math.round((per / cycle) * 100)}%`).replace("22%", `${Math.round(((per + 1) / cycle) * 100)}%`)}</style>
-      {shots.map((n, i) => (
-        <img
-          key={n}
-          src={`./clips/show_${n}.jpg`}
-          alt=""
-          style={{
-            position: "absolute", left: 0, right: 0, top: `${-lift}%`, width: "100%", height: "100%", objectFit: "cover", objectPosition: focus,
-            filter: "brightness(1.12) saturate(1.18)",
-            opacity: i === 0 ? 1 : 0,
-            animation: `pnShow ${cycle}s linear ${i * per - 0.01}s infinite`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-/*
  * THE WHOLE CITY, IN ITS OWN LIGHT.
  *
  * Amit, on the phone: *"אני סתם רואה ציור של רחוב מפעם"* — and before
@@ -7387,7 +7350,92 @@ function IntroBackdrop({ side, slide }: { side: "customer" | "pro"; slide: numbe
     return <StreetScene />;
   }
   if (slide === 1) return <ProsLineup />;
-  return slide === 2 ? <Showcase shots={["salon_side", "lust_side"]} /> : <StreetScene />;
+  /* Amit, 2026-09-30: *"גם התמונות במסכי הסבר היו לא נכונות."* "See the
+     job before you accept" showed the hair salon's front, and "the prices
+     are yours" showed the street. Each now shows what it says. */
+  if (slide === 2) return <ProOfferScene />;
+  if (slide === 3) return <ProPricesScene />;
+  return <StreetScene />;
+}
+
+/*
+ * THE PROFESSIONAL'S TWO EXAMPLES — a job arriving and his own price list.
+ *
+ * The same example numbers the demo already uses (the leak job from
+ * `offerFixture`, 2.4 km and 9 minutes away; the ₪250 tap washer from the
+ * family scene; the ₪179 visit from the leak's catalogue page), marked
+ * "דוגמה". No commission and no payout split: that is a business decision
+ * still to be made (docs/18-ROADMAP.md), so the job shows the price from
+ * HIS list and nothing about what is taken from it.
+ */
+function ProExampleStage({ children }: { children: React.ReactNode }) {
+  return (
+    <div aria-hidden style={{ position: "absolute", inset: 0, overflow: "hidden", background: "radial-gradient(120% 70% at 50% 28%, #6a3f73 0%, #2a1838 55%, #120c18 90%)" }}>
+      <img src={CITY_BG.src} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: CITY_BG.pos, opacity: 0.25, filter: "blur(3px)" }} />
+      <div style={{ position: "absolute", left: "7%", right: "7%", top: "6%", borderRadius: 22, padding: "16px 16px 18px", background: "rgba(23,18,31,.86)", border: "1px solid rgba(255,255,255,.12)", boxShadow: "0 20px 50px rgba(0,0,0,.5)", direction: "rtl" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+const exRow = (a: string, b: string, strong = false) => (
+  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, color: "#F7F3FA", fontSize: scale.meta, lineHeight: "20px", fontWeight: strong ? 800 : 400 }}>
+    <span>{a}</span><span style={{ flex: "0 0 auto" }}>{b}</span>
+  </div>
+);
+function ProOfferScene() {
+  return (
+    <ProExampleStage>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ padding: "4px 10px", borderRadius: 999, background: "rgba(255,107,74,.18)", color: "#FF9A80", fontSize: scale.micro, fontWeight: 800 }}>קריאה חדשה</span>
+        <span style={{ color: "rgba(247,243,250,.55)", fontSize: scale.micro }}>דוגמה</span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "row", alignItems: "flex-end", gap: 12, marginTop: 8 }}>
+        <div style={{ flex: 1, paddingBottom: 6 }}>
+          <div style={{ color: "#F7F3FA", fontSize: scale.body, fontWeight: 800 }}>החלפת אטם בברז</div>
+          <div style={{ color: "rgba(247,243,250,.7)", fontSize: scale.meta, marginTop: 4 }}>רמת אביב · 2.4 ק״מ ממך · 9 דק׳ נסיעה</div>
+          <div style={{ color: "rgba(247,243,250,.7)", fontSize: scale.meta, marginTop: 2 }}>קומה 4, יש מעלית · 2 תמונות מהלקוח</div>
+        </div>
+        <img src="./world/character_home_world.webp" alt="" style={{ height: 120, filter: "drop-shadow(0 8px 12px rgba(0,0,0,.5))" }} />
+      </div>
+      <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 14, background: "rgba(255,255,255,.06)", display: "grid", gap: 4 }}>
+        {exRow("לפי המחירון שלך", "₪250", true)}
+        <div style={{ color: "rgba(247,243,250,.6)", fontSize: scale.micro }}>הסכום ידוע לפני שאתה מקבל</div>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <span style={{ flex: 1, textAlign: "center", padding: "9px 0", borderRadius: 12, background: "#FF6B4A", color: "#1a0f0c", fontWeight: 800, fontSize: scale.meta }}>קבלת העבודה</span>
+        <span style={{ flex: "0 0 30%", textAlign: "center", padding: "9px 0", borderRadius: 12, background: "rgba(255,255,255,.1)", color: "#F7F3FA", fontSize: scale.meta }}>דילוג</span>
+      </div>
+    </ProExampleStage>
+  );
+}
+function ProPricesScene() {
+  const chip = (t: string, on: boolean) => (
+    <span style={{ padding: "5px 10px", borderRadius: 999, fontSize: scale.micro, fontWeight: 700, background: on ? "rgba(47,191,138,.18)" : "rgba(255,255,255,.08)", color: on ? "#7FE3BC" : "rgba(247,243,250,.7)" }}>{t}</span>
+  );
+  return (
+    <ProExampleStage>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span style={{ color: "#F7F3FA", fontSize: scale.body, fontWeight: 800 }}>המחירון שלי</span>
+        <span style={{ color: "rgba(247,243,250,.55)", fontSize: scale.micro }}>דוגמה</span>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+        {chip("ביקור ואבחון", true)}{chip("מחיר קבוע", true)}{chip("לשעה", false)}
+      </div>
+      <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 14, background: "rgba(255,255,255,.06)", display: "grid", gap: 7 }}>
+        {exRow("ביקור ואבחון · נזילה", "₪179")}
+        {exRow("החלפת אטם בברז", "₪250")}
+        <div style={{ color: "#FF9A80", fontSize: scale.meta, fontWeight: 700 }}>+ עבודה שלא ברשימה</div>
+      </div>
+      <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", color: "#F7F3FA", fontSize: scale.meta }}>
+        <span>תוספת לילה ושבת</span>
+        <span style={{ width: 40, height: 24, borderRadius: 12, background: "#2FBF8A", position: "relative", display: "inline-block" }}>
+          <span style={{ position: "absolute", top: 3, left: 3, width: 18, height: 18, borderRadius: 9, background: "#fff" }} />
+        </span>
+      </div>
+      <div style={{ color: "rgba(247,243,250,.6)", fontSize: scale.micro, marginTop: 10 }}>הלקוח רואה את המחיר שלך לפני שהוא מזמין</div>
+    </ProExampleStage>
+  );
 }
 
 function PreviewNote({ textHe }: { textHe: string }) {
