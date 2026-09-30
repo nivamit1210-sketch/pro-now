@@ -27,6 +27,7 @@ export default async function matchRoutes(app: FastifyInstance) {
 
     const job = await customerJob(app.prisma, req.user!.userId, jobId, {
         service: true,
+        address: true,
         assignedProfessional: {
           include: {
             identityVerification: true,
@@ -180,10 +181,30 @@ export default async function matchRoutes(app: FastifyInstance) {
         : {}),
     };
 
-    // --- ETA: the snapshot taken when the offer was made. Never recomputed
-    //     here and never substituted with a guess when absent.
+    // --- ETA: the snapshot taken when the offer was made, and — while they
+    //     are on the way (W9) — recomputed from their latest position by the
+    //     same maps provider dispatch uses. Never substituted with a guess.
     const acceptedOffer = job.offers[0];
-    const etaSeconds: number | null = acceptedOffer?.etaSecondsSnapshot ?? null;
+    let etaSeconds: number | null = acceptedOffer?.etaSecondsSnapshot ?? null;
+    let etaAt: Date = acceptedOffer?.offeredAt ?? job.updatedAt;
+    let routeBased = false;
+    if ((job.status === "PRO_ASSIGNED" || job.status === "PRO_EN_ROUTE") && job.address) {
+      const latest = await app.prisma.professionalLocation.findFirst({
+        where: { professionalId: pro.id },
+        orderBy: { receivedAt: "desc" },
+      });
+      if (latest && latest.receivedAt > etaAt) {
+        const [live] = await app.providers.maps.getEtaBatch(
+          { lat: job.address.lat, lng: job.address.lng },
+          [{ id: pro.id, location: { lat: latest.lat, lng: latest.lng } }]
+        );
+        if (live) {
+          etaSeconds = live.etaSeconds;
+          etaAt = latest.receivedAt;
+          routeBased = live.isRouteBased;
+        }
+      }
+    }
 
     const result: JobMatchView = {
       jobId: job.id,
@@ -199,8 +220,8 @@ export default async function matchRoutes(app: FastifyInstance) {
               // The snapshot does not record whether it came from a real
               // route, so it is reported as not route-based: the card then
               // marks it approximate. Under-claiming is the safe direction.
-              isRouteBased: false,
-              computedAt: (acceptedOffer?.offeredAt ?? job.updatedAt).toISOString(),
+              isRouteBased: routeBased,
+              computedAt: etaAt.toISOString(),
             },
       price,
     };

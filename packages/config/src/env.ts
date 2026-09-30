@@ -120,6 +120,14 @@ export const envSchema = z.object({
    */
   STORAGE_LIMIT_BYTES: z.coerce.number().int().positive().optional(),
   DATABASE_LIMIT_BYTES: z.coerce.number().int().positive().optional(),
+  /**
+   * Web Push with our own VAPID keys (docs/21 W9). Generate once with
+   * `npx web-push generate-vapid-keys`; set all three or none. Without
+   * them, push is off and notifications still arrive in-app and by email.
+   */
+  VAPID_PUBLIC_KEY: z.string().optional().transform((v) => (v ? v : undefined)),
+  VAPID_PRIVATE_KEY: z.string().optional().transform((v) => (v ? v : undefined)),
+  VAPID_SUBJECT: z.string().optional().transform((v) => (v ? v : undefined)),
   /** Set by Render at build and run time; tags every report with the deployed commit. */
   RENDER_GIT_COMMIT: z.string().optional(),
 
@@ -147,6 +155,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   assertNoLocalStandIns(parsed.data);
   assertSignInPossible(parsed.data);
   assertAlertsConfigured(parsed.data);
+  assertPushConfigured(parsed.data);
   return parsed.data;
 }
 
@@ -220,4 +229,10 @@ export function assertAlertsConfigured(env: Env): void {
   if (Boolean(env.ALERT_TELEGRAM_BOT_TOKEN) !== Boolean(env.ALERT_TELEGRAM_CHAT_ID)) {
     throw new Error("ALERT_TELEGRAM_BOT_TOKEN and ALERT_TELEGRAM_CHAT_ID must be set together.");
   }
+}
+
+/** Two of three VAPID values is a push that fails at every send. */
+export function assertPushConfigured(env: Env): void {
+  const set = [env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY, env.VAPID_SUBJECT].filter(Boolean).length;
+  if (set !== 0 && set !== 3) throw new Error("VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_SUBJECT must be set together.");
 }

@@ -5,6 +5,7 @@ import { fromNodeHeaders } from "better-auth/node";
 import { AUTH_BASE_PATH, createAuth, type Auth } from "../auth/auth.js";
 import { rolesOf, type Role } from "../auth/roles.js";
 import { createResendEmailProvider } from "../infra/email/resend.js";
+import type { EmailProvider } from "../infra/email/email-provider.js";
 import { createSmtpEmailProvider, unconfiguredEmailProvider } from "../infra/email/smtp.js";
 
 /** Who is calling, resolved from the session cookie. Server-side truth only. */
@@ -20,6 +21,8 @@ declare module "fastify" {
   }
   interface FastifyInstance {
     auth: Auth;
+    /** Outgoing email: sign-in links, and the notifications outbox (W9). */
+    email: EmailProvider;
   }
 }
 
@@ -33,6 +36,7 @@ export default fp(async (app: FastifyInstance) => {
       : unconfiguredEmailProvider;
   const auth = createAuth({ config: app.config, prisma: app.prisma, email });
   app.decorate("auth", auth);
+  app.decorate("email", email);
 
   // Better Auth speaks Fetch Request/Response; Fastify speaks Node. Translate.
   app.route({

@@ -82,6 +82,8 @@ export default async function proRoutes(app: FastifyInstance) {
         capturedAt: new Date(body.capturedAt),
       },
     });
+    // After the write: the customer re-reads the position just stored.
+    await announceLocation(app, professional.id);
     return reply.send({ ok: true });
   });
 
@@ -247,4 +249,24 @@ export default async function proRoutes(app: FastifyInstance) {
 
     return reply.send(result);
   });
+}
+
+/**
+ * THE CUSTOMER'S ETA MOVES WITH THEM (docs/21 W9). While a professional is
+ * on their way, a new position tells the job's socket that the ETA may
+ * have changed; the customer's screen re-reads it (GET /jobs/:id/match).
+ * No coordinates cross the socket, and at most one notice per job every
+ * 10 seconds.
+ */
+const lastAnnounced = new Map<string, number>();
+async function announceLocation(app: FastifyInstance, professionalId: string) {
+  const job = await app.prisma.job.findFirst({
+    where: { assignedProfessionalId: professionalId, status: { in: ["PRO_ASSIGNED", "PRO_EN_ROUTE"] } },
+    select: { id: true },
+  });
+  if (!job) return;
+  const now = Date.now();
+  if (now - (lastAnnounced.get(job.id) ?? 0) < 10_000) return;
+  lastAnnounced.set(job.id, now);
+  app.jobEvents.publish({ jobId: job.id, type: "PRO_LOCATION", at: new Date(now).toISOString() });
 }

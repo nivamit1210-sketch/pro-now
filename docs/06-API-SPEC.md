@@ -63,8 +63,16 @@ stores the key + response for replay.
   `JOB_EVENT {eventType, at}` for every `job_events` row written for the job,
   by any writer (a Prisma query extension publishes to an in-process bus).
   It carries no state: the client re-reads `GET /v1/jobs/:id`. A client
-  message is answered with `PONG` (keep-alive). Offer pushes, location and
-  the user channel are W9.
+  message is answered with `PONG` (keep-alive).
+- **As built (W9):** `WS /v1/ws/me`, the person's own channel: `OFFER` the
+  moment dispatch sends one, `NOTIFICATION` for the inbox. The job channel
+  also carries `PRO_LOCATION` while the professional is on the way (no
+  coordinates, at most one per 10 s); the client re-reads the ETA.
+  Notifications: in-app (`GET /v1/me/notifications`, `POST .../read`),
+  email through `email_outbox`, and Web Push with our own VAPID keys
+  (`GET /v1/push/public-key`, `POST/DELETE /v1/me/push-subscriptions`).
+  The channel policy per event is `domain/notifications/policy.ts`. SMS is
+  an interface only (D4).
 - Events are versioned with sequence IDs to support dedupe/resync on
   reconnect. No sensitive broadcast rooms. Push notifications (FCM/APNs)
   are a wake/fallback mechanism only — the socket + a resync-from-server

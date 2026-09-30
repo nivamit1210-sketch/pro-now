@@ -29,9 +29,15 @@ export default fp(async (app: FastifyInstance) => {
       jobEvent: {
         async create({ args, query }) {
           const event = await query(args);
-          const row = event as { jobId?: string; type?: string; createdAt?: Date };
+          const row = event as { jobId?: string; type?: string; createdAt?: Date; actor?: string; metadata?: unknown };
           if (row.jobId && row.type) {
-            bus.publish({ jobId: row.jobId, type: row.type, at: (row.createdAt ?? new Date()).toISOString() });
+            bus.publish({
+              jobId: row.jobId,
+              type: row.type,
+              at: (row.createdAt ?? new Date()).toISOString(),
+              actor: row.actor,
+              metadata: row.metadata,
+            });
           }
           return event;
         },

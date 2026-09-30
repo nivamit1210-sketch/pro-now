@@ -39,3 +39,24 @@ export function registerJobSocket(app: FastifyInstance) {
     socket.on("close", unsubscribe);
   });
 }
+
+/**
+ * The person's own channel (docs/21 W9): offers reach a professional the
+ * moment dispatch sends them, and notifications reach anyone signed in.
+ * Like the job channel, it says that something happened; the client
+ * re-reads the offer or the inbox over REST.
+ */
+export function registerUserSocket(app: FastifyInstance) {
+  app.get("/v1/ws/me", { websocket: true }, async (socket, req) => {
+    if (!req.user) {
+      socket.close(4401, "UNAUTHENTICATED");
+      return;
+    }
+    const unsubscribe = app.userEvents.subscribe(req.user.userId, (notice) => {
+      if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(notice));
+    });
+    socket.send(JSON.stringify({ type: "READY" }));
+    socket.on("message", () => socket.send(JSON.stringify({ type: "PONG", at: new Date().toISOString() })));
+    socket.on("close", unsubscribe);
+  });
+}

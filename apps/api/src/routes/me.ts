@@ -105,6 +105,10 @@ export default async function meRoutes(app: FastifyInstance) {
       await tx.userRole.deleteMany({ where: { userId } });
       // What they typed to find a service: personal, and nobody else's record.
       await tx.matchFeedback.deleteMany({ where: { userId } });
+      // Their inbox, their phones' push subscriptions, and mail not yet sent to them (W9).
+      await tx.notification.deleteMany({ where: { userId } });
+      await tx.pushSubscription.deleteMany({ where: { userId } });
+      await tx.emailOutbox.deleteMany({ where: { toEmail: before.email, status: "PENDING" } });
 
       const customer = await tx.customerProfile.findUnique({ where: { userId } });
       if (customer) {

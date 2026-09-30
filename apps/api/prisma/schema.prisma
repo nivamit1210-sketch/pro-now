@@ -45,6 +45,7 @@ model User {
   adminUser           AdminUser?
   uploads             Upload[]
   matchFeedback       MatchFeedback[]
+  pushSubscriptions   PushSubscription[]
 
   @@map("users")
 }
@@ -983,14 +984,54 @@ model ChatMessage {
 model Notification {
   id        String   @id @default(cuid())
   userId    String
+  /// What happened, as the job event type or a notice kind (docs/21 W9).
+  type      String   @default("GENERAL")
+  jobId     String?
   title     String
   body      String
   data      Json?
   deliveredAt DateTime?
+  readAt    DateTime?
   createdAt DateTime @default(now())
 
   @@map("notifications")
   @@index([userId, createdAt])
+}
+
+/// A browser's Web Push subscription (docs/21 W9). Deleted when the push
+/// service says it is gone (404/410).
+model PushSubscription {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint      String   @unique
+  p256dh        String
+  auth          String
+  userAgent     String?
+  lastSuccessAt DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+/// Email waiting to be sent (docs/21 W9): a worker sends and retries, so a
+/// mail provider's hiccup never fails the request that caused the email.
+model EmailOutbox {
+  id            String    @id @default(cuid())
+  toEmail       String
+  subject       String
+  text          String
+  html          String
+  status        String    @default("PENDING") // PENDING | SENT | FAILED
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  sentAt        DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@map("email_outbox")
 }
 
 model Dispute {

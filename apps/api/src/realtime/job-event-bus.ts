@@ -16,7 +16,12 @@ export interface JobEventNotice {
   jobId: string;
   type: string;
   at: string;
+  /** Who wrote it, and what it carried: for the notifications dispatcher, never sent to clients. */
+  actor?: string;
+  metadata?: unknown;
 }
+
+const ALL = Symbol("all-jobs");
 
 export class JobEventBus {
   private readonly emitter = new EventEmitter();
@@ -28,6 +33,13 @@ export class JobEventBus {
 
   publish(notice: JobEventNotice): void {
     this.emitter.emit(notice.jobId, notice);
+    this.emitter.emit(ALL, notice);
+  }
+
+  /** Every job's events: the notifications dispatcher listens here. */
+  subscribeAll(listener: (notice: JobEventNotice) => void): () => void {
+    this.emitter.on(ALL, listener);
+    return () => this.emitter.off(ALL, listener);
   }
 
   subscribe(jobId: string, listener: (notice: JobEventNotice) => void): () => void {
