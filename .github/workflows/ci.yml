@@ -35,6 +35,9 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run verify:domain
+      # Known high or critical advisories in what reaches users (the API and
+      # the web app's runtime dependencies), docs/21 W10.
+      - run: npm run audit:shipped
       # Both front ends must still build. The demo is Amit's and the product
       # is Dvir's, but they share one lockfile: a product dependency change
       # once broke the demo's build unnoticed (react-native-svg 15.15).

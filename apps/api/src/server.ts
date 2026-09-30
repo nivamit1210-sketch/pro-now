@@ -4,8 +4,10 @@ import { pathToFileURL } from "node:url";
 import Fastify from "fastify";
 import websocketPlugin from "@fastify/websocket";
 import { loadEnv } from "@pro-now/config";
+import { scrubText } from "@pro-now/types";
 
 import observabilityPlugin from "./plugins/observability.js";
+import securityPlugin from "./plugins/security.js";
 import corsPlugin from "./plugins/cors.js";
 import prismaPlugin from "./plugins/prisma.js";
 import jobLockPlugin from "./plugins/job-lock.js";
@@ -78,9 +80,44 @@ function zodIssuesOf(err: unknown): ZodIssueLike[] | null {
  */
 export const API_PREFIX = "/api";
 
+/**
+ * LOGS WITHOUT PERSONAL DATA (docs/21 W10). Cookies and auth headers are
+ * removed; a URL's query is scrubbed, because sign-in links carry their
+ * token there and search pages carry what people typed. Messages that
+ * name an email or a phone are scrubbed by the same rule the error
+ * reports use (scrubText).
+ */
+export function loggerOptions() {
+  return {
+    redact: {
+      paths: ["req.headers.cookie", "req.headers.authorization", 'res.headers["set-cookie"]', "headers.cookie"],
+      censor: "[redacted]",
+    },
+    serializers: {
+      req(req: { method: string; url: string; id: string; headers?: Record<string, unknown> }) {
+        return {
+          method: req.method,
+          url: scrubText(req.url.replace(/\?.*$/, (q) => (q.length > 1 ? "?[query]" : ""))),
+          requestId: req.id,
+          userAgent: req.headers?.["user-agent"],
+        };
+      },
+    },
+    hooks: {
+      logMethod(this: unknown, args: unknown[], method: (...a: unknown[]) => void) {
+        method.apply(this, args.map((a) => (typeof a === "string" ? scrubText(a) : a)));
+      },
+    },
+  };
+}
+
 export async function buildServer(opts: { logger?: boolean } = {}) {
   const config = loadEnv();
-  const app = Fastify({ logger: opts.logger ?? true });
+  const app = Fastify({
+    logger: opts.logger === false ? false : loggerOptions(),
+    // JSON bodies here are small (files go straight to storage); a large one is an attack or a bug.
+    bodyLimit: 64 * 1024,
+  });
   app.decorate("config", config);
 
   // Every route, as registered: how a test proves a rule holds for ALL of
@@ -92,6 +129,7 @@ export async function buildServer(opts: { logger?: boolean } = {}) {
   app.decorate("routeIndex", routeIndex);
 
   await app.register(observabilityPlugin);
+  await app.register(securityPlugin);
   await app.register(corsPlugin);
   await app.register(websocketPlugin);
   await app.register(prismaPlugin);

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { adminMarketChangeSchema, adminRoleChangeSchema } from "@pro-now/validation";
+import { JOB_STATES } from "@pro-now/types";
 import { requireRole } from "../auth/access.js";
 import { applicationView } from "./pro-onboarding.js";
 
@@ -69,10 +70,14 @@ export default async function adminRoutes(app: FastifyInstance) {
   });
 
   /** The job inspector: newest first, filterable by status. */
-  app.get("/v1/admin/jobs", admin, async (req) => {
+  app.get("/v1/admin/jobs", admin, async (req, reply) => {
     const { status } = req.query as { status?: string };
+    // An unknown status is the caller's mistake (it was a 500: the database refused the enum).
+    if (status && !(JOB_STATES as readonly string[]).includes(status)) {
+      return reply.status(400).send({ code: "UNKNOWN_STATUS", message: `No such job status: ${status}` });
+    }
     const jobs = await app.prisma.job.findMany({
-      where: status ? { status: status as never } : {},
+      where: status ? { status: status as (typeof JOB_STATES)[number] } : {},
       orderBy: { createdAt: "desc" },
       take: 50,
       include: {
