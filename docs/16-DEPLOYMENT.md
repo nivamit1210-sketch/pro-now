@@ -149,6 +149,21 @@ First deploy on a new Neon project:
    `GET /api/ready` should then report `postgis: true`.
 5. Seed the catalogue once: `DATABASE_URL=<direct url> npm run db:seed -w apps/api`.
 
+**Once only.** The full seed also resets every service's market switches
+(customer-visible, open to professionals, dispatch) to the catalogue's
+defaults, which silently undoes anything an admin changed since. When only
+the documents each service requires have changed (`service-documents.ts`),
+run the part that touches nothing else:
+
+```bash
+DATABASE_URL=<direct url> npm run db:seed:requirements -w apps/api
+```
+
+It runs as one transaction and prints, per service, the requirements
+before and after (`?` = not mandatory). A professional already approved
+for a service that gains a mandatory document stops receiving that
+service's offers until the document is uploaded and verified.
+
 Every later deploy: migrations run at boot, forward only. A migration
 that fails leaves the previous one applied and the server does not start,
 so the previous Render deploy keeps serving. Forward-fix with a new

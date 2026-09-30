@@ -20,6 +20,7 @@
     "db:drift": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:dev": "tsx prisma/seed-dev.ts",
+    "db:seed:requirements": "tsx prisma/reseed-requirements.ts",
     "dev:pulse": "tsx scripts/dev-pulse.ts"
   },
   "dependencies": {
