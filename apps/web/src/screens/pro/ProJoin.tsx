@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@pro-now/api-client";
 import { catalogMatchRules, databaseCodeForPilotService, matchServicesByText, type ProApplicationView } from "@pro-now/types";
@@ -12,6 +12,7 @@ import { compressImage } from "../../media";
 import { pickFile } from "../../pickFile";
 import { tradeCharacterFor } from "../../tradeCharacter";
 import { ErrorScreen, LoadingScreen } from "../../states";
+import { APPROVAL_STEPS_HE } from "./approval";
 import { ProSignOut } from "./ProSignOut";
 
 /**
@@ -31,7 +32,7 @@ import { ProSignOut } from "./ProSignOut";
  */
 export const applicationKey = ["pro-application"] as const;
 
-const STEPS = ["פרטים", "מה אתם עושים", "אזור", "מסמכים", "מחירים", "התמונה שלכם", "שליחה"] as const;
+const STEPS = ["פרטים", "מה אתם עושים", "אזור", "מסמכים", "מחירים", "התמונה שלכם", "סיכום ושליחה"] as const;
 const RADII_KM = [5, 10, 15, 25, 40];
 const ACCOUNT_DOCS: Array<{ kind: "GOVERNMENT_ID" | "SELFIE" | "TAX_FILE"; labelHe: string; noteHe: string }> = [
   { kind: "GOVERNMENT_ID", labelHe: "תעודת זהות", noteHe: "צילום ברור של שני הצדדים, או של הרישיון" },
@@ -87,7 +88,11 @@ export function ProJoin() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { width, height } = useFrame();
-  const [step, setStep] = useState(0);
+  // Coming back to edit a sent application opens at the summary, as in the demo.
+  const [params] = useSearchParams();
+  const [step, setStep] = useState(params.get("at") === "summary" ? STEPS.length - 1 : 0);
+  // The welcome, once, for someone who has not started joining.
+  const [welcomed, setWelcomed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorHe, setErrorHe] = useState<string | null>(null);
 
@@ -124,6 +129,7 @@ export function ProJoin() {
 
   if (application.isPending) return <LoadingScreen />;
   if (application.isError) return <ErrorScreen offline={!navigator.onLine} onRetry={() => void application.refetch()} />;
+  if (!application.data && !welcomed) return <Welcome width={width} height={height} onStart={() => setWelcomed(true)} onBack={() => navigate("/welcome")} />;
 
   const stepBody = (() => {
     switch (step) {
@@ -461,17 +467,57 @@ function Portrait({ view, busy, save, onNext }: { view: ProApplicationView; busy
   );
 }
 
+const TAX_HE: Record<string, string> = { EXEMPT: "עוסק פטור", LICENSED: "עוסק מורשה", COMPANY: "חברה בע״מ" };
+
+/**
+ * The summary before sending (the demo's last step): how a customer will
+ * see them, each part with "עריכה" back to its step, what is still missing,
+ * and what the review after sending checks.
+ */
 function Send({ view, busy, onSubmit, onGoTo }: { view: ProApplicationView; busy: boolean; onSubmit: () => void; onGoTo: (step: number) => void }) {
   const stepOf = (code: string) =>
     code === "ADDRESS_AS" || code === "TAX_STATUS" ? 0 : code === "SERVICES" ? 1 : code === "AREA" ? 2 : code.startsWith("PRICE") ? 4 : code === "PORTRAIT" ? 5 : 3;
+  const p = view.profile;
+  const face =
+    p.portrait?.kind === "PHOTO" && p.portrait.uploadId
+      ? `/api/v1/media/${encodeURIComponent(p.portrait.uploadId)}`
+      : p.portrait?.kind === "CHARACTER"
+        ? tradeCharacterFor(view.services[0]?.code)
+        : null;
+  const docsTotal = view.documents.length + view.services.reduce((n, s) => n + s.requirements.filter((r) => r.mandatory).length, 0);
+  const docsIn = view.documents.filter((d) => d.status !== "REJECTED").length + view.services.reduce((n, s) => n + s.requirements.filter((r) => r.mandatory && r.credential && r.credential.status !== "REJECTED").length, 0);
+  const rows: Array<{ t: string; v: string; to: number }> = [
+    { t: "פרטים", v: [p.displayName, p.business ? TAX_HE[p.business.taxStatus] : null].filter(Boolean).join(" · ") || "—", to: 0 },
+    { t: "שירותים", v: view.services.length ? view.services.map((s) => s.nameHe).join(" · ") : "—", to: 1 },
+    { t: "אזור", v: view.area ? `עד ${view.area.radiusKm} ק״מ מהבית` : "—", to: 2 },
+    { t: "מסמכים", v: `${docsIn}/${docsTotal} חובה`, to: 3 },
+    { t: "מחירים", v: `${view.services.filter((s) => s.priced).length}/${view.services.length} שירותים`, to: 4 },
+    { t: "התמונה", v: p.portrait?.kind === "PHOTO" ? "תמונה שלכם" : p.portrait?.kind === "CHARACTER" ? "הדמות של המקצוע" : "—", to: 5 },
+  ];
   return (
     <View style={styles.section}>
-      <Text style={styles.title}>שליחה לאישור</Text>
-      {view.missing.length === 0 ? (
-        <Text style={styles.soft}>הכול כאן. אחרי השליחה נבדוק את הפרטים, את המסמכים ואת כל שירות בנפרד, ונעדכן כאן.</Text>
-      ) : (
+      <Text style={styles.title}>{view.missing.length === 0 ? "הכול מוכן" : "כמעט שם"}</Text>
+      <Text style={styles.soft}>ככה יראה אתכם לקוח:</Text>
+      <View style={styles.card} accessibilityLabel="הכרטיס שלקוחות יראו">
+        {face ? <Image source={{ uri: face }} style={styles.cardFace} resizeMode="cover" /> : <View style={[styles.cardFace, styles.cardFaceEmpty]} />}
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.cardName}>{p.displayName || "השם שלכם"}</Text>
+          <Text style={styles.note}>{p.business?.tradingName ? `${p.business.tradingName} · ` : ""}חדש ב־PRO NOW</Text>
+          <Text style={styles.note} numberOfLines={1}>{view.services.slice(0, 2).map((s) => s.nameHe).join(" · ")}</Text>
+        </View>
+      </View>
+
+      {rows.map((r) => (
+        <Pressable key={r.t} onPress={() => onGoTo(r.to)} accessibilityRole="button" accessibilityLabel={`עריכת ${r.t}`} style={styles.sumRow}>
+          <Text style={styles.sumLabel}>{r.t}</Text>
+          <Text style={styles.sumValue} numberOfLines={1}>{r.v}</Text>
+          <Text style={styles.tag}>עריכה</Text>
+        </Pressable>
+      ))}
+
+      {view.missing.length > 0 ? (
         <>
-          <Text style={styles.soft}>לפני שאפשר לשלוח, חסרים:</Text>
+          <Text style={styles.label}>לפני שאפשר לשלוח, חסרים:</Text>
           {view.missing.map((m) => (
             <Pressable key={m} onPress={() => onGoTo(stepOf(m))} accessibilityRole="button" style={styles.listRow}>
               <Text style={styles.listText}>{missingHe(m, view)}</Text>
@@ -479,8 +525,64 @@ function Send({ view, busy, onSubmit, onGoTo }: { view: ProApplicationView; busy
             </Pressable>
           ))}
         </>
-      )}
-      <PrimaryAction labelHe="שליחה לאישור" disabled={busy || view.missing.length > 0} onPress={onSubmit} />
+      ) : null}
+
+      <Text style={styles.label}>מה קורה אחרי השליחה</Text>
+      {APPROVAL_STEPS_HE.map((t, i) => (
+        <View key={t} style={styles.approvalRow}>
+          <View style={styles.approvalNum}><Text style={styles.approvalNumText}>{i + 1}</Text></View>
+          <Text style={styles.listText}>{t}</Text>
+        </View>
+      ))}
+      <Text style={styles.note}>נעדכן כאן כשיש החלטה. עד אז אפשר לערוך הכול.</Text>
+      {/* Also after the first sending: a service added later waits as a draft until it is sent. */}
+      <PrimaryAction labelHe="שליחה לאישור PRO NOW" disabled={busy || view.missing.length > 0} onPress={onSubmit} />
+    </View>
+  );
+}
+
+/**
+ * The welcome, before the first step (the demo's step 0, Amit 2026-09-29),
+ * in the product's plural. It promises only what is built: the shop in the
+ * street joins this list when it exists (sync item E, decision D2).
+ */
+function Welcome({ width, height, onStart, onBack }: { width: number; height: number; onStart: () => void; onBack: () => void }) {
+  const lineup = ["home", "hair", "auto", "pets", "care"];
+  const benefits: Array<[string, string, string]> = [
+    ["📍", "עבודות לידכם, עכשיו", "מתחברים כשנוח לכם, והקריאות מגיעות לפי המיקום שלכם"],
+    ["₪", "אתם קובעים את המחירים", "ורואים כמה תקבלו לפני שאתם מאשרים עבודה"],
+    ["✓", "כל שירות נבדק בנפרד", "לקוחות יודעים שמי שמגיע אושר בדיוק למה שהזמינו"],
+  ];
+  return (
+    <View style={[styles.screen, { width, height }]}>
+      <Image source={{ uri: "/world/splash_city.webp" }} style={[StyleSheet.absoluteFill, { opacity: 0.55 }]} resizeMode="cover" />
+      <View style={styles.welcomeShade} />
+      <View style={styles.header}>
+        <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="חזרה">
+          <Text style={styles.back}>›</Text>
+        </Pressable>
+      </View>
+      <ScrollView contentContainerStyle={[styles.body, { gap: spacing.md }]}>
+        <Text style={styles.kicker}>PRO NOW לבעלי מקצוע</Text>
+        <Text style={styles.hero}>העסק שלכם,{"\n"}ברחוב של כולם.</Text>
+        <Text style={styles.soft}>בערך 5 דקות: מה אתם עושים, איפה, המסמכים והמחירים שלכם. עבודה מגיעה אחרי ש־PRO NOW מאשרת.</Text>
+        <View style={styles.lineup}>
+          {lineup.map((id, i) => (
+            <Image key={id} source={{ uri: `/world/character_${id}_icon.webp` }} style={[styles.lineupImg, { transform: [{ translateY: i % 2 ? 6 : 0 }] }]} resizeMode="contain" />
+          ))}
+        </View>
+        {benefits.map(([glyph, title, sub]) => (
+          <View key={title} style={styles.benefit}>
+            <View style={styles.benefitGlyph}><Text style={styles.benefitGlyphText}>{glyph}</Text></View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.listText}>{title}</Text>
+              <Text style={styles.note}>{sub}</Text>
+            </View>
+          </View>
+        ))}
+        <PrimaryAction labelHe="בואו נתחיל" onPress={onStart} />
+        <ProSignOut />
+      </ScrollView>
     </View>
   );
 }
@@ -547,6 +649,24 @@ const styles = StyleSheet.create({
   checkOn: { backgroundColor: colors.action, borderColor: colors.action },
   docRow: { flexDirection: "row-reverse", alignItems: "flex-start", gap: spacing.md, paddingVertical: spacing.sm },
   priceBlock: { gap: spacing.sm, paddingVertical: spacing.sm },
+  card: { flexDirection: "row-reverse", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: 20, backgroundColor: colors.surfaceElevated, borderWidth: 1.5, borderColor: colors.action },
+  cardFace: { width: 64, height: 64, borderRadius: 32 },
+  cardFaceEmpty: { backgroundColor: colors.bg },
+  cardName: { ...t.bodyStrong, color: colors.textPrimary, textAlign: "right", writingDirection: "rtl" },
+  sumRow: { flexDirection: "row-reverse", alignItems: "center", gap: spacing.sm, minHeight: 48, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.surfaceElevated },
+  sumLabel: { ...t.metaStrong, color: colors.textSecondary, width: 64, textAlign: "right", writingDirection: "rtl" },
+  sumValue: { ...t.body, color: colors.textPrimary, flex: 1, textAlign: "right", writingDirection: "rtl" },
+  approvalRow: { flexDirection: "row-reverse", alignItems: "center", gap: spacing.sm, minHeight: 36 },
+  approvalNum: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceElevated },
+  approvalNumText: { ...t.metaStrong, color: colors.textPrimary },
+  welcomeShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(10,8,16,0.72)" },
+  kicker: { ...t.metaStrong, color: colors.actionText, textAlign: "right", writingDirection: "rtl" },
+  hero: { ...t.h1, color: colors.textPrimary, textAlign: "right", writingDirection: "rtl" },
+  lineup: { flexDirection: "row-reverse", justifyContent: "center", gap: 4, paddingVertical: spacing.sm },
+  lineupImg: { width: 60, height: 76 },
+  benefit: { flexDirection: "row-reverse", alignItems: "center", gap: spacing.md },
+  benefitGlyph: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceElevated },
+  benefitGlyphText: { ...t.bodyStrong, color: colors.textPrimary },
   portraitOption: {
     flex: 1,
     minWidth: 140,

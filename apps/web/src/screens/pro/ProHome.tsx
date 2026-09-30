@@ -1,7 +1,9 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Navigate, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ApiError } from "@pro-now/api-client";
+import type { ProApplicationView } from "@pro-now/types";
 import { PrimaryAction, customerDarkTheme, spacing, type as t } from "@pro-now/ui";
 
 import { api } from "../../api";
@@ -10,6 +12,30 @@ import { ErrorScreen, LoadingScreen } from "../../states";
 import { applicationKey } from "./ProJoin";
 import { ProOnline } from "./ProOnline";
 import { ProSignOut } from "./ProSignOut";
+import { APPROVAL_STATE_HE, approvalProgress } from "./approval";
+import { tradeCharacterFor } from "../../tradeCharacter";
+
+/*
+ * "Waiting" is remembered on this device only to give the approval its
+ * moment (the demo's ShopOpen): someone who watched their application wait
+ * sees it land once. A per-device convenience; losing it only skips the moment.
+ */
+const waitingKey = (proId: string) => `pronow.pro.waiting.${proId}`;
+function remember(key: string, on: boolean) {
+  try {
+    if (on) localStorage.setItem(key, "1");
+    else localStorage.removeItem(key);
+  } catch {
+    /* private mode or blocked storage: no moment, nothing else changes */
+  }
+}
+function recalls(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
 
 /**
  * The professional's own page (docs/21 W7). Someone already registered
@@ -29,6 +55,7 @@ export function ProHome() {
   // "?review=1" shows the application's status even once approved.
   const reviewOnly = new URLSearchParams(location.search).get("review") === "1";
   const { width, height } = useFrame();
+  const [, rerender] = useState(0);
   const application = useQuery({
     queryKey: applicationKey,
     queryFn: async () => {
@@ -49,8 +76,26 @@ export function ProHome() {
 
   const accountApproved = view.profile.verificationStatus === "APPROVED";
   const approved = view.services.filter((s) => s.status === "APPROVED");
-  // Approved for at least one service: the work screen.
-  if (accountApproved && approved.length > 0 && !reviewOnly) return <ProOnline />;
+  const working = accountApproved && approved.length > 0;
+  if (working && !reviewOnly) {
+    if (recalls(waitingKey(view.profile.id))) {
+      return (
+        <ApprovedMoment
+          view={view}
+          width={width}
+          height={height}
+          onStart={() => {
+            remember(waitingKey(view.profile.id), false);
+            rerender((n) => n + 1);
+          }}
+        />
+      );
+    }
+    // Approved for at least one service: the work screen.
+    return <ProOnline />;
+  }
+  if (!working) remember(waitingKey(view.profile.id), true);
+  const progress = approvalProgress(view);
   return (
     <ScrollView style={{ width, height, backgroundColor: colors.bg }} contentContainerStyle={styles.body}>
       <Text style={styles.title}>{accountApproved && approved.length > 0 ? "אושרתם לעבודה" : "הבקשה בבדיקה"}</Text>
@@ -59,13 +104,21 @@ export function ProHome() {
           ? "השירותים המאושרים מקבלים קריאות כשאתם מחוברים. שירות שעדיין בבדיקה יתחיל לקבל כשיאושר."
           : "בודקים את הפרטים, את המסמכים ואת כל שירות בנפרד. נעדכן כאן כשיש החלטה."}
       </Text>
+      {working ? null : (
+        <View style={styles.card} accessibilityLabel="מה נבדק">
+          {progress.map((p) => (
+            <Row key={p.labelHe} labelHe={p.labelHe} statusHe={APPROVAL_STATE_HE[p.state]} tone={p.state} />
+          ))}
+        </View>
+      )}
+      <Text style={styles.section}>לפי שירות</Text>
       <View style={styles.card}>
         <Row labelHe="הפרטים והמסמכים" statusHe={accountApproved ? "מאושר ✓" : "בבדיקה"} />
         {view.services.map((s) => (
           <Row key={s.serviceId} labelHe={s.nameHe} statusHe={SERVICE_STATUS_HE[s.status] ?? s.status} />
         ))}
       </View>
-      <PrimaryAction labelHe="עדכון הבקשה" onPress={() => navigate("/pro/join")} />
+      <PrimaryAction labelHe="עריכת הפרטים" onPress={() => navigate("/pro/join?at=summary")} />
       <Text style={styles.link} accessibilityRole="link" onPress={() => navigate("/?as=customer")}>
         להזמין מקצוען לעצמכם ›
       </Text>
@@ -74,12 +127,36 @@ export function ProHome() {
   );
 }
 
-function Row({ labelHe, statusHe }: { labelHe: string; statusHe: string }) {
+function Row({ labelHe, statusHe, tone }: { labelHe: string; statusHe: string; tone?: string }) {
   return (
     <View style={styles.row}>
       <Text style={styles.label}>{labelHe}</Text>
-      <Text style={styles.status}>{statusHe}</Text>
+      <Text style={[styles.status, tone === "done" && styles.good, tone === "attention" && styles.bad, tone === "queued" && styles.active]}>{statusHe}</Text>
     </View>
+  );
+}
+
+/** The approval lands: their face, what they may now do, one button. */
+function ApprovedMoment({ view, width, height, onStart }: { view: ProApplicationView; width: number; height: number; onStart: () => void }) {
+  const p = view.profile;
+  const face =
+    p.portrait?.kind === "PHOTO" && p.portrait.uploadId
+      ? `/api/v1/media/${encodeURIComponent(p.portrait.uploadId)}`
+      : tradeCharacterFor(view.services.find((s) => s.status === "APPROVED")?.code);
+  const approvedNames = view.services.filter((s) => s.status === "APPROVED").map((s) => s.nameHe);
+  return (
+    <ScrollView style={{ width, height, backgroundColor: colors.bg }} contentContainerStyle={[styles.body, { flexGrow: 1, justifyContent: "center" }]}>
+      <Image source={{ uri: face }} style={styles.momentFace} resizeMode="cover" accessibilityIgnoresInvertColors />
+      <Text style={[styles.title, { textAlign: "center" }]}>{p.addressAs ? "אושרת!" : "אושרתם!"}</Text>
+      <Text style={[styles.soft, { textAlign: "center" }]}>
+        {p.addressAs === "F"
+          ? `מעכשיו את מקבלת קריאות ל${approvedNames.join(", ")} — כשאת מחוברת.`
+          : p.addressAs === "M"
+            ? `מעכשיו אתה מקבל קריאות ל${approvedNames.join(", ")} — כשאתה מחובר.`
+            : `מעכשיו אתם מקבלים קריאות ל${approvedNames.join(", ")} — כשאתם מחוברים.`}
+      </Text>
+      <PrimaryAction labelHe="להתחיל לקבל עבודות" onPress={onStart} />
+    </ScrollView>
   );
 }
 
@@ -92,5 +169,10 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", minHeight: 36 },
   label: { ...t.body, color: colors.textPrimary, writingDirection: "rtl", flexShrink: 1 },
   status: { ...t.metaStrong, color: colors.textSecondary, writingDirection: "rtl" },
+  good: { color: colors.trust },
+  bad: { color: colors.statusDanger },
+  active: { color: colors.actionText },
+  section: { ...t.metaStrong, color: colors.textSecondary, textAlign: "right", writingDirection: "rtl" },
+  momentFace: { width: 160, height: 160, borderRadius: 80, alignSelf: "center", marginBottom: spacing.md },
   link: { ...t.metaStrong, color: colors.actionText, textAlign: "right", writingDirection: "rtl", paddingVertical: spacing.sm },
 });

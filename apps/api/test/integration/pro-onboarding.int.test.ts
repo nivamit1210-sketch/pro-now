@@ -125,12 +125,15 @@ describe("joining as a professional", () => {
 
     const character = await put({ kind: "CHARACTER" });
     expect(character.statusCode, character.body).toBe(200);
-    expect(character.json().profile.portrait).toEqual({ kind: "CHARACTER" });
+    expect(character.json().profile.portrait).toEqual({ kind: "CHARACTER", uploadId: null });
     expect(character.json().missing).not.toContain("PORTRAIT");
 
-    const photo = await put({ kind: "PHOTO", uploadId: await upload(applicant, "PHOTO") });
+    const photoId = await upload(applicant, "PHOTO");
+    const photo = await put({ kind: "PHOTO", uploadId: photoId });
     expect(photo.statusCode, photo.body).toBe(200);
-    expect(photo.json().profile.portrait).toEqual({ kind: "PHOTO" });
+    expect(photo.json().profile.portrait).toEqual({ kind: "PHOTO", uploadId: photoId });
+    // Theirs to see again, for the summary before sending.
+    expect((await app.inject({ method: "GET", url: `/api/v1/media/${photoId}`, headers: as(applicant) })).statusCode).toBe(302);
     // Only the admin sees the photo, and only through a short-lived link.
     const seen = await app.inject({ method: "GET", url: `/api/v1/admin/professionals/${proId}`, headers: as(admin) });
     expect(seen.statusCode, seen.body).toBe(200);

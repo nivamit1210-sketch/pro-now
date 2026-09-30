@@ -108,7 +108,8 @@ export async function applicationView(db: PrismaClient, professionalId: string):
       business: pro.businessProfile?.taxStatus
         ? { tradingName: pro.businessProfile.tradingName, taxStatus: pro.businessProfile.taxStatus as "EXEMPT" | "LICENSED" | "COMPANY" }
         : null,
-      portrait: pro.portraitKind === "PHOTO" || pro.portraitKind === "CHARACTER" ? { kind: pro.portraitKind } : null,
+      // Their own photo is theirs to see: the screen opens it through /v1/media/:id (the owner may).
+      portrait: pro.portraitKind === "PHOTO" || pro.portraitKind === "CHARACTER" ? { kind: pro.portraitKind, uploadId: pro.portraitUploadId } : null,
     },
     services,
     area: area ? { lat: area.centerLat, lng: area.centerLng, radiusKm: area.radiusMeters / 1000 } : null,

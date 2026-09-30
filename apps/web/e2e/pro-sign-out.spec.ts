@@ -41,7 +41,7 @@ test("a professional signs out and back in; the next person on the device starts
   // Someone new on the same tab: joining, and nothing of the last person.
   await signInAsPro(page, uniqueEmail("e2e-next"));
   await expect(page).toHaveURL(/\/pro\/join$/);
-  await expect(page.getByText(/שלב 1 מתוך/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "בואו נתחיל" })).toBeVisible();
   await expect(page.getByText("הבקשה בבדיקה")).toHaveCount(0);
   // Joining has its own way out.
   await page.getByRole("button", { name: "יציאה מהחשבון" }).click();

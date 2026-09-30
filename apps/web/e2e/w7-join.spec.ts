@@ -21,6 +21,10 @@ test("a professional joins, is reviewed, and is approved for one service", async
   await page.goto(await linkFor(email));
   await expect(page).toHaveURL(/\/pro\/join$/);
 
+  // 0 · the welcome, promising only what exists.
+  await expect(page.getByText("ברחוב של כולם", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "בואו נתחיל" }).click();
+
   // 1 · details, and how to be addressed (asked, never guessed).
   await page.getByRole("textbox", { name: "השם שהלקוחות יראו" }).fill("מיכל");
   await page.getByRole("textbox", { name: "שם מלא כפי שבתעודה" }).fill("מיכל לוי");
@@ -87,11 +91,20 @@ test("a professional joins, is reviewed, and is approved for one service", async
   await expect(page.getByText("התמונה שלכם ✓")).toBeVisible();
   await page.getByRole("button", { name: "המשך" }).click();
 
-  // 7 · send; the server said nothing is missing.
-  await expect(page.getByText("הכול כאן.", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "שליחה לאישור" }).click();
+  // 7 · the summary: how a customer will see her, each part editable, and what the review checks.
+  await expect(page.getByText("הכול מוכן")).toBeVisible();
+  await expect(page.getByLabel("הכרטיס שלקוחות יראו")).toContainText("מיכל");
+  await page.getByRole("button", { name: "עריכת אזור" }).click();
+  await expect(page.getByText(/שלב 3 מתוך/)).toBeVisible();
+  await page.getByRole("button", { name: "המשך" }).click();
+  for (let i = 0; i < 3; i++) await page.getByRole("button", { name: /^המשך$|שמירה והמשך|אפשר להמשיך/ }).click();
+  await expect(page.getByText("ביקורות ודירוגים ברשת")).toBeVisible();
+  await page.getByRole("button", { name: "שליחה לאישור PRO NOW" }).click();
   await expect(page).toHaveURL(/\/pro$/);
   await expect(page.getByText("הבקשה בבדיקה")).toBeVisible();
+  // The true state, per step: received, and nothing checked yet.
+  await expect(page.getByLabel("מה נבדק")).toContainText("התקבלו");
+  await expect(page.getByLabel("מה נבדק")).not.toContainText("נבדק ✓");
 
   // The admin approves the account, the licence, then the service (W8 gives this a screen).
   const admin = await adminApi(baseURL!);
@@ -114,8 +127,11 @@ test("a professional joins, is reviewed, and is approved for one service", async
   } finally {
     await admin.dispose();
   }
-  // Approved: /pro is now her work screen, addressed as she asked.
+  // Approved: the moment lands once on the device that watched it wait, then her work screen.
   await page.reload();
+  await expect(page.getByText("אושרת!")).toBeVisible();
+  await expect(page.getByText("מעכשיו את מקבלת קריאות", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "להתחיל לקבל עבודות" }).click();
   await expect(page.getByRole("button", { name: "התחברות לקבלת עבודות" })).toBeVisible();
   await expect(page.getByText("את לא זמינה")).toBeVisible();
   // And the review, per service, is still one link away.

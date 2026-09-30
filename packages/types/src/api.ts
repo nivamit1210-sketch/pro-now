@@ -690,7 +690,7 @@ export interface ProApplicationView {
     /** Trading name (optional) and tax status; null until answered. Entered, not verified. */
     business: { tradingName: string | null; taxStatus: "EXEMPT" | "LICENSED" | "COMPANY" } | null;
     /** Their own photo, or their trade's character. Null: not chosen yet. */
-    portrait: { kind: "PHOTO" | "CHARACTER" } | null;
+    portrait: { kind: "PHOTO" | "CHARACTER"; uploadId: string | null } | null;
   };
   services: Array<{
     /** The application for this service (what an admin decides on). */
