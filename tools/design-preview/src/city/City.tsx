@@ -1644,8 +1644,25 @@ export function City({
         /* Nine metres: at seven, standing directly under Lust's own
            sign with its doorway in frame was still "not near a shop". */
         let bd = 9;
+        /*
+         * …AND ONLY A SHOP YOU CAN SEE.
+         *
+         * Amit, after a live demo on a friend's phone: *"חנות לחיות פתחה
+         * לי ביוטי, חנות של לאסט פתחה לי ספר."* The pill kept naming the
+         * shop you had just walked past for another nine metres. On a
+         * portrait phone the camera looks down the street, so by then
+         * that shop was behind you and off the screen, and the shop in
+         * front of you was a different one. Pressing "היכנס" at what you
+         * were looking at took you into what you had left behind.
+         *
+         * So a door more than a step behind the way you face does not
+         * count, however close it is.
+         */
+        const hx = Math.sin(yaw), hz = Math.cos(yaw);
         for (const s of street.shops) {
           const d = s.doorway.distanceTo(player.group.position);
+          const along = (s.doorway.z - player.group.position.z) * hz + (s.doorway.x - player.group.position.x) * hx;
+          if (along < -1.5) continue;
           if (d < bd) { bd = d; best = s; }
         }
 
@@ -2295,7 +2312,8 @@ export function City({
             enterRef.current?.();
           }}
         >
-          היכנס ›
+          {/* The door says whose it is — see "ONLY A SHOP YOU CAN SEE". */}
+          {`היכנס ל${SHOPS.find((x) => x.id === nearId)?.he ?? "חנות"} ›`}
         </button>
       ) : null}
 
@@ -2945,7 +2963,9 @@ const S: Record<string, React.CSSProperties> = {
      the character's head — the one thing on screen the eye is on. */
   enter: {
     position: "absolute", right: 20, bottom: 52,
-    border: 0, borderRadius: 999, padding: "13px 26px", background: "#FF6B4A",
+    /* Clear of the joystick, now that the button carries a shop's name. */
+    maxWidth: "calc(100% - 170px)", textAlign: "center", lineHeight: 1.25,
+    border: 0, borderRadius: 999, padding: "13px 22px", background: "#FF6B4A",
     color: "#17121F", fontSize: scale.meta, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
     boxShadow: "0 8px 26px rgba(255,107,74,.45)",
   },
