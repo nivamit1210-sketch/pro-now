@@ -83,7 +83,15 @@ test("a professional joins, is reviewed, and is approved for one service", async
   await page.getByRole("textbox", { name: "דמי ביקור ואבחון (₪)" }).fill("190");
   await page.getByRole("button", { name: "שמירה והמשך" }).click();
 
-  // 6 · her photo, required (Amit, 2026-09-30): nothing moves on until one is chosen.
+  // 6 · her shop: the sign reads her name until she types her own, and a swatch sets the colour.
+  await expect(page.getByRole("textbox", { name: "השם על השלט" })).toHaveValue("מיכל");
+  await page.getByRole("textbox", { name: "השם על השלט" }).fill("מיכל צנרת");
+  await page.getByRole("radio", { name: "צבע סגול" }).click();
+  await expect(page.getByLabel("השלט: מיכל צנרת")).toBeVisible();
+  await expect(page.getByRole("button", { name: "דלג — אעצב את החנות אחר כך" })).toBeVisible();
+  await page.getByRole("button", { name: "המשך" }).click();
+
+  // 7 · her photo, required (Amit, 2026-09-30): nothing moves on until one is chosen.
   await expect(page.getByRole("button", { name: "בחרו תמונה או דמות" })).toBeDisabled();
   const photoChooser = page.waitForEvent("filechooser");
   await page.getByRole("radio", { name: "סלפי או תמונה" }).click();
@@ -91,13 +99,13 @@ test("a professional joins, is reviewed, and is approved for one service", async
   await expect(page.getByText("התמונה שלכם ✓")).toBeVisible();
   await page.getByRole("button", { name: "המשך" }).click();
 
-  // 7 · the summary: how a customer will see her, each part editable, and what the review checks.
+  // 8 · the summary: how a customer will see her, each part editable, and what the review checks.
   await expect(page.getByText("הכול מוכן")).toBeVisible();
   await expect(page.getByLabel("הכרטיס שלקוחות יראו")).toContainText("מיכל");
   await page.getByRole("button", { name: "עריכת אזור" }).click();
   await expect(page.getByText(/שלב 3 מתוך/)).toBeVisible();
   await page.getByRole("button", { name: "המשך" }).click();
-  for (let i = 0; i < 3; i++) await page.getByRole("button", { name: /^המשך$|שמירה והמשך|אפשר להמשיך/ }).click();
+  for (let i = 0; i < 4; i++) await page.getByRole("button", { name: /^המשך$|שמירה והמשך|אפשר להמשיך/ }).click();
   await expect(page.getByText("ביקורות ודירוגים ברשת")).toBeVisible();
   await page.getByRole("button", { name: "שליחה לאישור PRO NOW" }).click();
   await expect(page).toHaveURL(/\/pro$/);
@@ -105,6 +113,13 @@ test("a professional joins, is reviewed, and is approved for one service", async
   // The true state, per step: received, and nothing checked yet.
   await expect(page.getByLabel("מה נבדק")).toContainText("התקבלו");
   await expect(page.getByLabel("מה נבדק")).not.toContainText("נבדק ✓");
+  // Her shop can be redesigned from her page, and saving brings her back to it.
+  await page.getByRole("link", { name: "עיצוב החנות ›" }).click();
+  await expect(page.getByRole("textbox", { name: "השם על השלט" })).toHaveValue("מיכל צנרת");
+  await page.getByRole("radio", { name: "צבע ירוק" }).click();
+  await page.getByRole("button", { name: "המשך" }).click();
+  await expect(page).toHaveURL(/\/pro$/);
+  await expect(page.getByText("הבקשה בבדיקה")).toBeVisible();
 
   // The admin approves the account, the licence, then the service (W8 gives this a screen).
   const admin = await adminApi(baseURL!);

@@ -22,9 +22,19 @@ const DEPARTMENT_FIGURE: Readonly<Record<string, string>> = {
   IMPROVEMENT: "build",
 };
 
+function departmentFigure(pilotId: string | null): string {
+  const department = pilotId ? departmentCodeByServiceId[pilotId] : undefined;
+  return (department && DEPARTMENT_FIGURE[department]) || "home";
+}
+
+/** The trade's shopfront in our street (sync item E), the demo's `onboardShopFor` facade. */
+export function tradeShopFor(databaseCode: string | null | undefined): string {
+  const pilotId = databaseCode ? pilotServiceIdForDatabaseCode(databaseCode) : null;
+  return `/world/m/shop_${departmentFigure(pilotId)}.webp`;
+}
+
 export function tradeCharacterFor(databaseCode: string | null | undefined): string {
   const pilotId = databaseCode ? pilotServiceIdForDatabaseCode(databaseCode) : null;
-  const department = pilotId ? departmentCodeByServiceId[pilotId] : undefined;
-  const figure = pilotId && /^svc-(electric|socket|alarm|solar)/.test(pilotId) ? "appliance" : (department && DEPARTMENT_FIGURE[department]) || "home";
+  const figure = pilotId && /^svc-(electric|socket|alarm|solar)/.test(pilotId) ? "appliance" : departmentFigure(pilotId);
   return `/world/character_${figure}_icon.webp`;
 }

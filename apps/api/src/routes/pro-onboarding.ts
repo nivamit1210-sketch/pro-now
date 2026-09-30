@@ -9,6 +9,7 @@ import {
   proDocumentSchema,
   proJoinSchema,
   proPortraitSchema,
+  proShopSchema,
   proServicesSchema,
 } from "@pro-now/validation";
 import { grantRole } from "../auth/roles.js";
@@ -105,6 +106,7 @@ export async function applicationView(db: PrismaClient, professionalId: string):
       legalName: pro.legalName,
       addressAs: pro.addressAs,
       verificationStatus: pro.verificationStatus,
+      shop: pro.shopName && pro.shopBrandColor ? { name: pro.shopName, brandColor: pro.shopBrandColor, logoUploadId: pro.shopLogoUploadId } : null,
       business: pro.businessProfile?.taxStatus
         ? { tradingName: pro.businessProfile.tradingName, taxStatus: pro.businessProfile.taxStatus as "EXEMPT" | "LICENSED" | "COMPANY" }
         : null,
@@ -233,6 +235,26 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
     const body = proBusinessSchema.parse(req.body);
     const data = { tradingName: body.tradingName?.trim() || null, taxStatus: body.taxStatus };
     await app.prisma.businessProfile.upsert({ where: { professionalId: p.id }, update: data, create: { professionalId: p.id, ...data } });
+    return reply.send(await applicationView(app.prisma, p.id));
+  });
+
+  /**
+   * Their shop (sync item E). Never required: "דלג — אעצב את החנות אחר כך"
+   * is the one skip joining allows (Amit, 2026-09-30). The logo must be a
+   * ready photo of their own.
+   */
+  app.put("/v1/pro/application/shop", pro, async (req, reply) => {
+    const p = await professionalOf(app, req, reply);
+    if (!p) return;
+    const body = proShopSchema.parse(req.body);
+    if (body.logoUploadId) {
+      const logo = await app.prisma.upload.findFirst({ where: { id: body.logoUploadId, ownerId: req.user!.userId, status: "READY", kind: "PHOTO" } });
+      if (!logo) return reply.status(422).send({ code: "UPLOAD_NOT_READY", message: "The logo must be a ready photo upload of yours" });
+    }
+    await app.prisma.professionalProfile.update({
+      where: { id: p.id },
+      data: { shopName: body.name.trim(), shopBrandColor: body.brandColor.toUpperCase(), shopLogoUploadId: body.logoUploadId ?? null },
+    });
     return reply.send(await applicationView(app.prisma, p.id));
   });
 

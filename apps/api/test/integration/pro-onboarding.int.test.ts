@@ -115,6 +115,27 @@ describe("joining as a professional", () => {
     expect(row.verificationStatus).toBe("UNVERIFIED");
   });
 
+  it("the shop: a sign, a brand colour, a logo if they like; designing it can wait (Amit, 2026-09-30)", async () => {
+    const before = (await app.inject({ method: "GET", url: "/api/v1/pro/application", headers: as(applicant) })).json();
+    expect(before.profile.shop).toBeNull();
+    expect(before.missing.join()).not.toMatch(/SHOP/);
+
+    const put = (payload: object) => app.inject({ method: "PUT", url: "/api/v1/pro/application/shop", headers: as(applicant), payload });
+    expect((await put({ name: "", brandColor: "#FF5C38" })).statusCode).toBe(400);
+    expect((await put({ name: "שם ארוך מדי בשביל שלט ניאון אחד", brandColor: "#FF5C38" })).statusCode).toBe(400);
+    expect((await put({ name: "רוני", brandColor: "red" })).statusCode).toBe(400);
+    const someoneElses = await upload(customer, "PHOTO");
+    expect((await put({ name: "רוני", brandColor: "#FF5C38", logoUploadId: someoneElses })).statusCode).toBe(422);
+
+    const logo = await upload(applicant, "PHOTO");
+    const res = await put({ name: "  רוני צנרת ", brandColor: "#8b5cf6", logoUploadId: logo });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().profile.shop).toEqual({ name: "רוני צנרת", brandColor: "#8B5CF6", logoUploadId: logo });
+
+    const noLogo = await put({ name: "רוני צנרת", brandColor: "#2FBF8A", logoUploadId: null });
+    expect(noLogo.json().profile.shop).toEqual({ name: "רוני צנרת", brandColor: "#2FBF8A", logoUploadId: null });
+  });
+
   it("the portrait is a photo of their own, or the trade's character (Amit, 2026-09-30: required)", async () => {
     const put = (payload: object, jar = applicant) => app.inject({ method: "PUT", url: "/api/v1/pro/application/portrait", headers: as(jar), payload });
 

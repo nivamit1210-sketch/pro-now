@@ -18,7 +18,8 @@ import { api } from "../../api";
 import { useFrame } from "../../frame";
 import { compressImage } from "../../media";
 import { pickFile } from "../../pickFile";
-import { tradeCharacterFor } from "../../tradeCharacter";
+import { brandColorFromFile } from "../../art/brandColor";
+import { tradeCharacterFor, tradeShopFor } from "../../tradeCharacter";
 import { ErrorScreen, LoadingScreen } from "../../states";
 import { APPROVAL_STEPS_HE } from "./approval";
 import { ProSignOut } from "./ProSignOut";
@@ -40,7 +41,8 @@ import { ProSignOut } from "./ProSignOut";
  */
 export const applicationKey = ["pro-application"] as const;
 
-const STEPS = ["פרטים", "מה אתם עושים", "אזור", "מסמכים", "מחירים", "התמונה שלכם", "סיכום ושליחה"] as const;
+const STEPS = ["פרטים", "מה אתם עושים", "אזור", "מסמכים", "מחירים", "החנות שלכם", "התמונה שלכם", "סיכום ושליחה"] as const;
+const SHOP_STEP = 5;
 const RADII_KM = [5, 10, 15, 25, 40];
 const ACCOUNT_DOCS: Array<{ kind: "GOVERNMENT_ID" | "SELFIE" | "TAX_FILE"; labelHe: string; noteHe: string }> = [
   { kind: "GOVERNMENT_ID", labelHe: "תעודת זהות", noteHe: "צילום ברור של שני הצדדים, או של הרישיון" },
@@ -96,7 +98,8 @@ export function ProJoin() {
   const { width, height } = useFrame();
   // Coming back to edit a sent application opens at the summary, as in the demo.
   const [params] = useSearchParams();
-  const [step, setStep] = useState(params.get("at") === "summary" ? STEPS.length - 1 : 0);
+  const at = params.get("at");
+  const [step, setStep] = useState(at === "summary" ? STEPS.length - 1 : at === "shop" ? SHOP_STEP : 0);
   // The welcome, once, for someone who has not started joining.
   const [welcomed, setWelcomed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -154,7 +157,10 @@ export function ProJoin() {
       case 2: return view ? <Area view={view} busy={busy} onSave={(a) => save(() => api.proSetArea(a), 3)} /> : null;
       case 3: return view ? <Documents view={view} busy={busy} save={save} onNext={() => setStep(4)} /> : null;
       case 4: return view ? <Prices view={view} busy={busy} save={save} onNext={() => setStep(5)} /> : null;
-      case 5: return view ? <Portrait view={view} busy={busy} save={save} onNext={() => setStep(6)} /> : null;
+      case 5:
+        // From their page ("לעצב את החנות"), done means back to it, as in the demo.
+        return view ? <Shop view={view} busy={busy} save={save} onNext={() => (at === "shop" && view.submitted ? navigate("/pro") : setStep(6))} /> : null;
+      case 6: return view ? <Portrait view={view} busy={busy} save={save} onNext={() => setStep(7)} /> : null;
       default:
         return view ? (
           <Send
@@ -422,6 +428,87 @@ function Prices({ view, busy, save, onNext }: { view: ProApplicationView; busy: 
   );
 }
 
+const BRAND_SWATCHES = [
+  { hex: "#FF5C38", he: "כתום" }, { hex: "#8B5CF6", he: "סגול" }, { hex: "#2FBF8A", he: "ירוק" }, { hex: "#3B82F6", he: "כחול" },
+  { hex: "#F59E0B", he: "ענבר" }, { hex: "#EC4899", he: "ורוד" }, { hex: "#14B8A6", he: "טורקיז" }, { hex: "#E5E7EB", he: "לבן" },
+] as const;
+
+/**
+ * Their shop in our street (the demo's step 5; sync item E): their trade's
+ * shopfront with their name in neon, a logo whose colour becomes the brand
+ * colour, eight swatches. The one step joining may skip (Amit, 2026-09-30):
+ * it then opens with these defaults, to be designed from their page later.
+ * Customers see the shop when the street arrives (D2).
+ */
+function Shop({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<void>; onNext: () => void }) {
+  const p = view.profile;
+  // Until they type their own, the sign reads the business name, else their name (the demo's rule).
+  const [name, setName] = useState(p.shop?.name ?? (p.business?.tradingName || p.displayName).slice(0, 22));
+  const [color, setColor] = useState<string>(p.shop?.brandColor ?? BRAND_SWATCHES[0].hex);
+  const [logoId, setLogoId] = useState<string | null>(p.shop?.logoUploadId ?? null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  useEffect(() => () => { if (logoPreview) URL.revokeObjectURL(logoPreview); }, [logoPreview]);
+  const logoUri = logoPreview ?? (logoId ? `/api/v1/media/${encodeURIComponent(logoId)}` : null);
+  const pickLogo = async () => {
+    const file = await pickFile("image/*");
+    if (!file) return;
+    await save(async () => {
+      const [blob, fromLogo] = await Promise.all([compressImage(file), brandColorFromFile(file)]);
+      const id = (await api.uploadMedia({ kind: "PHOTO", mime: "image/jpeg", body: blob })).upload.id;
+      setLogoId(id);
+      setLogoPreview(URL.createObjectURL(blob));
+      if (fromLogo) setColor(fromLogo);
+    });
+  };
+  const ok = name.trim().length > 0;
+  return (
+    <View style={styles.section}>
+      <Text style={styles.title}>החנות שלכם ברחוב</Text>
+      <Text style={styles.soft}>ככה לקוחות יכירו אתכם — השם, הצבע והלוגו שלכם.</Text>
+      <View style={styles.shopPreview} accessibilityLabel={`השלט: ${name}`}>
+        <Image source={{ uri: tradeShopFor(view.services[0]?.code) }} style={styles.facade} resizeMode="contain" />
+        <View style={[styles.sign, { borderColor: color }]}>
+          {logoUri ? <Image source={{ uri: logoUri }} style={styles.signLogo} /> : null}
+          <Text style={[styles.signText, { textShadowColor: color, textShadowRadius: 12, textShadowOffset: { width: 0, height: 0 } }]} numberOfLines={1}>
+            {name.trim() || "השם שלכם"}
+          </Text>
+        </View>
+      </View>
+      <Field label="השם על השלט" value={name} onChange={setName} max={22} />
+      <Text style={styles.label}>לוגו (לא חובה)</Text>
+      <Chip labelHe={logoId ? "✓ הלוגו עלה — להחליף" : "העלאת לוגו · ניקח ממנו את צבע המותג"} on={false} onPress={() => void pickLogo()} />
+      <Text style={styles.label}>צבע המותג</Text>
+      <View style={styles.row}>
+        {BRAND_SWATCHES.map((c) => (
+          <Pressable
+            key={c.hex}
+            onPress={() => setColor(c.hex)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: color.toUpperCase() === c.hex }}
+            accessibilityLabel={`צבע ${c.he}`}
+            style={[styles.swatch, { backgroundColor: c.hex }, color.toUpperCase() === c.hex && styles.swatchOn]}
+          />
+        ))}
+      </View>
+      <PrimaryAction
+        labelHe="המשך"
+        disabled={!ok || busy}
+        onPress={() =>
+          void save(async () => {
+            const saved = await api.proSetShop({ name: name.trim(), brandColor: color, logoUploadId: logoId });
+            onNext();
+            return saved;
+          })
+        }
+      />
+      {/* The only skip in joining (Amit, 2026-09-30). */}
+      <Pressable onPress={onNext} accessibilityRole="button" style={styles.skip}>
+        <Text style={styles.tag}>דלג — אעצב את החנות אחר כך</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 /**
  * Their own photo, or their trade's drawn character (the demo's step 6).
  * Required: "המשך" waits for one of the two. The customer they are sent to
@@ -487,7 +574,7 @@ const TAX_HE: Record<string, string> = { EXEMPT: "עוסק פטור", LICENSED: 
  */
 function Send({ view, busy, onSubmit, onGoTo }: { view: ProApplicationView; busy: boolean; onSubmit: () => void; onGoTo: (step: number) => void }) {
   const stepOf = (code: string) =>
-    code === "ADDRESS_AS" || code === "TAX_STATUS" ? 0 : code === "SERVICES" ? 1 : code === "AREA" ? 2 : code.startsWith("PRICE") ? 4 : code === "PORTRAIT" ? 5 : 3;
+    code === "ADDRESS_AS" || code === "TAX_STATUS" ? 0 : code === "SERVICES" ? 1 : code === "AREA" ? 2 : code.startsWith("PRICE") ? 4 : code === "PORTRAIT" ? 6 : 3;
   const p = view.profile;
   const face =
     p.portrait?.kind === "PHOTO" && p.portrait.uploadId
@@ -503,17 +590,18 @@ function Send({ view, busy, onSubmit, onGoTo }: { view: ProApplicationView; busy
     { t: "אזור", v: view.area ? `עד ${view.area.radiusKm} ק״מ מהבית` : "—", to: 2 },
     { t: "מסמכים", v: `${docsIn}/${docsTotal} חובה`, to: 3 },
     { t: "מחירים", v: `${view.services.filter((s) => s.priced).length}/${view.services.length} שירותים`, to: 4 },
-    { t: "התמונה", v: p.portrait?.kind === "PHOTO" ? "תמונה שלכם" : p.portrait?.kind === "CHARACTER" ? "הדמות של המקצוע" : "—", to: 5 },
+    { t: "החנות", v: p.shop ? p.shop.name : "עיצוב ברירת מחדל, אפשר אחר כך", to: 5 },
+    { t: "התמונה", v: p.portrait?.kind === "PHOTO" ? "תמונה שלכם" : p.portrait?.kind === "CHARACTER" ? "הדמות של המקצוע" : "—", to: 6 },
   ];
   return (
     <View style={styles.section}>
       <Text style={styles.title}>{view.missing.length === 0 ? "הכול מוכן" : "כמעט שם"}</Text>
       <Text style={styles.soft}>ככה יראה אתכם לקוח:</Text>
-      <View style={styles.card} accessibilityLabel="הכרטיס שלקוחות יראו">
+      <View style={[styles.card, p.shop && { borderColor: p.shop.brandColor }]} accessibilityLabel="הכרטיס שלקוחות יראו">
         {face ? <Image source={{ uri: face }} style={styles.cardFace} resizeMode="cover" /> : <View style={[styles.cardFace, styles.cardFaceEmpty]} />}
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.cardName}>{p.displayName || "השם שלכם"}</Text>
-          <Text style={styles.note}>{p.business?.tradingName ? `${p.business.tradingName} · ` : ""}חדש ב־PRO NOW</Text>
+          <Text style={styles.note}>{p.shop?.name ?? p.business?.tradingName ? `${p.shop?.name ?? p.business?.tradingName} · ` : ""}חדש ב־PRO NOW</Text>
           <Text style={styles.note} numberOfLines={1}>{view.services.slice(0, 2).map((s) => s.nameHe).join(" · ")}</Text>
         </View>
       </View>
@@ -678,6 +766,14 @@ const styles = StyleSheet.create({
   benefit: { flexDirection: "row-reverse", alignItems: "center", gap: spacing.md },
   benefitGlyph: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceElevated },
   benefitGlyphText: { ...t.bodyStrong, color: colors.textPrimary },
+  shopPreview: { height: 220, borderRadius: 20, overflow: "hidden", backgroundColor: "#1B1230", alignItems: "center", justifyContent: "flex-end" },
+  facade: { position: "absolute", bottom: 0, width: "100%", height: "92%" },
+  sign: { position: "absolute", top: 18, alignSelf: "center", flexDirection: "row-reverse", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: 14, borderWidth: 2, backgroundColor: "rgba(10,8,16,0.72)", maxWidth: "90%" },
+  signLogo: { width: 28, height: 28, borderRadius: 14 },
+  signText: { ...t.h2, color: "#FFFFFF", writingDirection: "rtl" },
+  swatch: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: "transparent" },
+  swatchOn: { borderColor: colors.textPrimary, transform: [{ scale: 1.1 }] },
+  skip: { minHeight: 44, alignItems: "center", justifyContent: "center" },
   portraitOption: {
     flex: 1,
     minWidth: 140,

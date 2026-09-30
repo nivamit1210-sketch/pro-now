@@ -125,7 +125,7 @@ export default async function meRoutes(app: FastifyInstance) {
       }
       await tx.professionalProfile.updateMany({
         where: { userId },
-        data: { legalName: ERASED, displayName: ERASED, profilePhotoRef: null, portraitKind: null, portraitUploadId: null, presenceState: "OFFLINE" },
+        data: { legalName: ERASED, displayName: ERASED, profilePhotoRef: null, portraitKind: null, portraitUploadId: null, shopName: null, shopLogoUploadId: null, presenceState: "OFFLINE" },
       });
       // A trading name is often the person's own ("יוסי אינסטלציה").
       await tx.businessProfile.updateMany({ where: { professional: { userId } }, data: { tradingName: null } });

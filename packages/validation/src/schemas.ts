@@ -304,6 +304,15 @@ export const proBusinessSchema = z
   })
   .strict();
 
+/** `PUT /api/v1/pro/application/shop`: the sign, the brand colour, an optional logo (sync item E). */
+export const proShopSchema = z
+  .object({
+    name: z.string().trim().min(1).max(22),
+    brandColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    logoUploadId: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+
 /** `PUT /api/v1/pro/application/services`: the services applied for (server ids). */
 export const proServicesSchema = z.object({ serviceIds: z.array(z.string().min(1)).min(1).max(20) }).strict();
 

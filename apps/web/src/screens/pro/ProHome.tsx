@@ -88,6 +88,10 @@ export function ProHome() {
             remember(waitingKey(view.profile.id), false);
             rerender((n) => n + 1);
           }}
+          onDesignShop={() => {
+            remember(waitingKey(view.profile.id), false);
+            navigate("/pro/join?at=shop");
+          }}
         />
       );
     }
@@ -119,6 +123,10 @@ export function ProHome() {
         ))}
       </View>
       <PrimaryAction labelHe="עריכת הפרטים" onPress={() => navigate("/pro/join?at=summary")} />
+      {/* The one step joining may skip comes back here (Amit, 2026-09-30). */}
+      <Text style={styles.link} accessibilityRole="link" onPress={() => navigate("/pro/join?at=shop")}>
+        {view.profile.shop ? "עיצוב החנות ›" : "לעצב את החנות ›"}
+      </Text>
       <Text style={styles.link} accessibilityRole="link" onPress={() => navigate("/?as=customer")}>
         להזמין מקצוען לעצמכם ›
       </Text>
@@ -137,7 +145,7 @@ function Row({ labelHe, statusHe, tone }: { labelHe: string; statusHe: string; t
 }
 
 /** The approval lands: their face, what they may now do, one button. */
-function ApprovedMoment({ view, width, height, onStart }: { view: ProApplicationView; width: number; height: number; onStart: () => void }) {
+function ApprovedMoment({ view, width, height, onStart, onDesignShop }: { view: ProApplicationView; width: number; height: number; onStart: () => void; onDesignShop: () => void }) {
   const p = view.profile;
   const face =
     p.portrait?.kind === "PHOTO" && p.portrait.uploadId
@@ -156,6 +164,11 @@ function ApprovedMoment({ view, width, height, onStart }: { view: ProApplication
             : `מעכשיו אתם מקבלים קריאות ל${approvedNames.join(", ")} — כשאתם מחוברים.`}
       </Text>
       <PrimaryAction labelHe="להתחיל לקבל עבודות" onPress={onStart} />
+      {p.shop ? null : (
+        <Text style={[styles.link, { textAlign: "center" }]} accessibilityRole="link" onPress={onDesignShop}>
+          לעצב את החנות
+        </Text>
+      )}
     </ScrollView>
   );
 }

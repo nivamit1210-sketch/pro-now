@@ -181,6 +181,13 @@ model ProfessionalProfile {
   portraitKind       String?
   portraitUploadId   String?
   portraitUpload     Upload?            @relation("ProfessionalPortrait", fields: [portraitUploadId], references: [id], onDelete: SetNull)
+  /// Their shop in our street (Amit, 2026-09-30; sync item E): the sign's
+  /// name (22 characters), the brand colour ("#RRGGBB") and an optional
+  /// logo. All null: not designed yet — the only step joining may skip.
+  shopName           String?
+  shopBrandColor     String?
+  shopLogoUploadId   String?
+  shopLogoUpload     Upload?            @relation("ProfessionalShopLogo", fields: [shopLogoUploadId], references: [id], onDelete: SetNull)
   verificationStatus VerificationStatus @default(DRAFT)
   presenceState      ProPresenceState   @default(OFFLINE)
   createdAt          DateTime           @default(now())
@@ -304,6 +311,7 @@ model Upload {
   jobMedia              JobMedia[]
   professionalDocuments ProfessionalDocument[]
   portraitOf            ProfessionalProfile[]  @relation("ProfessionalPortrait")
+  shopLogoOf            ProfessionalProfile[]  @relation("ProfessionalShopLogo")
 
   @@index([ownerId, status])
   @@index([status, createdAt])
