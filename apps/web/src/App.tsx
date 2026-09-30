@@ -19,6 +19,7 @@ import { Addresses } from "./screens/Addresses";
 import { Avatar, Intro } from "./screens/Onboarding";
 import { SignIn } from "./screens/SignIn";
 import { Welcome } from "./screens/Welcome";
+import { World } from "./screens/World";
 
 /**
  * Who may see what is decided by the server's session, never by the client
@@ -75,6 +76,7 @@ export function App() {
             <Route path="/intro" element={<SignedIn><Intro /></SignedIn>} />
             <Route path="/avatar" element={<SignedIn><Avatar /></SignedIn>} />
             <Route path="/addresses" element={<SignedIn><Addresses /></SignedIn>} />
+            <Route path="/world" element={<SignedIn><FirstRun><World /></FirstRun></SignedIn>} />
             <Route path="/jobs/:id" element={<SignedIn><Job /></SignedIn>} />
             {/* The professional's side (docs/21 W7). */}
             <Route path="/pro" element={<SignedIn><ProHome /></SignedIn>} />

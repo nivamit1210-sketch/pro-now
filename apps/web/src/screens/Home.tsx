@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { View } from "react-native";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
   ActiveJobCapsule,
   AppHeader,
@@ -59,6 +59,7 @@ type Tab = "home" | "menu";
 export function Home() {
   const { width, height } = useFrame();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>("home");
   /*
    * A chosen service opens its page first, then the request form — the
@@ -72,6 +73,13 @@ export function Home() {
   const [seedQuery, setSeedQuery] = useState<string | null>(null);
   // The sentence the service was chosen from, carried into the request.
   const [typedText, setTypedText] = useState("");
+  useEffect(() => {
+    const service = searchParams.get("service");
+    if (!service) return;
+    setRequestServiceId(service);
+    searchParams.delete("service");
+    setSearchParams(searchParams, { replace: true });
+  }, [searchParams, setSearchParams]);
   const me = useMe();
   const media = useWebMediaCapture();
   /* The face they chose, in the header, as in the demo; the glyph if none. */
@@ -153,7 +161,7 @@ export function Home() {
               {
                 titleHe: "העולם",
                 items: [
-                  { id: "stroll", labelHe: "טיול בשכונה", detailHe: "בלי בקשה פתוחה", upcoming: true },
+                  { id: "stroll", labelHe: "טיול בשכונה", detailHe: "בלי בקשה פתוחה", onPress: () => navigate("/world") },
                   { id: "advertise", labelHe: "יש לך עסק?", detailHe: "פתיחת חנות בשכונה של PRO NOW", upcoming: true },
                 ],
               },
@@ -255,7 +263,6 @@ export function Home() {
               // customer and the service they chose.
               void api.sendMatchFeedback(choice).catch(() => {});
             }}
-            strollUpcoming
             advertiseUpcoming
             width={width}
             height={bodyH}

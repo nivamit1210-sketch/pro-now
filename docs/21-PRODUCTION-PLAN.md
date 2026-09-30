@@ -622,6 +622,22 @@ iOS push waits for the installed app on HTTPS (Phase 2); SMS for D4.
   (`NODE_ENV=production` against the compose stand-ins, with the
   stand-in guard relaxed only by an explicit `ALLOW_LOCAL_STANDINS=1`).
 
+### W11 — Virtual world web experience (M)
+**IMPLEMENTED 2026-09-30** (QA: `docs/qa/W11.md`).
+
+- Product-owned Three.js runtime under `apps/web/src/world`; the demo remains
+  a visual reference and is not imported at runtime.
+- `/world` is a signed-in neighbourhood route with keyboard/pointer movement,
+  catalogue-backed shop services, supported interiors, and navigation into the
+  existing request composer.
+- Searching and assigned-job screens use the same scene runtime as a backdrop.
+  Professional identity, vehicle presence, and route progress are rendered
+  only from the current job/match/ETA snapshots; missing data remains unknown.
+- WebGL, reduced-motion, unsupported-interior, keyboard, missing-ETA, and
+  semantic fallback paths are covered by unit and browser tests.
+- Measured limitation: the route is an authored temporal illustration, not a
+  GPS map. A manual iPhone/desktop pass is still pending (QA note).
+
 ## 4. Phase 2 — go live (after W10)
 
 **Status 2026-09-30:** live at **https://pro-now.onrender.com** (accounts

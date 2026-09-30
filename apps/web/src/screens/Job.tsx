@@ -20,11 +20,12 @@ import {
 } from "@pro-now/ui";
 
 import { api } from "../api";
-import { CityHero } from "../art/CityHero";
 import { useFrame } from "../frame";
 import { ErrorScreen, LoadingScreen } from "../states";
 import { tradeCharacterFor } from "../tradeCharacter";
 import { useJobSocket } from "../useJobSocket";
+import { JobWorldBackdrop } from "../world";
+import { CityHero } from "../art/CityHero";
 
 /**
  * One job, from "looking for a professional" to the review (docs/21 W6).
@@ -175,7 +176,7 @@ export function Job() {
     return withError(
       <>
         <SearchingBody
-          backdrop={<CityHero />}
+          backdrop={<JobWorldBackdrop status={data.status} match={match.data ?? null} departmentCode={departmentCode} fallback={<CityHero />} />}
           serviceNameHe={serviceNameHe}
           elapsedSeconds={elapsedSeconds}
           departmentCode={departmentCode ?? undefined}
@@ -275,7 +276,7 @@ export function Job() {
 
   return withError(
     <TrackingBody
-      backdrop={<CityHero />}
+      backdrop={<JobWorldBackdrop status={data.status} match={m} departmentCode={departmentCode} fallback={<CityHero />} />}
       status={data.status}
       serviceNameHe={serviceNameHe}
       professional={professional}

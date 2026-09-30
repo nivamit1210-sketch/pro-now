@@ -1,0 +1,31 @@
+import { describe, expect, it } from "vitest";
+
+import { movementFromKeyboard, movementFromPointer, worldActionFromKey } from "./worldInput";
+
+describe("world input", () => {
+  it("maps arrows and WASD to the same movement", () => {
+    expect(movementFromKeyboard(new Set(["ArrowUp"]))).toEqual({ x: 0, z: -1, sprint: false });
+    expect(movementFromKeyboard(new Set(["w", "Shift"]))).toEqual({ x: 0, z: -1, sprint: true });
+  });
+
+  it("normalizes diagonal movement", () => {
+    const result = movementFromKeyboard(new Set(["ArrowUp", "ArrowRight"]));
+    expect(Math.hypot(result.x, result.z)).toBeCloseTo(1);
+  });
+
+  it("applies a pointer dead zone and radius clamp", () => {
+    expect(movementFromPointer(2, 2, 100)).toEqual({ x: 0, z: 0, sprint: false });
+    const result = movementFromPointer(200, -200, 100);
+    expect(Math.hypot(result.x, result.z)).toBeCloseTo(1);
+  });
+
+  it("returns to zero when touch input is released", () => {
+    expect(movementFromPointer(0, 0, 100)).toEqual({ x: 0, z: 0, sprint: false });
+  });
+
+  it("maps Escape to exit and Enter to shop entry", () => {
+    expect(worldActionFromKey("Escape")).toBe("EXIT");
+    expect(worldActionFromKey("Enter")).toBe("ENTER_SHOP");
+    expect(worldActionFromKey("ArrowUp")).toBeNull();
+  });
+});

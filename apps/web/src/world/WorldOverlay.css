@@ -1,0 +1,40 @@
+.world-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  color: #f7f3fa;
+  font-family: inherit;
+}
+
+.world-overlay button {
+  pointer-events: auto;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: #ff6b4a;
+  color: #1a0f0c;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.world-overlay__status,
+.world-overlay__professional,
+.world-overlay__sheet,
+.world-overlay__actions {
+  position: absolute;
+  pointer-events: auto;
+  background: rgba(18, 12, 24, 0.82);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+}
+
+.world-overlay__status { top: 16px; right: 16px; padding: 8px 12px; border-radius: 999px; }
+.world-overlay__professional { top: 58px; right: 16px; padding: 8px 12px; border-radius: 12px; }
+.world-overlay__sheet { left: 16px; right: 16px; bottom: 66px; padding: 16px; border-radius: 20px; }
+.world-overlay__sheet h2 { margin: 0 0 10px; font-size: 20px; }
+.world-overlay__sheet p { margin: 0; color: rgba(247, 243, 250, 0.7); }
+.world-overlay__services { display: grid; gap: 8px; }
+.world-overlay__services button { text-align: right; border-radius: 12px; }
+.world-overlay__actions { left: 16px; right: 16px; bottom: 16px; display: flex; justify-content: space-between; gap: 8px; padding: 8px; border-radius: 999px; }
+.world-overlay__actions button:last-child { background: rgba(247, 243, 250, 0.12); color: #f7f3fa; }
