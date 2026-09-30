@@ -29,6 +29,7 @@
     "dev:pulse": "npm run dev:pulse -w apps/api",
     "verify:domain": "tsx scripts/verify-domain-logic.ts",
     "audit:shipped": "node scripts/audit-shipped.mjs",
+    "drill:backup": "node scripts/backup-drill.mjs",
     "verify:rowlock": "tsx scripts/verify-row-lock.ts",
     "verify:journey": "npm run db:seed:dev && node scripts/verify-journey.mjs",
     "verify:demo-isolation": "node scripts/check-demo-isolation.mjs",

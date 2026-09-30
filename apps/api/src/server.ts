@@ -146,6 +146,37 @@ export async function buildServer(opts: { logger?: boolean } = {}) {
   app.get("/health", async () => ({ ok: true, sandbox: config.NODE_ENV !== "production" }));
 
   /*
+   * LIVENESS AND READINESS (docs/21 W10, docs/16 §Health).
+   * /api/health: the process answers — nothing else is asked, so a slow
+   *   database never gets a healthy process restarted.
+   * /api/ready: it can do its work — the database answers with PostGIS,
+   *   and storage answers a HEAD for a key that does not exist (reachable
+   *   and authorised, without writing anything). 503 names what failed,
+   *   never why in a way that leaks a secret.
+   */
+  app.get(`${API_PREFIX}/health`, async () => ({ ok: true }));
+  app.get(`${API_PREFIX}/ready`, async (_req, reply) => {
+    const within = <T,>(p: Promise<T>, ms: number) =>
+      Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))]);
+    const checks: Record<string, string> = {};
+    try {
+      const [row] = await within(app.prisma.$queryRawUnsafe<Array<{ v: string }>>("SELECT postgis_lib_version() AS v"), 3000);
+      checks.database = "ok";
+      checks.postgis = row?.v ?? "unknown";
+    } catch {
+      checks.database = "unavailable";
+    }
+    try {
+      await within(app.providers.storage.head("readiness-probe/does-not-exist"), 3000);
+      checks.storage = "ok";
+    } catch {
+      checks.storage = "unavailable";
+    }
+    const ready = checks.database === "ok" && checks.storage === "ok";
+    return reply.status(ready ? 200 : 503).send({ ready, checks });
+  });
+
+  /*
    * BEFORE THE ROUTES, AND THAT IS THE WHOLE POINT.
    *
    * Every route below is registered as a plugin, so each one gets its own

@@ -36,6 +36,10 @@ services:
         value: "1"
       - key: DATABASE_URL
         sync: false
+      # Neon's direct (unpooled) URL, used only by migrate deploy at boot.
+      # See docs/16 §Neon runbook.
+      - key: DIRECT_DATABASE_URL
+        sync: false
       - key: PUBLIC_URL
         sync: false
       - key: EMAIL_FROM

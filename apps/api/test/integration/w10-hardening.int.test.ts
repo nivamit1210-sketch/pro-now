@@ -84,3 +84,28 @@ describe("headers and limits", () => {
     expect(res.statusCode).toBe(413);
   });
 });
+
+describe("health and readiness", () => {
+  it("liveness asks nothing; readiness checks the database, PostGIS and storage", async () => {
+    expect((await app.inject({ method: "GET", url: "/api/health" })).json()).toEqual({ ok: true });
+    const ready = await app.inject({ method: "GET", url: "/api/ready" });
+    expect(ready.statusCode, ready.body).toBe(200);
+    expect(ready.json()).toMatchObject({ ready: true, checks: { database: "ok", storage: "ok" } });
+    expect(ready.json().checks.postgis).toMatch(/^\d+\.\d+/);
+  });
+
+  it("is not ready when storage is not reachable, and says which part", async () => {
+    const head = app.providers.storage.head;
+    app.providers.storage.head = async () => {
+      throw new Error("connect ECONNREFUSED");
+    };
+    try {
+      const res = await app.inject({ method: "GET", url: "/api/ready" });
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toEqual({ ready: false, checks: { database: "ok", postgis: expect.any(String), storage: "unavailable" } });
+      expect(res.body).not.toContain("ECONNREFUSED");
+    } finally {
+      app.providers.storage.head = head;
+    }
+  });
+});
