@@ -9,6 +9,7 @@ import { ProOfferBody, ProOnlineBody, catalogServicePages, customerDarkTheme, sp
 import { api } from "../../api";
 import { useFrame } from "../../frame";
 import { ErrorScreen, LoadingScreen } from "../../states";
+import { ProSignOut } from "./ProSignOut";
 
 /**
  * ONLINE, IN THE BROWSER (docs/21 W7).
@@ -165,15 +166,21 @@ export function ProOnline() {
         })}
         onToggleOnline={busy ? undefined : toggle}
         width={width}
-        height={height - (online ? 44 : 0)}
+        height={height - 44}
       />
+      {/* Online: keep the app open. Offline: the way out (signing out while
+          online would leave dispatch counting on someone who has gone). */}
       {online ? (
         <Text style={styles.keepOpen}>
           {s.addressAs === "F"
             ? "את מחוברת — השאירי את האפליקציה פתוחה כדי לקבל קריאות."
             : "אתה מחובר — השאר את האפליקציה פתוחה כדי לקבל קריאות."}
         </Text>
-      ) : null}
+      ) : (
+        <View style={styles.strip}>
+          <ProSignOut />
+        </View>
+      )}
       {problemHe ? <Text accessibilityRole="alert" style={styles.problem}>{problemHe}</Text> : null}
     </View>
   );
@@ -182,5 +189,6 @@ export function ProOnline() {
 const colors = customerDarkTheme.colors;
 const styles = StyleSheet.create({
   keepOpen: { ...t.meta, height: 44, color: colors.textSecondary, textAlign: "center", writingDirection: "rtl", paddingHorizontal: spacing.lg, backgroundColor: colors.bg },
+  strip: { height: 44, justifyContent: "center", backgroundColor: colors.bg },
   problem: { ...t.body, position: "absolute", bottom: spacing.xxl, left: spacing.lg, right: spacing.lg, color: colors.statusDanger, textAlign: "center", writingDirection: "rtl" },
 });

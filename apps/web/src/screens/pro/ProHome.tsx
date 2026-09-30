@@ -9,6 +9,7 @@ import { useFrame } from "../../frame";
 import { ErrorScreen, LoadingScreen } from "../../states";
 import { applicationKey } from "./ProJoin";
 import { ProOnline } from "./ProOnline";
+import { ProSignOut } from "./ProSignOut";
 
 /**
  * The professional's own page (docs/21 W7). Someone already registered
@@ -68,6 +69,7 @@ export function ProHome() {
       <Text style={styles.link} accessibilityRole="link" onPress={() => navigate("/?as=customer")}>
         להזמין מקצוען לעצמכם ›
       </Text>
+      <ProSignOut />
     </ScrollView>
   );
 }

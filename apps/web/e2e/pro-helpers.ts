@@ -127,7 +127,8 @@ export async function pendingApplicant(serviceCode: string, displayName: string)
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
   try {
     const service = await db.service.findUniqueOrThrow({ where: { code: serviceCode }, include: { requirements: true } });
-    const user = await db.user.create({ data: { email: uniqueEmail("e2e-applicant"), emailVerified: true, name: displayName } });
+    const email = uniqueEmail("e2e-applicant");
+    const user = await db.user.create({ data: { email, emailVerified: true, name: displayName } });
     await db.userRole.create({ data: { userId: user.id, role: "PROFESSIONAL" } });
     const profile = await db.professionalProfile.create({
       data: { userId: user.id, legalName: `${displayName} כהן`, displayName, addressAs: "M", verificationStatus: "SERVICE_REVIEW" },
@@ -144,7 +145,7 @@ export async function pendingApplicant(serviceCode: string, displayName: string)
       const u = await db.upload.create({ data: { ownerId: user.id, kind: "DOCUMENT", mime: "image/jpeg", bytes: 10, status: "READY", storageKey: `e2e/${profile.id}/${type}.jpg` } });
       await db.professionalCredential.create({ data: { professionalId: profile.id, serviceId: service.id, type, number: "77777", documentRef: u.id, status: "PENDING" } });
     }
-    return { professionalId: profile.id };
+    return { professionalId: profile.id, email };
   } finally {
     await db.$disconnect();
   }

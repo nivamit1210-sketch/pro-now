@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { View } from "react-native";
 import { useNavigate } from "react-router";
 import {
@@ -19,7 +19,7 @@ import { avatarById, categoryAsksForPerson, customerCategoryById, greetingAt, ty
 
 import { api, useMe } from "../api";
 import { servicesForCategory } from "../categories";
-import { authClient } from "../auth";
+import { signOutHere } from "../auth";
 import { CityHero } from "../art/CityHero";
 import { worldSources } from "../art/worldSources";
 import { useFrame } from "../frame";
@@ -80,10 +80,8 @@ export function Home() {
   const category = categoryId ? customerCategoryById(categoryId) : null;
   const bodyH = height - HEADER_H - (active ? CAPSULE_HEIGHT : 0);
 
-  const signOut = async () => {
-    await authClient.signOut();
-    navigate("/welcome", { replace: true });
-  };
+  const queryClient = useQueryClient();
+  const signOut = () => signOutHere(queryClient, () => navigate("/welcome", { replace: true }));
 
   if (requestServiceId) {
     return (

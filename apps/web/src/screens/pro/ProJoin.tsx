@@ -12,6 +12,7 @@ import { compressImage } from "../../media";
 import { pickFile } from "../../pickFile";
 import { tradeCharacterFor } from "../../tradeCharacter";
 import { ErrorScreen, LoadingScreen } from "../../states";
+import { ProSignOut } from "./ProSignOut";
 
 /**
  * JOINING AS A PROFESSIONAL (docs/21 W7), in the demo's order and words
@@ -161,6 +162,7 @@ export function ProJoin() {
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         {stepBody}
         {errorHe ? <Text accessibilityRole="alert" style={styles.error}>{errorHe}</Text> : null}
+        {step === 0 ? <ProSignOut /> : null}
       </ScrollView>
     </View>
   );
