@@ -4,11 +4,18 @@ import { existsSync } from "node:fs";
 import fastifyStatic from "@fastify/static";
 import type { FastifyInstance } from "fastify";
 
+/**
+ * apiRuntimeDir is the bundle's directory, apps/api/dist. A relative
+ * WEB_DIST_DIR is read from the repository root, as render.yaml writes it —
+ * not from the working directory, which `npm run start -w apps/api` sets to
+ * apps/api (that sent production to apps/api/apps/web/dist, and / to 404).
+ */
 export function resolveWebDistRoot(
   configuredRoot = process.env.WEB_DIST_DIR,
   apiRuntimeDir = import.meta.dirname,
 ): string {
-  return path.resolve(configuredRoot ?? path.join(apiRuntimeDir, "../../web/dist"));
+  const repoRoot = path.resolve(apiRuntimeDir, "../../..");
+  return path.resolve(repoRoot, configuredRoot || "apps/web/dist");
 }
 
 /**
@@ -27,7 +34,7 @@ export function resolveWebDistRoot(
 export default fp(async (app: FastifyInstance) => {
   const root = resolveWebDistRoot();
   if (!existsSync(path.join(root, "index.html"))) {
-    app.log.info({ root }, "No web build found; not serving the web app");
+    app.log.warn({ root }, "No web build found; not serving the web app");
     return;
   }
 

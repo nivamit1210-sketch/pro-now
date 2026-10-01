@@ -72,8 +72,8 @@ services:
         value: "3"
       - key: ALLOW_LOCAL_STANDINS
         value: "0"
-      # The API bundle runs from apps/api/dist while the frontend build lives
-      # in apps/web/dist in this workspace monorepo.
+      # Relative to the repository root (not the start command's working
+      # directory, apps/api). The API bundle runs from apps/api/dist.
       - key: WEB_DIST_DIR
         value: apps/web/dist
 
