@@ -18,8 +18,8 @@ function simulateWalk(
 ): { reachedShop: boolean; shopId: string | null; finalZ: number; framesRendered: number; distance: number } {
   const speed = 2.7;
   const diagonal = Math.SQRT1_2;
-  let x = SPAWN.x;
-  let z = SPAWN.z;
+  let x: number = SPAWN.x;
+  let z: number = SPAWN.z;
   const totalFrames = Math.floor(fpsAverage * budgetSeconds);
   const frameInterval = 1 / fpsAverage;
 
