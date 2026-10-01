@@ -3821,6 +3821,11 @@ const go = useCallback((r: CustomerRoute) => {
             liveLocation={live}
             onUseLiveLocation={askLocation}
             onSelect={(id) => { addressPickedSinceSend.current = true; setAddressId(id); setTypedAddress(null); }}
+            onRemove={(id) => {
+              setMyAddresses((cur) => cur.filter((a) => a.id !== id));
+              if (addressId === id) setAddressId("");
+              if (onSiteTyped?.forId === id) setOnSiteTyped(null);
+            }}
             onConfirm={(r) => {
               addressPickedSinceSend.current = true;
               /* What was typed (or the device's location) becomes one of my addresses, chosen now and offered next time. */
@@ -3968,6 +3973,9 @@ const go = useCallback((r: CustomerRoute) => {
         const reading = supply.supplyFor(route.serviceId);
         return (
           <ServiceDetailBody
+            orderAddressHe={hasAddress ? chosen.formattedHe || chosen.labelHe : null}
+            orderForHe={onSiteNameHe ? onSiteNameHe.replace(/ \(תצוגה\)$/, "") : null}
+            onChangeAddress={() => go({ name: "address" })}
             forSomeoneElseHe={onSiteNameHe ? onSiteNameHe.replace(/ \(תצוגה\)$/, "") : null}
             ongoingHe={
               dockOrders.filter((o) => o.proNameHe).length === 1
@@ -4020,6 +4028,9 @@ const go = useCallback((r: CustomerRoute) => {
         const page = SERVICE_PAGES[route.serviceId]!;
         return (
           <DescribeFaultBody
+            orderAddressHe={hasAddress ? chosen.formattedHe || chosen.labelHe : null}
+            orderForHe={onSiteNameHe ? onSiteNameHe.replace(/ \(תצוגה\)$/, "") : null}
+            onChangeAddress={() => go({ name: "address" })}
             serviceNameHe={page.nameHe}
             mark={page.mark}
             symptomsHe={route.symptomsHe}

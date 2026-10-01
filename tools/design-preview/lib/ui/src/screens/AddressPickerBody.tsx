@@ -62,6 +62,8 @@ export interface AddressPickerBodyProps {
   liveLocation: LiveLocationState;
   onUseLiveLocation?: () => void;
   onSelect?: (id: string) => void;
+  /** Take an address off my list. */
+  onRemove?: (id: string) => void;
   onConfirm?: (result: {
     addressId: string | null;
     typedHe: string;
@@ -80,6 +82,7 @@ export function AddressPickerBody({
   liveLocation,
   onUseLiveLocation,
   onSelect,
+  onRemove,
   onConfirm,
   onBack,
   width = 390,
@@ -184,7 +187,8 @@ export function AddressPickerBody({
                 /* A typed address is the choice: no saved row stays lit beside it (Amit, in the ad film). */
                 const on = a.id === selectedId && !hasTyped;
                 return (
-                  <Pressable key={a.id} onPress={() => { setTyped(""); onSelect?.(a.id); }} accessibilityRole="radio" accessibilityState={{ checked: on }}>
+                  <View key={a.id}>
+                  <Pressable onPress={() => { setTyped(""); onSelect?.(a.id); }} accessibilityRole="radio" accessibilityState={{ checked: on }}>
                     <Surface
                       colors={colors}
                       level={1}
@@ -201,7 +205,7 @@ export function AddressPickerBody({
                         <View style={styles.savedText}>
                           <Text style={styles.savedLabel} numberOfLines={1}>
                             {a.labelHe}
-                            {a.forSomeoneElseNameHe ? (
+                            {a.forSomeoneElseNameHe && !a.labelHe.includes(a.forSomeoneElseNameHe) ? (
                               <Text style={styles.savedFor}> · עבור {a.forSomeoneElseNameHe}</Text>
                             ) : null}
                           </Text>
@@ -213,6 +217,19 @@ export function AddressPickerBody({
                       </View>
                     </Surface>
                   </Pressable>
+                  {/* Removing an address from my list (Dvir, 2026-10-02: "אין אפשרות להסיר כתובת"). */}
+                  {onRemove ? (
+                    <Pressable
+                      onPress={() => onRemove(a.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`הסרת הכתובת ${a.labelHe}`}
+                      hitSlop={8}
+                      style={styles.remove}
+                    >
+                      <Text style={styles.removeText}>×</Text>
+                    </Pressable>
+                  ) : null}
+                  </View>
                 );
               })}
             </View>
@@ -301,6 +318,8 @@ export function AddressPickerBody({
 }
 
 const styles = StyleSheet.create({
+  remove: { position: "absolute", top: 6, left: 6, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: tint.neutralDark(0.06) },
+  removeText: { color: colors.textSecondary, fontSize: scale.body, fontWeight: "800", lineHeight: 20 },
   screen: { backgroundColor: colors.bg, overflow: "hidden", borderRadius: radii.xl },
   scroll: { paddingBottom: 116 },
 

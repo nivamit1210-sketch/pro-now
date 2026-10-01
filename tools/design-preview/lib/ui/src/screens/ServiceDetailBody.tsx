@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import type { PriceQuoteView, VisitTermsHe } from "@pro-now/demo-types";
 
 import { BackButton } from "../components/BackButton";
+import { AddressLine } from "../components/AddressLine";
 import { customerDarkTheme, depth, elevation, radii, scale, spacing, tabular, tint, type } from "../theme";
 import { priceExplainer } from "../pricing-copy";
 import { ClockMark, Mark, type MarkName, ShieldCheckMark } from "../components/marks";
@@ -61,6 +62,10 @@ const colors = customerDarkTheme.colors;
 export { priceExplainer };
 
 export interface ServiceDetailBodyProps {
+  /** Where this order goes (undefined: the line is not shown; null: none chosen yet). */
+  orderAddressHe?: string | null;
+  orderForHe?: string | null;
+  onChangeAddress?: () => void;
   nameHe: string;
   mark: MarkName;
   /** What the licensed hero photograph shows. */
@@ -130,6 +135,9 @@ export interface ServiceDetailBodyProps {
 }
 
 export function ServiceDetailBody({
+  orderAddressHe,
+  orderForHe = null,
+  onChangeAddress,
   nameHe,
   mark,
   photoSubject: _photoSubject,
@@ -213,6 +221,7 @@ export function ServiceDetailBody({
           <Text style={styles.description} numberOfLines={2}>
             {descriptionHe}
           </Text>
+          {orderAddressHe !== undefined ? <AddressLine addressHe={orderAddressHe} forHe={orderForHe} onChange={onChangeAddress} /> : null}
 
           {/* Supply — real or absent, never implied. */}
           {availableNowCount === null ? (
