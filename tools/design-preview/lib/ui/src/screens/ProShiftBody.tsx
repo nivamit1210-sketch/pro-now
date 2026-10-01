@@ -117,7 +117,7 @@ export interface ProShiftBodyProps {
    * are missing (Amit, 2026-10-01: you may look around, you may not work).
    * The shift button gives way to what is missing and the way to finish it.
    */
-  notApproved?: { missingHe: string; onFinish: () => void } | null;
+  notApproved?: { missingHe: string; onFinish: () => void; /** For showing the app before the check is done (Amit, 2026-10-01). */ onDemoStart?: () => void } | null;
   /**
    * "פנוי בעוד XX דקות" — Amit, 2026-09-27: a professional finishing
    * another job can say when he will be free; to a customer he already
@@ -418,6 +418,11 @@ export function ProShiftBody({
             >
               <Text style={[styles.ctaText, { color: colors.onAction }]}>השלמת הרישום</Text>
             </Pressable>
+            {notApproved.onDemoStart ? (
+              <Pressable onPress={notApproved.onDemoStart} accessibilityRole="button" style={styles.soonToggle}>
+                <Text style={styles.soonToggleText}>התחלת משמרת להדגמה</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : (
         <Pressable

@@ -6193,6 +6193,8 @@ function ProApp({
   // Going online is a transition the SERVER confirms, so the prototype makes
   // you wait through it rather than flipping instantly — that delay is the
   // honest part of the interaction.
+  /* "התחלת משמרת להדגמה" was used: the shift is open for showing, until the app is reopened. */
+  const [demoShift, setDemoShift] = useState(false);
   const toggle = useCallback(() => {
     if (presence === "OFFLINE") {
       setPresence("STARTING_SHIFT");
@@ -7045,8 +7047,17 @@ function ProApp({
     ) : (
       <ProShiftBody
         notApproved={
-          joined && missingForWork(joined).length > 0 && onFinishJoin
-            ? { missingHe: missingForWork(joined).join(" ו"), onFinish: onFinishJoin }
+          joined && missingForWork(joined).length > 0 && onFinishJoin && !demoShift
+            ? {
+                missingHe: missingForWork(joined).join(" ו"),
+                onFinish: onFinishJoin,
+                /* Showing the app before the identity check (Amit): the shift opens, the lock stays for the real thing. */
+                onDemoStart: () => {
+                  setDemoShift(true);
+                  onAvailableAtChange?.(null);
+                  toggle();
+                },
+              }
             : null
         }
         pendingPriceHe={
