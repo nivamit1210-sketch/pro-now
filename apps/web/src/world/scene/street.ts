@@ -21,17 +21,28 @@ export const FRONT_X = KERB_X + PAVEMENT;
 export const WALK_LIMIT = FRONT_X - 0.9;
 export const STREET_LENGTH = 300;
 const BAY = 8.8;
-export const SPAWN = { x: -6.3, z: STREET_LENGTH / 2 - 50 } as const;
+/**
+ * Spawn on the left pavement, twelve metres ahead of the home shop —
+ * matching the demo's placement rule: "the finished shop is the first
+ * thing you meet". ArrowUp (negative z) reaches `home` first.
+ */
+export const SPAWN = { x: -6.3, z: 64.8 } as const;
 
 /**
  * The full shop roster matching the demo's 14-shop high street.
  * Alternating sides, 17.6 m apart (every other bay). Each shop sits
  * at FRONT_X on its side of the street.
+ *
+ * `home` is listed first and positioned closest to SPAWN so that:
+ *  - walking up+left reaches it first (the e2e test expectation),
+ *  - the fallback's "first trade" is HOME_URGENT (plumbing services),
+ *  - it matches the demo's intent that the first shop you meet is the
+ *    one with real services in the catalogue seed.
  */
 export const WORLD_SHOPS: readonly WorldShopPosition[] = [
+  { shopId: "home",      departmentCode: "HOME_URGENT",  labelHe: "תיקונים דחופים",    assetId: "district_home",      neonColour: "#ffb45e", z:   52.8,  side: -1, x: -FRONT_X },
   { shopId: "hair",      departmentCode: "BEAUTY",       labelHe: "טיפוח ויופי",       assetId: "district_hair",      neonColour: "#ff7ac2", z:   88,    side: -1, x: -FRONT_X },
   { shopId: "pets",      departmentCode: "PETS",         labelHe: "בעלי חיים",         assetId: "district_pets",      neonColour: "#8ce06a", z:   70.4,  side:  1, x:  FRONT_X },
-  { shopId: "home",      departmentCode: "HOME_URGENT",  labelHe: "תיקונים דחופים",    assetId: "district_home",      neonColour: "#ffb45e", z:   52.8,  side: -1, x: -FRONT_X },
   { shopId: "tech",      departmentCode: "TECH",         labelHe: "מחשבים וסלולר",     assetId: "district_tech",      neonColour: "#7ad7ff", z:   17.6,  side: -1, x: -FRONT_X },
   { shopId: "auto",      departmentCode: "VEHICLE",      labelHe: "רכב ודרך",          assetId: "district_auto",      neonColour: "#ff9b3d", z:    0,    side:  1, x:  FRONT_X },
   { shopId: "well",      departmentCode: "WELLNESS",     labelHe: "בריאות וכושר",      assetId: "district_well",      neonColour: "#6affc6", z:  -17.6,  side: -1, x: -FRONT_X },
