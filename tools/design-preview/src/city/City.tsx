@@ -410,16 +410,17 @@ export function City({
   const inShop = Boolean(room || insideShop);
   useEffect(
     () =>
-      inShop
+      /* Not while paused behind a service screen: that screen's back is its own (QA). */
+      inShop && !paused
         ? openOverlay(() => {
             setRoom(null);
             setInside(null);
             leaveRef.current?.();
           })
         : undefined,
-    [inShop]
+    [inShop, paused]
   );
-  useEffect(() => (openPlace ? openOverlay(() => setOpenPlace(null)) : undefined), [openPlace]);
+  useEffect(() => (openPlace && !paused ? openOverlay(() => setOpenPlace(null)) : undefined), [openPlace, paused]);
 
   useEffect(() => {
     const el = host.current;
@@ -1506,6 +1507,21 @@ export function City({
               stand.z *= PANO_STAND_RADIUS / d;
             }
           }
+          /*
+           * WALKING BACK OUT OF THE SHOP LEAVES IT (Amit, 2026-10-01, in Lust:
+           * "ניסיתי לצאת מהחנות והוא לא זיהה שיצאתי"). Every shop is a built
+           * room, so this — not the street's wall check — is where you are:
+           * at the edge of where you can stand, still pulling back towards
+           * the door, for a moment, is "חזרה לרחוב".
+           */
+          const atRim = Math.hypot(stand.x, stand.z) >= PANO_STAND_RADIUS * 0.95;
+          pushOutFor = atRim && stick.y > 0.45 && !entry ? pushOutFor + dt : 0;
+          if (pushOutFor > 0.4) {
+            pushOutFor = 0;
+            setRoom(null);
+            setInside(null);
+            leaveRef.current?.();
+          }
           roomPlayer.setDistance(roomWalked, false);
           vrShop.update(dt, now / 1000, { yaw: look, pitch: lookPitch }, stand);
           /* The door's colour lifts off you as you arrive. */
@@ -2538,7 +2554,9 @@ export function City({
           }
           onRequestService={(id) => onRequestService?.(id, room.id)}
           onLeave={() => {
+            /* Out of the shop, not only out of its menu — the shop stayed "yours" (Lust, Amit). */
             setRoom(null);
+            setInside(null);
             leaveRef.current?.();
           }}
           onStreet={() => setWalking(false)}

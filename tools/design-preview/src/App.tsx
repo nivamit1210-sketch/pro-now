@@ -5375,6 +5375,10 @@ const go = useCallback((r: CustomerRoute) => {
     <View
       key="cityLayer"
       pointerEvents={cityVisible ? "auto" : "none"}
+      /* Hidden behind a service screen: not read out either (QA). */
+      accessibilityElementsHidden={!cityVisible}
+      importantForAccessibility={cityVisible ? "auto" : "no-hide-descendants"}
+      aria-hidden={!cityVisible}
       style={{ position: "absolute", left: 0, top: 0, width, height, opacity: cityVisible ? 1 : 0, zIndex: cityVisible ? 1 : -1 }}
     >
       <City
