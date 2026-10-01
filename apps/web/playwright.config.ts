@@ -1,5 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
+import { existsSync } from "node:fs";
 import path from "node:path";
+
+// The tests reach the database and Mailpit directly (e2e/pro-helpers.ts), so
+// they need apps/api/.env as much as the server does. Variables already set
+// (CI's) win; the file is absent in CI.
+const apiEnv = path.resolve(import.meta.dirname, "../api/.env");
+if (existsSync(apiEnv)) process.loadEnvFile(apiEnv);
 
 /**
  * End-to-end tests of the real app (docs/21 W2), in its production shape:
