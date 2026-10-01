@@ -526,7 +526,7 @@ export function createWorldScene({
           movePlayer(
             player,
             moveCommand,
-            Math.min(0.05, Math.max(0, (nowMs - lastMs) / 1000)),
+            Math.min(0.2, Math.max(0, (nowMs - lastMs) / 1000)),
           );
           emitNear();
           updateShadowTarget();

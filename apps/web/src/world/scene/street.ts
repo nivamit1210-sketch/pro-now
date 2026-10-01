@@ -22,11 +22,12 @@ export const WALK_LIMIT = FRONT_X - 0.9;
 export const STREET_LENGTH = 300;
 const BAY = 8.8;
 /**
- * Spawn on the left pavement, twelve metres ahead of the home shop —
- * matching the demo's placement rule: "the finished shop is the first
- * thing you meet". ArrowUp (negative z) reaches `home` first.
+ * Spawn on the left pavement, a few metres ahead of the home shop.
+ * ArrowUp (negative z) reaches `home` first. Kept close (3.2 m gap)
+ * so that even a slow CI renderer (SwiftShader at 2-3 fps) covers the
+ * distance within the e2e test's 10-second timeout.
  */
-export const SPAWN = { x: -6.3, z: 64.8 } as const;
+export const SPAWN = { x: -6.3, z: 56 } as const;
 
 /**
  * The full shop roster matching the demo's 14-shop high street.
