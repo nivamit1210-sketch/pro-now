@@ -20,6 +20,7 @@ function application(over: Partial<ProApplicationView> = {}): ProApplicationView
       },
     ],
     area: null,
+    identity: null,
     documents: [
       { kind: "GOVERNMENT_ID", status: "VERIFIED" },
       { kind: "SELFIE", status: "PENDING" },

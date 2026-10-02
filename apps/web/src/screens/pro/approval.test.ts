@@ -23,6 +23,7 @@ function view(opts: {
       requirements: i === 0 ? requirements : [],
     })),
     area: null,
+    identity: null,
     documents: (opts.documents ?? ["PENDING", "PENDING", "PENDING"]).map((status, i) => ({ kind: `K${i}`, status })),
     missing: [],
     submitted: opts.submitted ?? true,
