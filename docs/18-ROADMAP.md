@@ -44,6 +44,17 @@ and whether they ship at all (`01-PRD.md §Sponsored shops`).
     a way to, but no screen offers it.
   - *The profile shows the character the customer chose* (`/avatar`), not
     a generated face — today the header and the profile disagree.
+- **Demo bugs for Amit** (seen on an iPhone, Dvir, 2026-10-02; only Amit
+  edits the demo):
+  - *"יש לך עסק?" form, with the keyboard up* (e.g. on "האתר"): the form is
+    cut off under the field and an empty dark area fills the rest. The
+    product fixed the same thing in its request form and sign-in (#78, #80):
+    while typing, the screen is the strip above the keyboard, and a fixed
+    layout must scroll instead of stacking.
+  - *"יש לך עסק?" form, after scrolling*: the round back button floats over
+    the text ("בכנות: אנחנו בתחילת הדרך…"). The content needs the back
+    control's clearance (`BACK_BUTTON_CLEARANCE`), or the button scrolls
+    with it.
 
 ### The commission — the ledger is waiting on it
 Every completed job writes a `CUSTOMER_CHARGE` row and stops there. Setting
