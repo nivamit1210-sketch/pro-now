@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Navigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError } from "@pro-now/api-client";
+import { ApiError, type AdminProfessionalView } from "@pro-now/api-client";
 import { customerDarkTheme, spacing, type as t } from "@pro-now/ui";
 
 import { api, useMe } from "../../api";
@@ -66,6 +66,13 @@ export function Admin() {
   );
 }
 
+/** Server refusals the reviewer acts on, in their words; the code stays beside them. */
+const ERROR_HE: Record<string, string> = {
+  IDENTITY_NOT_VERIFIED: "קודם צריך לאשר את הזהות.",
+  UNDER_MINIMUM_AGE: "לפי תאריך הלידה, מתחת לגיל 18.",
+  DATE_OF_BIRTH_MISSING: "חסר תאריך לידה בפרטים.",
+};
+
 /** An action that needs a reason when it refuses; errors shown in place. */
 function useAct() {
   const [busy, setBusy] = useState(false);
@@ -77,7 +84,7 @@ function useAct() {
     try {
       await fn();
     } catch (e) {
-      setErrorHe(e instanceof ApiError ? `${e.message} (${e.code})` : e instanceof Error ? e.message : "הפעולה נכשלה");
+      setErrorHe(e instanceof ApiError ? `${ERROR_HE[e.code] ?? e.message} (${e.code})` : e instanceof Error ? e.message : "הפעולה נכשלה");
     } finally {
       setBusy(false);
     }
@@ -131,6 +138,8 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
       </Text>
       <Field label="סיבה (חובה לסירוב, נשמרת ביומן)" value={reason} onChange={setReason} />
 
+      {v.identity ? <IdentityBlock identity={v.identity} busy={busy} reason={reason} decide={decide} run={run} /> : null}
+
       <Text style={styles.section}>החשבון והמסמכים</Text>
       {v.documents.map((d) => (
         <View key={d.id} style={styles.row}>
@@ -180,6 +189,69 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
       ))}
       {errorHe ? <Text accessibilityRole="alert" style={styles.error}>{errorHe}</Text> : null}
     </View>
+  );
+}
+
+type Identity = NonNullable<AdminProfessionalView["identity"]>;
+
+const mark = (b: boolean | null) => (b === true ? "✓" : b === false ? "✗" : "—");
+
+/**
+ * The identity check (docs/10): the four photos, what was declared, what the
+ * provider found, and a person's decision. The photos are deleted once it is
+ * decided, so a decided check shows where they were.
+ */
+function IdentityBlock({ identity: idn, busy, reason, decide, run }: {
+  identity: Identity;
+  busy: boolean;
+  reason: string;
+  decide: (fn: () => Promise<unknown>) => Promise<void>;
+  run: (fn: () => Promise<unknown>) => Promise<void>;
+}) {
+  const photos: Array<[string, string | null]> = [
+    ["תעודת זהות", idn.photos.idCard],
+    ["פנים · ישר", idn.photos.straight],
+    ["פנים · ימינה", idn.photos.right],
+    ["פנים · שמאלה", idn.photos.left],
+  ];
+  const dob = idn.declared.dateOfBirth ? idn.declared.dateOfBirth.split("-").reverse().join("/") : "—";
+  const withReason = (action: "RETAKE" | "REJECT") => {
+    const r = reason.trim();
+    return r.length >= 3 ? decide(() => api.admin.decideIdentity(idn.id, { action, reason: r })) : run(async () => { throw new Error("לצילום מחדש או לסירוב צריך לכתוב סיבה"); });
+  };
+  const open = idn.status === "MANUAL_REVIEW" || idn.status === "PENDING";
+  return (
+    <>
+      <Text style={styles.section}>זהות</Text>
+      <View style={styles.photos}>
+        {photos.map(([label, uri]) => (
+          <View key={label} style={styles.photo}>
+            {uri ? (
+              <Image source={{ uri }} style={{ width: 150, height: 110 }} resizeMode="contain" accessibilityLabel={label} />
+            ) : (
+              <View style={styles.photoGone}><Text style={styles.rowSub}>נמחקה אחרי ההחלטה</Text></View>
+            )}
+            <Text style={styles.rowSub}>{label}</Text>
+          </View>
+        ))}
+      </View>
+      <Text style={styles.rowTitle}>שם בתעודה: {idn.declared.legalName} · תאריך לידה: {dob}</Text>
+      <Text style={styles.rowSub}>
+        {idn.isSandbox
+          ? "ספק בדיקה: סביבת ניסיון — אין בדיקה אוטומטית"
+          : `ספק: ${idn.vendorName} · התאמת שם ${mark(idn.provider.nameMatch)} · בדיקת חיות ${mark(idn.provider.livenessPassed)} · תעודה בתוקף ${mark(idn.provider.documentValid)}`}
+      </Text>
+      <Text style={styles.rowSub}>
+        {idn.status}{idn.decidedAt ? ` · ${new Date(idn.decidedAt).toLocaleString("he-IL")}` : ""}{idn.decisionReason ? ` · ${idn.decisionReason}` : ""}
+      </Text>
+      {open ? (
+        <View style={styles.actions}>
+          <Action labelHe="הזהות אושרה" disabled={busy} onPress={() => decide(() => api.admin.decideIdentity(idn.id, { action: "APPROVE" }))} />
+          <Action labelHe="צילום מחדש" disabled={busy} onPress={() => withReason("RETAKE")} />
+          <Action labelHe="סירוב זהות" danger disabled={busy} onPress={() => withReason("REJECT")} />
+        </View>
+      ) : null}
+    </>
   );
 }
 
@@ -419,6 +491,9 @@ const styles = StyleSheet.create({
   line: { flexDirection: "row-reverse", justifyContent: "space-between", gap: spacing.md, paddingVertical: 4 },
   timeline: { flexDirection: "row-reverse", gap: spacing.md, alignItems: "center" },
   link: { ...t.metaStrong, color: colors.actionText, textAlign: "right", writingDirection: "rtl" },
+  photos: { flexDirection: "row-reverse", flexWrap: "wrap", gap: spacing.sm },
+  photo: { gap: 4, alignItems: "center" },
+  photoGone: { width: 150, height: 110, borderRadius: 8, backgroundColor: colors.surfaceElevated, alignItems: "center", justifyContent: "center" },
   actions: { flexDirection: "row-reverse", flexWrap: "wrap", gap: spacing.sm, marginTop: 4 },
   action: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 10, backgroundColor: colors.action },
   actionDanger: { backgroundColor: colors.statusDanger },

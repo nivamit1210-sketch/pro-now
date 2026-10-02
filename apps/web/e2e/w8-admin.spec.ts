@@ -22,19 +22,28 @@ test("the admin approves an application, account, licence and service", async ({
   await expect(page).toHaveURL(/\/admin$/);
 
   await page.getByRole("button", { name: `בקשה של ${name}` }).click();
-  await expect(page.getByText("GOVERNMENT_ID · PENDING")).toBeVisible();
+  await expect(page.getByText("TAX_FILE · PENDING")).toBeVisible();
+  await expect(page.getByText("ספק בדיקה: סביבת ניסיון — אין בדיקה אוטומטית")).toBeVisible();
+  await expect(page.getByLabel("תעודת זהות")).toBeVisible();
   await expect(page.getByText("פתיחת המסמך ›").first()).toBeVisible();
 
   // A refusal without a reason is refused.
-  await page.getByRole("button", { name: "סירוב" }).first().click();
+  await page.getByRole("button", { name: "סירוב", exact: true }).first().click();
   await expect(page.getByRole("alert")).toContainText("סיבה");
 
   // Service first: the server refuses until the account is approved.
   await page.getByRole("button", { name: "אישור השירות" }).click();
   await expect(page.getByRole("alert")).toContainText("ACCOUNT_NOT_APPROVED");
 
+  // The account waits for the identity, decided by a person; the photos go once it is.
   await page.getByRole("button", { name: "אישור החשבון" }).click();
-  await expect(page.getByText("GOVERNMENT_ID · VERIFIED")).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("קודם צריך לאשר את הזהות.");
+  await page.getByRole("button", { name: "הזהות אושרה" }).click();
+  await expect(page.getByText("נמחקה אחרי ההחלטה")).toHaveCount(4);
+  await expect(page.getByRole("button", { name: "הזהות אושרה" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "אישור החשבון" }).click();
+  await expect(page.getByText("TAX_FILE · VERIFIED")).toBeVisible();
   await page.getByRole("textbox", { name: /בתוקף עד/ }).fill("2027-12-31");
   for (const b of await page.getByRole("button", { name: "אימות" }).all()) await b.click();
   await expect(page.getByText("עד 2027-12-31").first()).toBeVisible();

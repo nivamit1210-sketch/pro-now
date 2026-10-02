@@ -51,7 +51,15 @@ export default defineConfig({
     // One browser while the product is early: Chromium at iPhone 16 Pro size
     // (402×874 screen, 402×681 viewport), touch and mobile on. WebKit and a
     // desktop pass come back when the app nears real users.
-    { name: "chromium-iphone16pro", use: { ...devices["iPhone 16 Pro"], browserName: "chromium" } },
+    // A fake camera for the identity check; a spec that uses it asks for the permission (test.use).
+    {
+      name: "chromium-iphone16pro",
+      use: {
+        ...devices["iPhone 16 Pro"],
+        browserName: "chromium",
+        launchOptions: { args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] },
+      },
+    },
   ],
   webServer: {
     command: PRODUCTION

@@ -129,7 +129,7 @@ export async function adminApi(baseURL: string) {
   return api;
 }
 
-/** An application waiting for review (docs/21 W8): account, one service, its licences and documents pending. */
+/** An application waiting for review (docs/21 W8): identity, account, one service, its licences and documents pending. */
 export async function pendingApplicant(serviceCode: string, displayName: string) {
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
   try {
@@ -138,14 +138,21 @@ export async function pendingApplicant(serviceCode: string, displayName: string)
     const user = await db.user.create({ data: { email, emailVerified: true, name: displayName } });
     await db.userRole.create({ data: { userId: user.id, role: "PROFESSIONAL" } });
     const profile = await db.professionalProfile.create({
-      data: { userId: user.id, legalName: `${displayName} כהן`, displayName, addressAs: "M", verificationStatus: "SERVICE_REVIEW" },
+      data: { userId: user.id, legalName: `${displayName} כהן`, displayName, addressAs: "M", verificationStatus: "SERVICE_REVIEW", dateOfBirth: new Date("1988-04-12") },
     });
     await db.professionalService.create({ data: { professionalId: profile.id, serviceId: service.id, status: "PENDING", basePriceMinorUnits: 20000 } });
     await db.serviceArea.create({ data: { professionalId: profile.id, centerLat: 32.08, centerLng: 34.78, radiusMeters: 10_000 } });
-    for (const kind of ["GOVERNMENT_ID", "SELFIE", "TAX_FILE"]) {
+    for (const kind of ["TAX_FILE"]) {
       const u = await db.upload.create({ data: { ownerId: user.id, kind: "DOCUMENT", mime: "image/jpeg", bytes: 10, status: "READY", storageKey: `e2e/${profile.id}/${kind}.jpg` } });
       await db.professionalDocument.create({ data: { professionalId: profile.id, kind, storageRef: u.storageKey, uploadId: u.id } });
     }
+    // The identity check (docs/10): the ID card and three face photos, waiting for a person.
+    const uploadIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const u = await db.upload.create({ data: { ownerId: user.id, kind: "IDENTITY", mime: "image/jpeg", bytes: 10, status: "READY", storageKey: `e2e/${profile.id}/identity-${i}.jpg` } });
+      uploadIds.push(u.id);
+    }
+    await db.identityVerification.create({ data: { professionalId: profile.id, vendorName: "sandbox-identity", isSandbox: true, status: "MANUAL_REVIEW", uploadIds } });
     for (const r of service.requirements) {
       const type = credentialTypeFor(r.requirement);
       if (!type) continue;

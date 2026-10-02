@@ -87,7 +87,7 @@ test("the customer and the professional, two browsers, request to review", async
     await p.getByRole("tab", { name: "המסמכים שלי" }).click();
     await expect(p).toHaveURL(/\/pro\/documents$/);
     await expect(p.getByRole("heading", { name: "המסמכים שלי" })).toBeVisible();
-    await expect(p.getByText("תעודת זהות")).toBeVisible();
+    await expect(p.getByText("זהות", { exact: true })).toBeVisible();
 
     // Her profile as customers see it (the demo's profile tab): the job she just did counts, and "עריכה" leads to her details.
     await p.getByRole("tab", { name: "הפרופיל" }).click();

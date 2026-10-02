@@ -6,7 +6,7 @@ import { adminApi } from "./pro-helpers";
  * W7 (docs/21): a new professional joins from the welcome screen, sends an
  * application the server checks, and an admin approves one service.
  */
-test.use({ permissions: ["geolocation"], geolocation: { latitude: 32.08, longitude: 34.78 } });
+test.use({ permissions: ["geolocation", "camera"], geolocation: { latitude: 32.08, longitude: 34.78 } });
 
 test("a professional joins, is reviewed, and is approved for one service", async ({ page, baseURL }) => {
   test.setTimeout(150_000);
@@ -43,6 +43,7 @@ test("a professional joins, is reviewed, and is approved for one service", async
   // How she is registered for tax is required; a business name is not.
   await expect(page.getByRole("button", { name: "המשך" })).toBeDisabled();
   await page.getByRole("button", { name: "עוסק פטור" }).click();
+  await page.getByRole("textbox", { name: "תאריך לידה" }).fill("14/05/1990");
   await page.getByRole("button", { name: "המשך" }).click();
 
   // 2 · in her own words; the matcher marks what fits.
@@ -57,7 +58,7 @@ test("a professional joins, is reviewed, and is approved for one service", async
   await page.getByRole("button", { name: "15 ק״מ" }).click();
   await page.getByRole("button", { name: "המשך" }).click();
 
-  // 4 · documents: real uploads, into private storage.
+  // 4 · documents: the identity check and real uploads, into private storage.
   const jpeg = { name: "doc.jpg", mimeType: "image/jpeg", buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]) };
   const uploadVia = async (rowButton: import("@playwright/test").Locator) => {
     const chooser = page.waitForEvent("filechooser");
@@ -65,22 +66,27 @@ test("a professional joins, is reviewed, and is approved for one service", async
     await (await chooser).setFiles(jpeg);
   };
   await expect(page.getByText("לא נבקש תעודת יושר", { exact: false })).toBeVisible();
-  // ID first, then (the selfie row is second) the tax file: the rows keep their order.
-  await uploadVia(page.getByRole("button", { name: "העלאה" }).first());
-  await expect(page.getByText("✓ הועלה")).toHaveCount(1);
-  // The selfie is re-encoded in the browser like any photo; give it a real image.
+  // Photos are re-encoded in the browser; give them a real image.
   const png = await page.evaluate(async () => {
     const c = document.createElement("canvas");
     c.width = 8;
     c.height = 8;
     return Array.from(new Uint8Array(await (await new Promise<Blob>((r) => c.toBlob((b) => r(b!), "image/jpeg"))).arrayBuffer()));
   });
-  const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "העלאה" }).first().click();
-  await (await chooser).setFiles({ name: "selfie.jpg", mimeType: "image/jpeg", buffer: Buffer.from(png) });
-  await expect(page.getByText("✓ הועלה")).toHaveCount(2);
+  // The identity check (docs/10): the ID card, then the face straight, right and left.
+  const idChooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "צילום תעודת הזהות" }).click();
+  await (await idChooser).setFiles({ name: "id.jpg", mimeType: "image/jpeg", buffer: Buffer.from(png) });
+  await page.getByRole("button", { name: "נראה טוב" }).click();
+  // Chromium's fake camera shows no face, so nothing is taken by itself: the shutter, three times.
+  for (const tick of ["ישר ✓", "ימינה ✓", "שמאלה ✓"]) {
+    await page.getByRole("button", { name: "צילום", exact: true }).click();
+    await expect(page.getByText(tick)).toBeVisible();
+  }
+  await expect(page.getByText("הזהות נשלחה לבדיקה")).toBeVisible();
+  // The tax file, then the licences.
   await uploadVia(page.getByRole("button", { name: "העלאה" }).first());
-  await expect(page.getByText("✓ הועלה")).toHaveCount(3);
+  await expect(page.getByText("✓ הועלה")).toHaveCount(1);
   // Every licence the service requires, with its number.
   while ((await page.getByRole("button", { name: "העלאה" }).count()) > 0) {
     const numberBox = page.getByRole("textbox", { name: /^מספר · / }).first();
@@ -143,6 +149,9 @@ test("a professional joins, is reviewed, and is approved for one service", async
       expect(res.ok(), await res.text()).toBe(true);
       return res.json();
     };
+    // A person decides the identity first; the server refuses the account until then.
+    const { identity } = await (await admin.get(`/api/v1/admin/professionals/${mine.profile.id}`)).json();
+    await decide(`/api/v1/admin/identity/${identity.id}/decision`, { action: "APPROVE" });
     await decide(`/api/v1/admin/professionals/${mine.profile.id}/decision`, { approve: true });
     for (const s of mine.services) {
       for (const r of s.requirements) {
