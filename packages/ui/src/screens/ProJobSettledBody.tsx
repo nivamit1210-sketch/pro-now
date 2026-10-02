@@ -155,14 +155,14 @@ export function ProJobSettledBody({
         </View>
         <View style={styles.row}>
           <Text style={styles.rowValue}>{formatOnlineDuration(onlineMinutes)}</Text>
-          <Text style={styles.rowLabel}>מחובר</Text>
+          <Text style={styles.rowLabel}>זמן במשמרת</Text>
         </View>
 
         <View style={styles.next}>
           <Text style={styles.nextText}>
             {returningToAvailable
               ? "שוב במשמרת — מחפשים לך את העבודה הבאה"
-              : "המשמרת הסתיימה. הרווחים יופיעו במסך התמורה."}
+              : "המשמרת הסתיימה. הסכומים בלשונית ״הרווחים״."}
           </Text>
         </View>
 

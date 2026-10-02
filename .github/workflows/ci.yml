@@ -13,7 +13,9 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push replaces a PR's run. On master every merge runs to the
+  # end: a cancelled run there left a red "CI passed" on a good commit.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   # Does this change touch the demo (Amit's track) or what it shares with

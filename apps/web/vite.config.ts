@@ -61,7 +61,7 @@ export default defineConfig({
         importScripts: ["/push-handler.js"],
         runtimeCaching: [
           {
-            urlPattern: /\/(clips|world)\/[^/]+\.(jpe?g|png|webp)$/,
+            urlPattern: /\/(clips|world)\/(?:[^/]+\/)*[^/]+\.(jpe?g|png|webp)$/, // subfolders too: /world/m/ holds the shop textures
             handler: "StaleWhileRevalidate",
             options: {
               cacheName: "art",
