@@ -11,6 +11,7 @@ import {
 } from "../domain/job/advance-presence.js";
 import { assertTransition, nextAfterArrival } from "../domain/job/transitions.js";
 import { loadPaidTotals, priceContextFor } from "../domain/pricing/price-context.js";
+import { toMyJobSummary } from "../domain/job/my-jobs.js";
 import { assignedJob, customerJob, notFound, requireRole } from "../auth/access.js";
 
 /**
@@ -105,18 +106,27 @@ export default async function jobsRoutes(app: FastifyInstance) {
 
   /**
    * The customer's own jobs, newest first: how the home screen finds the
-   * job still in progress after a reload or a new tab (docs/21 W6).
+   * job still in progress after a reload or a new tab (docs/21 W6), and
+   * what the calls list (הקריאות שלי) shows — who came, the stars given,
+   * and what the work came to (domain/job/my-jobs.ts).
    */
   app.get("/v1/jobs", { onRequest: requireRole("CUSTOMER") }, async (req) => {
     const jobs = await app.prisma.job.findMany({
       where: { customer: { userId: req.user!.userId } },
       orderBy: { createdAt: "desc" },
-      take: 20,
-      select: { id: true, status: true, createdAt: true, service: { select: { nameHe: true } } },
+      take: 50,
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        service: { select: { nameHe: true, code: true } },
+        assignedProfessional: { select: { id: true, displayName: true } },
+        review: { select: { overallRating: true } },
+        // Only the receipt's event, not the job's whole history.
+        events: { where: { type: "SETTLED_OUTSIDE_APP" }, select: { type: true, metadata: true } },
+      },
     });
-    return {
-      jobs: jobs.map((j) => ({ id: j.id, status: j.status, createdAt: j.createdAt.toISOString(), serviceNameHe: j.service.nameHe })),
-    };
+    return { jobs: jobs.map(toMyJobSummary) };
   });
 
   app.get("/v1/jobs/:id", { onRequest: requireRole("CUSTOMER") }, async (req, reply) => {

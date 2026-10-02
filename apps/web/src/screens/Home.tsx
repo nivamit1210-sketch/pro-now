@@ -142,7 +142,7 @@ export function Home() {
               },
               {
                 titleHe: "העבודות שלי",
-                items: [{ id: "calls", labelHe: "הקריאות שלי", detailHe: "היסטוריה, קריאה פעילה ודירוגים", upcoming: true }],
+                items: [{ id: "calls", labelHe: "הקריאות שלי", detailHe: "היסטוריה, קריאה פעילה ודירוגים", onPress: () => navigate("/calls") }],
               },
               {
                 titleHe: "החשבון",

@@ -5,6 +5,7 @@ import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
 
 import { linkFor, uniqueEmail } from "../e2e/helpers";
+import { dispatchableProfessional } from "../e2e/pro-helpers";
 
 /**
  * The product against the demo, screen by screen (see parity.config.ts for
@@ -84,7 +85,7 @@ test("the product's screens match the demo's", async ({ browser }) => {
   await product.waitForURL(`${PRODUCT}/`);
   // The product's home shows the saved address, as the demo's does.
   await product.request.post(`${PRODUCT}/api/v1/me/addresses`, {
-    data: { formatted: "18, אהרון דוד גורדון, תל־אביב־יפו, ישראל", lat: 32.0853, lng: 34.7818 },
+    data: { kind: "location", lat: 32.0853, lng: 34.7818, details: "אהרון דוד גורדון 18" },
     headers: { origin: PRODUCT },
   });
   await product.reload();
@@ -112,6 +113,22 @@ test("the product's screens match the demo's", async ({ browser }) => {
   await step("5-home-scrolled", async (p) => void (await p.mouse.wheel(0, 700)));
   await step("6-menu", (p) => p.getByRole("button", { name: "תפריט" }).click({ timeout: 5000 }));
   await step("6b-menu-closed", (p) => p.getByRole("button", { name: "תפריט" }).click({ timeout: 5000 }));
+
+  // הקריאות שלי, before any call: the empty state, asserted (both from the menu).
+  for (const p of [demo, product]) {
+    await p.getByRole("button", { name: "תפריט" }).click({ timeout: 5000 });
+    await p.getByRole("button", { name: /^הקריאות שלי/ }).click({ timeout: 5000 });
+  }
+  // The demo's prototype notice ("אב־טיפוס…") covers the top for its first seconds.
+  await demo.waitForTimeout(4000);
+  compare("6c-calls-empty", await shot(demo), await shot(product));
+  for (const p of [demo, product]) {
+    await p.getByRole("button", { name: "חזרה", exact: true }).click({ timeout: 5000 });
+    await p.getByRole("button", { name: "תפריט" }).click({ timeout: 5000 });
+  }
+
+  // Someone to take the product's call (the demo invents its match).
+  const pro = await dispatchableProfessional({ serviceCode: "CLEAN_URGENT", lat: 32.0853, lng: 34.7818, baseURL: PRODUCT });
   await step("7-category", async (p) => {
     await p.mouse.wheel(0, -2000);
     await p.getByRole("button", { name: "ניקיון", exact: true }).click({ timeout: 5000 });
@@ -121,8 +138,34 @@ test("the product's screens match the demo's", async ({ browser }) => {
   await step("10-form-picked", (p) => p.getByText("ביקור ניקיון · 3 שעות").first().click({ timeout: 5000 }));
   await step("11-searching", (p) => p.getByRole("button", { name: "שליחת הקריאה" }).click({ timeout: 5000 }));
 
-  writeFileSync(path.join(OUT, "unreachable.json"), JSON.stringify(unreachable, null, 2));
-  // Leave nothing searching behind on the product's server.
+  // הקריאות שלי with the call live: the professional on the way. Reported.
   const job = product.url().match(/\/jobs\/([^/?#]+)/)?.[1];
+  // At once: the offer would expire while the demo walks its own match screen.
+  const onTheWay = job
+    ? pro.acceptOfferFor(job).then(() => pro.step(job, "en-route")).catch((e: Error) => e)
+    : Promise.resolve(new Error("no job on the product"));
+  await onTheWay;
+  await step("12-calls-live", async (p) => {
+    if (p === product) {
+      const failed = await onTheWay;
+      if (failed instanceof Error) throw failed;
+    } else {
+      // The demo asks for the address first: the device's location, then send again.
+      if (await p.getByText("לאן לשלוח את המקצוען?").count()) {
+        await p.context().grantPermissions(["geolocation"]);
+        await p.context().setGeolocation({ latitude: 32.0853, longitude: 34.7818 });
+        await p.getByText("המיקום שלי עכשיו").click({ timeout: 5000 });
+        await p.getByRole("button", { name: "אישור הכתובת" }).click({ timeout: 5000 });
+        await p.getByRole("button", { name: "שליחת הקריאה" }).click({ timeout: 5000 });
+      }
+      await p.getByRole("button", { name: "כן, מתאים לי" }).click({ timeout: 30_000 });
+    }
+    await p.getByRole("button", { name: "תפריט" }).click({ timeout: 10_000 });
+    await p.getByRole("button", { name: /^הקריאות שלי/ }).click({ timeout: 5000 });
+  });
+  await pro.dispose();
+
+  writeFileSync(path.join(OUT, "unreachable.json"), JSON.stringify(unreachable, null, 2));
+  // Leave nothing live behind on the product's server.
   if (job) await product.request.post(`${PRODUCT}/api/v1/jobs/${job}/cancel`, { data: {}, headers: { origin: PRODUCT } });
 });

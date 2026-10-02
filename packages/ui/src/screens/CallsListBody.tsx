@@ -3,11 +3,11 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { formatMoney, money } from "@pro-now/types";
 
-import { customerTheme, elevation, radii, scale, spacing, tabular, tint, type } from "../theme";
+import { customerDarkTheme, elevation, radii, scale, spacing, tabular, tint, type } from "../theme";
 import { lex } from "../lexicon";
-import { ClockMark, Mark, type MarkName, StarMark } from "../components/marks";
+import { BackButton, BACK_BUTTON_CLEARANCE } from "../components/BackButton";
+import { Mark, type MarkName, StarMark } from "../components/marks";
 import { Persona } from "../components/Persona";
-import { SectionHeader, Surface } from "../components/surfaces";
 
 /**
  * C16 — the customer's calls.
@@ -24,7 +24,11 @@ import { SectionHeader, Surface } from "../components/surfaces";
  * March's paint job by the third month of use.
  */
 
-const colors = customerTheme.colors;
+/* Night, like the rest of the app — the light page read "חיוור" (Amit, 2026-10-01). */
+const colors = customerDarkTheme.colors;
+const CARD = "#1D1726";
+const CARD_SOFT = "rgba(247,243,250,0.05)";
+const LINE = "rgba(247,243,250,0.10)";
 
 export interface CallListItem {
   id: string;
@@ -42,9 +46,26 @@ export interface CallListItem {
   myRating: number | null;
   /** True when a quote is waiting for this customer to approve or decline. */
   needsQuoteApproval?: boolean;
+  /**
+   * Whether a rating is still owed and can still be given. Omitted, an
+   * unrated finished call counts as owed (the demo's rule); the product sets
+   * it, because a cancelled call has no rating and a closed one can no
+   * longer take one.
+   */
+  needsRating?: boolean;
+  /** Live orders: 0 on the way · 1 arrived · 2 checking · 3 working · 4 finishing. */
+  stage?: number;
+  /** Live orders: something waits on the customer. */
+  attention?: boolean;
+  /** Live orders, when ordered for someone else: who is at home. */
+  forHe?: string | null;
 }
 
 export interface CallsListBodyProps {
+  /* A visible way back (button audit #25) — the phone's back was the only one. */
+  onBack?: () => void;
+  /** The history section's title; "הושלמו" unless it also holds cancelled calls. */
+  historyTitleHe?: string;
   calls: CallListItem[];
   onOpen?: (id: string) => void;
   onRate?: (id: string) => void;
@@ -55,6 +76,8 @@ export interface CallsListBodyProps {
 }
 
 export function CallsListBody({
+  onBack,
+  historyTitleHe = "הושלמו",
   calls,
   onOpen,
   onRate,
@@ -64,19 +87,20 @@ export function CallsListBody({
   height = 780,
 }: CallsListBodyProps) {
   const live = calls.filter((c) => c.live);
-  const needsYou = calls.filter((c) => !c.live && (c.needsQuoteApproval || c.myRating === null));
+  const needsYou = calls.filter((c) => !c.live && (c.needsQuoteApproval || (c.needsRating ?? c.myRating === null)));
   const done = calls.filter((c) => !live.includes(c) && !needsYou.includes(c));
 
   return (
     <View style={[styles.screen, { width, height }]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <BackButton onPress={onBack} tone="dark" placement="absolute" />
         <View style={styles.head}>
           <Text style={styles.title}>{lex.myCalls}</Text>
         </View>
 
         {calls.length === 0 ? (
           <View style={styles.block}>
-            <Surface colors={colors} level={1} style={styles.empty}>
+            <View style={[n.rowCard, styles.empty]}>
               <View style={styles.emptyMark}>
                 <Mark name="handyman" size={24} color={colors.action} />
               </View>
@@ -87,39 +111,62 @@ export function CallsListBody({
               <Pressable onPress={onNewCall} accessibilityRole="button" style={styles.emptyCta}>
                 <Text style={styles.emptyCtaText}>{lex.sendCall}</Text>
               </Pressable>
-            </Surface>
+            </View>
           </View>
         ) : null}
 
         {/* ---------------- Happening now ---------------- */}
-        {live.map((c) => (
-          <Pressable key={c.id} onPress={() => onOpen?.(c.id)} style={styles.liveWrap}>
-            <View style={styles.liveCard}>
-              <View style={styles.liveTop}>
-                <View style={styles.livePill}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.liveState}>{c.stateHe}</Text>
-                </View>
-                {c.etaMinutes !== null ? (
-                  <View style={styles.liveEta}>
-                    <ClockMark size={14} color={colors.onAction} />
-                    <Text style={styles.liveEtaText}>{c.etaMinutes} דק׳</Text>
-                  </View>
-                ) : null}
+        {live.length > 0 ? (
+          <View style={n.sectionHead}>
+            <Text style={n.sectionTitle}>עכשיו</Text>
+            <Text style={n.sectionCount}>{live.length === 1 ? "הזמנה אחת פעילה" : `${live.length} פעילות`}</Text>
+          </View>
+        ) : null}
+        {live.map((c, i) => (
+          <Pressable
+            key={c.id}
+            onPress={() => onOpen?.(c.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`הזמנה ${i + 1} מתוך ${live.length}: ${c.serviceNameHe}${c.proNameHe ? `, ${c.proNameHe}` : ""}, ${c.stateHe}${c.etaMinutes !== null ? `, ${c.etaMinutes} דקות` : ""}`}
+            style={({ pressed }) => [n.liveCard, c.attention && n.liveCardCall, pressed && { opacity: 0.9 }]}
+          >
+            <View style={n.liveTop}>
+              <View style={[n.livePill, c.attention && n.livePillCall]}>
+                <View style={[n.liveDot, c.attention && { backgroundColor: colors.action }]} />
+                <Text style={n.liveState}>{c.stateHe}</Text>
               </View>
-              <Text style={styles.liveService} numberOfLines={1}>
-                {c.serviceNameHe}
-              </Text>
-              {c.proSeed && c.proNameHe ? (
-                <View style={styles.livePro}>
-                  <Persona seed={c.proSeed} size={32} ring="rgba(255,255,255,0.5)" />
-                  <Text style={styles.liveProName} numberOfLines={1}>
-                    {c.proNameHe}
-                  </Text>
+              {c.etaMinutes !== null ? (
+                <View style={n.liveEta}>
+                  <Text style={n.liveEtaNum}>{c.etaMinutes}</Text>
+                  <Text style={n.liveEtaUnit}>דק׳</Text>
                 </View>
-              ) : (
-                <Text style={styles.liveProName}>{lex.scanning}…</Text>
-              )}
+              ) : null}
+            </View>
+            <View style={n.liveMid}>
+              <View style={n.liveMark}>
+                <Mark name={c.mark} size={22} color={colors.action} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={n.liveService} numberOfLines={1}>
+                  {c.serviceNameHe}
+                </Text>
+                <Text style={n.liveProName} numberOfLines={1}>
+                  {c.proNameHe ? `${c.proNameHe}${c.forHe ? ` · בשביל ${c.forHe}` : ""}` : `${lex.scanning}…`}
+                </Text>
+              </View>
+              {live.length > 1 ? <Text style={n.liveSeq}>הזמנה {i + 1}</Text> : null}
+            </View>
+            {/* Where it stands, in five words — never colour alone. */}
+            <View style={n.rail} accessibilityElementsHidden>
+              {["בדרך", "הגיע", "בבדיקה", "בעבודה", "סיום"].map((w, k) => {
+                const st = c.stage ?? 0;
+                return (
+                  <View key={w} style={n.railStep}>
+                    <View style={[n.railBar, k < st && n.railDone, k === st && n.railNow]} />
+                    <Text style={[n.railWord, k === st && n.railWordNow]}>{w}</Text>
+                  </View>
+                );
+              })}
             </View>
           </Pressable>
         ))}
@@ -127,10 +174,10 @@ export function CallsListBody({
         {/* ---------------- Waiting on you ---------------- */}
         {needsYou.length > 0 ? (
           <View style={styles.block}>
-            <SectionHeader title="ממתין לך" colors={colors} />
+            <Text style={n.sectionTitleSmall}>ממתין לך</Text>
             <View style={{ gap: spacing.sm }}>
               {needsYou.map((c) => (
-                <Surface key={c.id} colors={colors} level={1}>
+                <View key={c.id} style={n.rowCard}>
                   <Row call={c} onOpen={onOpen} />
                   <Pressable
                     onPress={() => (c.needsQuoteApproval ? onApproveQuote?.(c.id) : onRate?.(c.id))}
@@ -141,7 +188,7 @@ export function CallsListBody({
                       {c.needsQuoteApproval ? "צפייה בהצעת המחיר" : "דירוג המקצוען"}
                     </Text>
                   </Pressable>
-                </Surface>
+                </View>
               ))}
             </View>
           </View>
@@ -150,14 +197,12 @@ export function CallsListBody({
         {/* ---------------- History ---------------- */}
         {done.length > 0 ? (
           <View style={styles.block}>
-            <SectionHeader title="הושלמו" colors={colors} />
+            <Text style={n.sectionTitleSmall}>{historyTitleHe}</Text>
             <View style={{ gap: spacing.sm }}>
               {done.map((c) => (
-                <Pressable key={c.id} onPress={() => onOpen?.(c.id)}>
-                  <Surface colors={colors} level={1}>
-                    <Row call={c} onOpen={onOpen} />
-                  </Surface>
-                </Pressable>
+                <View key={c.id} style={n.rowCard}>
+                  <Row call={c} onOpen={onOpen} />
+                </View>
               ))}
             </View>
           </View>
@@ -167,9 +212,15 @@ export function CallsListBody({
   );
 }
 
-function Row({ call: c }: { call: CallListItem; onOpen?: (id: string) => void }) {
+function Row({ call: c, onOpen }: { call: CallListItem; onOpen?: (id: string) => void }) {
+  /* The whole row opens its call (button audit #22) — it used to look pressable and do nothing. */
   return (
-    <>
+    <Pressable
+      disabled={!onOpen}
+      onPress={() => onOpen?.(c.id)}
+      accessibilityRole="button"
+      accessibilityLabel={`${c.serviceNameHe} · ${c.stateHe}`}
+    >
       <View style={styles.row}>
         <View style={styles.rowMark}>
           <Mark name={c.mark} size={18} color={colors.action} />
@@ -200,14 +251,14 @@ function Row({ call: c }: { call: CallListItem; onOpen?: (id: string) => void })
                   key={i}
                   size={11}
                   filled={i <= (c.myRating as number)}
-                  color={i <= (c.myRating as number) ? colors.statusWarning : colors.border}
+                  color={i <= (c.myRating as number) ? colors.action : "rgba(247,243,250,0.2)"}
                 />
               ))}
             </View>
           ) : null}
         </View>
       ) : null}
-    </>
+    </Pressable>
   );
 }
 
@@ -215,7 +266,7 @@ const styles = StyleSheet.create({
   screen: { backgroundColor: colors.bg, overflow: "hidden", borderRadius: radii.xl },
   scroll: { paddingBottom: spacing.xxl },
 
-  head: { paddingHorizontal: spacing.lg, paddingTop: spacing.xxl, alignItems: "flex-end" },
+  head: { paddingHorizontal: spacing.lg, paddingTop: BACK_BUTTON_CLEARANCE, alignItems: "flex-end" },
   title: { ...type.h1, color: colors.textPrimary, writingDirection: "rtl" },
 
   block: { paddingHorizontal: spacing.lg, marginTop: spacing.xl },
@@ -304,4 +355,35 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   rowCtaText: { ...type.captionStrong, color: colors.actionText },
+});
+
+/* The night page (Amit, 2026-10-01: "נראה קצת חיוור"). */
+const n = StyleSheet.create({
+  liveCard: { marginHorizontal: spacing.lg, marginTop: spacing.md, backgroundColor: CARD, borderRadius: radii.lg, padding: spacing.lg, borderRightWidth: 3, borderRightColor: colors.action, shadowColor: colors.action, shadowOpacity: 0.22, shadowRadius: 22, shadowOffset: { width: 0, height: 8 } },
+  liveCardCall: { borderWidth: 1, borderColor: "rgba(255,92,56,0.55)" },
+  liveTop: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between" },
+  livePill: { flexDirection: "row-reverse", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: tint.trust(0.16) },
+  livePillCall: { backgroundColor: tint.action(0.18) },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.trust },
+  liveState: { color: colors.textPrimary, fontSize: scale.meta, fontWeight: "800", writingDirection: "rtl" },
+  liveEta: { flexDirection: "row-reverse", alignItems: "baseline", gap: 4 },
+  liveEtaNum: { color: colors.action, fontSize: scale.title, fontWeight: "900", ...tabular },
+  liveEtaUnit: { color: colors.textSecondary, fontSize: scale.meta, fontWeight: "700" },
+  liveMid: { flexDirection: "row-reverse", alignItems: "center", gap: 12, marginTop: spacing.md },
+  liveMark: { width: 46, height: 46, borderRadius: 23, backgroundColor: tint.action(0.14), alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,92,56,0.35)" },
+  liveService: { color: colors.textPrimary, fontSize: scale.section, fontWeight: "800", textAlign: "right", writingDirection: "rtl" },
+  liveProName: { color: colors.textSecondary, fontSize: scale.meta, textAlign: "right", writingDirection: "rtl", marginTop: 2 },
+  liveSeq: { color: colors.textSecondary, fontSize: scale.micro, fontWeight: "700" },
+  rail: { flexDirection: "row-reverse", gap: 4, marginTop: spacing.lg },
+  railStep: { flex: 1, gap: 6 },
+  railBar: { height: 4, borderRadius: 2, backgroundColor: LINE },
+  railDone: { backgroundColor: colors.trust },
+  railNow: { backgroundColor: colors.action },
+  railWord: { color: "rgba(247,243,250,0.42)", fontSize: scale.micro, textAlign: "center" },
+  railWordNow: { color: colors.textPrimary, fontWeight: "800" },
+  sectionHead: { flexDirection: "row-reverse", alignItems: "baseline", justifyContent: "space-between", paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  sectionTitle: { color: colors.textPrimary, fontSize: scale.section, fontWeight: "800", writingDirection: "rtl" },
+  sectionCount: { color: colors.textSecondary, fontSize: scale.meta },
+  sectionTitleSmall: { color: colors.textSecondary, fontSize: scale.meta, fontWeight: "800", textAlign: "right", marginBottom: spacing.sm, writingDirection: "rtl" },
+  rowCard: { backgroundColor: CARD_SOFT, borderRadius: radii.md, padding: spacing.md, borderWidth: 1, borderColor: LINE },
 });

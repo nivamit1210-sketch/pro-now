@@ -67,6 +67,14 @@ describe("a job from request to review, no money in the app (D1)", () => {
     expect(res.json().job.status).toBe("OFFERING");
   });
 
+  it("the calls list shows the job with nobody assigned yet", async () => {
+    const list = await app.inject({ method: "GET", url: "/api/v1/jobs", headers: as(customer) });
+    expect(list.statusCode, list.body).toBe(200);
+    const row = list.json().jobs.find((j: { id: string }) => j.id === jobId);
+    expect(row).toMatchObject({ status: "OFFERING", professional: null, ratingGiven: null, amountMinorUnits: null });
+    expect(typeof row.serviceCode).toBe("string");
+  });
+
   it("the customer's socket hears every step", async () => {
     const ws = await app.injectWS(`/api/v1/ws/jobs/${jobId}`, { headers: as(customer) });
     ws.on("message", (raw: Buffer) => {
@@ -121,6 +129,25 @@ describe("a job from request to review, no money in the app (D1)", () => {
     const res = await app.inject({ method: "POST", url: `/api/v1/jobs/${jobId}/reviews`, headers: as(customer), payload: { overallRating: 5, text: "מעולה" } });
     expect(res.statusCode, res.body).toBe(200);
     expect((await db.job.findUniqueOrThrow({ where: { id: jobId } })).status).toBe("CLOSED");
+  });
+
+  it("the calls list then says who came, the stars given and the receipt's amount", async () => {
+    const list = await app.inject({ method: "GET", url: "/api/v1/jobs", headers: as(customer) });
+    const row = list.json().jobs.find((j: { id: string }) => j.id === jobId);
+    const assigned = await db.professionalProfile.findUniqueOrThrow({ where: { id: proId! } });
+    expect(row).toMatchObject({
+      status: "CLOSED",
+      professional: { id: assigned.id, displayName: assigned.displayName },
+      ratingGiven: 5,
+      amountMinorUnits: 22000,
+    });
+  });
+
+  it("nobody else's calls list shows the job", async () => {
+    const stranger = await signInByEmail(app, uniqueEmail("w6-list-stranger"));
+    const list = await app.inject({ method: "GET", url: "/api/v1/jobs", headers: as(stranger) });
+    expect(list.statusCode, list.body).toBe(200);
+    expect(list.json().jobs.map((j: { id: string }) => j.id)).not.toContain(jobId);
   });
 
   it("nobody else may listen to the job", async () => {
