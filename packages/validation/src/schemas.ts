@@ -382,6 +382,14 @@ export const proCredentialSchema = z
   })
   .strict();
 
+/** `POST /api/v1/pro/application/identity`: the ID card, then the face straight, right and left (docs/10). */
+export const proIdentitySchema = z
+  .object({
+    documentUploadId: z.string().min(1),
+    selfieUploadIds: z.tuple([z.string().min(1), z.string().min(1), z.string().min(1)]),
+  })
+  .strict();
+
 /** `POST /api/v1/admin/...` decisions: a reason is required to refuse. */
 export const adminDecisionSchema = z
   .object({ approve: z.boolean(), reason: z.string().trim().max(500).optional(), expiresAt: z.string().datetime().optional() })

@@ -798,6 +798,8 @@ export interface ProApplicationView {
   }>;
   area: { lat: number; lng: number; radiusKm: number } | null;
   documents: Array<{ kind: string; status: string }>;
+  /** The current identity check (docs/10). reasonHe: the reviewer's words when a retake was asked for or it was refused. */
+  identity: { id: string; status: string; submittedAt: string; reasonHe: string | null } | null;
   /** What stands between this application and review, as codes. Empty: ready. */
   missing: string[];
   submitted: boolean;

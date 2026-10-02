@@ -35,7 +35,7 @@ const as = (j: CookieJar, idem?: string) => ({
   ...(idem ? { "idempotency-key": idem } : {}),
 });
 
-async function upload(jar: CookieJar, kind: "PHOTO" | "DOCUMENT"): Promise<string> {
+async function upload(jar: CookieJar, kind: "PHOTO" | "DOCUMENT" | "IDENTITY"): Promise<string> {
   const body = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
   const prepared = await app.inject({ method: "POST", url: "/api/v1/uploads", headers: as(jar), payload: { kind, mime: "image/jpeg", bytes: body.byteLength } });
   expect(prepared.statusCode, prepared.body).toBe(201);
@@ -77,7 +77,7 @@ describe("joining as a professional", () => {
     expect(res.statusCode, res.body).toBe(200);
     proId = res.json().profile.id;
     expect(res.json().profile).toMatchObject({ addressAs: "F", verificationStatus: "DRAFT" });
-    expect(res.json().missing).toEqual(expect.arrayContaining(["SERVICES", "AREA", "DOCUMENT:TAX_FILE", "PORTRAIT", "TAX_STATUS"]));
+    expect(res.json().missing).toEqual(expect.arrayContaining(["SERVICES", "AREA", "DOCUMENT:TAX_FILE", "PORTRAIT", "TAX_STATUS", "IDENTITY"]));
     expect(res.json().profile.dateOfBirth).toBe("1990-05-14");
     expect(res.json().profile.business).toBeNull();
     expect(res.json().profile.portrait).toBeNull();
@@ -180,6 +180,57 @@ describe("joining as a professional", () => {
     expect(seen.json().portrait).toMatchObject({ kind: "PHOTO", mime: "image/jpeg" });
     expect(seen.json().portrait.url).toMatch(/^https?:\/\//);
     // What customers see of it is portrait-customers.int.test.ts (D1).
+  });
+
+  describe("the identity check (docs/10 §Identity check in the app)", () => {
+    const send = (payload: object, jar = applicant) => app.inject({ method: "POST", url: "/api/v1/pro/application/identity", headers: as(jar), payload });
+    const four = async (jar = applicant) => ({
+      documentUploadId: await upload(jar, "IDENTITY"),
+      selfieUploadIds: [await upload(jar, "IDENTITY"), await upload(jar, "IDENTITY"), await upload(jar, "IDENTITY")],
+    });
+
+    it("refuses someone else's photos, and photos that are not identity uploads", async () => {
+      expect((await send(await four(customer))).statusCode).toBe(422);
+      const wrongKind = { ...(await four()), documentUploadId: await upload(applicant, "PHOTO") };
+      expect((await send(wrongKind)).statusCode).toBe(422);
+      expect((await send({ documentUploadId: "x", selfieUploadIds: ["a", "b"] })).statusCode).toBe(400);
+    });
+
+    it("goes to a person for review, and is the application's current check", async () => {
+      const res = await send(await four());
+      expect(res.statusCode, res.body).toBe(200);
+      expect(res.json().identity).toMatchObject({ status: "MANUAL_REVIEW", reasonHe: null });
+      expect(res.json().missing).not.toContain("IDENTITY");
+      const row = await db.identityVerification.findFirstOrThrow({ where: { professionalId: proId }, orderBy: { createdAt: "desc" } });
+      expect(row).toMatchObject({ vendorName: "sandbox-identity", isSandbox: true, status: "MANUAL_REVIEW", method: null });
+      expect(row.uploadIds).toHaveLength(4);
+      // The account's own status is not moved by identity (docs/10, deviation noted in the plan).
+      expect((await db.professionalProfile.findUniqueOrThrow({ where: { id: proId } })).verificationStatus).toBe("DRAFT");
+    });
+
+    it("a double tap makes one attempt", async () => {
+      const payload = await four();
+      const [a, b] = await Promise.all([send(payload), send(payload)]);
+      expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
+      const live = await db.identityVerification.count({ where: { professionalId: proId, status: { not: "SUPERSEDED" } } });
+      expect(live).toBe(1);
+    });
+
+    it("a retake replaces the check under review, and deletes its photos", async () => {
+      const before = await db.identityVerification.findFirstOrThrow({ where: { professionalId: proId, status: "MANUAL_REVIEW" } });
+      expect((await send(await four())).statusCode).toBe(200);
+      const old = await db.identityVerification.findUniqueOrThrow({ where: { id: before.id } });
+      expect(old.status).toBe("SUPERSEDED");
+      expect(old.uploadIds).toEqual([]);
+      expect(old.photosDeletedAt).not.toBeNull();
+      expect(await db.upload.count({ where: { id: { in: before.uploadIds } } })).toBe(0);
+    });
+
+    it("an upload the clean-up already deleted is a 422, not a 500", async () => {
+      const payload = await four();
+      await db.upload.delete({ where: { id: payload.selfieUploadIds[1]! } });
+      expect((await send(payload)).statusCode).toBe(422);
+    });
   });
 
   it("with everything required, it goes to review", async () => {
