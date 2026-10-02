@@ -12,6 +12,8 @@ DRAFT → IDENTITY_PENDING → IDENTITY_REVIEW → IDENTITY_VERIFIED
       → APPROVED
 APPROVED → LIMITED | SUSPENDED | REVERIFY_REQUIRED | REJECTED (per risk/expiry events)
 ```
+Since 2026-10-02 the `IDENTITY_*` states are recorded on the identity check,
+not on the account (see §Identity check in the app).
 Dispatch eligibility is **service-specific**, not merely account-specific —
 an expired required credential removes only the affected service from
 eligibility, not the whole account, where possible.
@@ -181,8 +183,8 @@ The reviewer's three actions:
 - Integration (real Postgres):
   - another user's upload is refused;
   - a double submit makes one attempt;
-  - a sandbox submit lands in `IDENTITY_REVIEW`;
-  - a manual approval writes the audit and the timeline;
+  - a sandbox submit makes a `MANUAL_REVIEW` check and leaves the account status unchanged;
+  - a manual approval writes `audit_logs`;
   - approving an account without identity is refused;
   - the media clean-up keeps an undecided attempt's photos past 4 days;
   - a decision (each of the three) deletes that attempt's photos and keeps
