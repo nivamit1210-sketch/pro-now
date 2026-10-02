@@ -10,6 +10,7 @@ const matchWithEta = (etaSeconds: number | null, computedAtMs = 0): JobMatchView
   professional: {
     id: "pro-1",
     displayName: "מקצוען",
+    addressAs: null,
     profilePhotoUrl: null,
     portraitKind: null,
     verifications: [],

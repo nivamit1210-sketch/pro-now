@@ -11,7 +11,7 @@ const job = (over: Partial<MyJobSummary> = {}): MyJobSummary => ({
   createdAt: new Date(2026, 9, 2, 9, 30).toISOString(),
   serviceNameHe: "תיקון נזילה",
   serviceCode: "HOME_PLUMB_LEAK",
-  professional: { id: "pro_1", displayName: "יוסי" },
+  professional: { id: "pro_1", displayName: "יוסי", addressAs: "M" },
   ratingGiven: 5,
   amountMinorUnits: 22000,
   ...over,

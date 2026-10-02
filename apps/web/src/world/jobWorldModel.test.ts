@@ -11,6 +11,7 @@ const match: JobMatchView = {
   professional: {
     id: "pro-1",
     displayName: "עמית",
+    addressAs: "M",
     profilePhotoUrl: null,
     portraitKind: null,
     verifications: [],
