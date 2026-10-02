@@ -58,9 +58,10 @@ split (fee rounds down; fee + payable = charge). Until then
 keeps jobs, payments and reviews pointing at the anonymised user. Open: how
 long those are kept and whether a review's text is erased (needs a legal
 and tax answer). Photos, voice and text: **decided 4 days** (D3, a
-setting). Error data: follows Sentry's plan. **Open: how long identity-check
-photos (ID card, face) are kept.** Until decided they are kept as evidence
-and never purged with job media (`10-TRUST-VERIFICATION.md §Identity check`).
+setting). Error data: follows Sentry's plan. Identity-check photos (ID card,
+face): **decided, kept until the admin's decision on that check, then
+deleted**; the decision record stays (Dvir, 2026-10-02,
+`10-TRUST-VERIFICATION.md §Identity check`).
 
 ### How long a customer waits before being told nobody is coming
 `DISPATCH_SEARCH_DEADLINE_SECONDS`, default **300**. After it, SYSTEM

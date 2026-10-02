@@ -87,10 +87,19 @@ Also part of the flow:
   decided, when and why.
 - `professional_profiles.dateOfBirth`.
 - Identity photos are uploaded with their own kind, `IDENTITY`, in the same
-  private storage. The media clean-up (`domain/storage/media-cleanup.ts`,
-  which deletes uploads older than 4 days) counts them as evidence, like
-  documents and credentials, so a photo is never deleted before or after
-  review. How long they are kept is open (`18-ROADMAP.md §Data retention`).
+  private storage. **They are kept only until the admin decides** (Dvir,
+  2026-10-02):
+  - While an attempt has no decision, the media clean-up
+    (`domain/storage/media-cleanup.ts`, which deletes uploads older than
+    4 days) counts its four photos as evidence, so a slow review never
+    loses them.
+  - Once the attempt is decided (approved, retake or rejected), its photos
+    are deleted from storage. The decision itself stays: who, when, method,
+    reason and the provider's answer.
+  - An attempt replaced by a retake before any decision is deleted when the
+    retake is submitted.
+  - So after approval nobody can look at the photos again. A later doubt is
+    handled with a new check (re-verification), not with the old photos.
 
 **API.**
 - `POST /v1/pro/application/identity { documentUploadId, selfieUploadIds:
@@ -158,7 +167,10 @@ The reviewer's three actions:
   - a sandbox submit lands in `IDENTITY_REVIEW`;
   - a manual approval writes the audit and the timeline;
   - approving an account without identity is refused;
-  - the media clean-up keeps identity uploads.
+  - the media clean-up keeps an undecided attempt's photos past 4 days;
+  - a decision (each of the three) deletes that attempt's photos and keeps
+    the record;
+  - a retake deletes the replaced undecided attempt's photos.
 - E2E (Playwright, Chromium's fake camera): a professional joins through the
   check, admin sees the four photos and approves identity, and the account
   can then be approved.
