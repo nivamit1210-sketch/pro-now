@@ -1,8 +1,7 @@
 /**
- * The street behind the top of the home screen, and the day/night rule it
- * follows. Ported 1:1 from the demo (tools/design-preview/src/App.tsx
- * `CityHero`, src/daylight.ts): our own city, photographed at the viewer's
- * hour, 06:00–18:00 by day.
+ * The street behind the top of the home screen, and the day/night rule
+ * (06:00–18:00 by day) the other backdrops still follow. Ported from the
+ * demo (tools/design-preview/src/App.tsx `CityHero`, src/daylight.ts).
  */
 export function isDaytime(now: Date = new Date()): boolean {
   const h = now.getHours();
@@ -11,10 +10,14 @@ export function isDaytime(now: Date = new Date()): boolean {
 
 const CITY_HERO_CSS = "@keyframes pnCity{0%{transform:scale(1.02) translateX(0)}100%{transform:scale(1.12) translateX(-3%)}}";
 
+/**
+ * THE EVENING CITY, AT EVERY HOUR. The demo's `CITY_BG` shows the evening
+ * render by day too: "the daytime render was the foggy one" (its UX audit).
+ */
+const CITY_HERO_BG = { src: "/world/splash_city.webp", pos: "64% 50%" } as const;
+
 export function CityHero({ lift = 0 }: { lift?: number }) {
-  const bg = isDaytime()
-    ? { src: "/world/splash_city_day.webp", pos: "50% 40%" }
-    : { src: "/world/splash_city.webp", pos: "64% 50%" };
+  const bg = CITY_HERO_BG;
   return (
     <div aria-hidden style={{ position: "absolute", inset: 0, overflow: "hidden", background: "#2a1838" }}>
       <style>{CITY_HERO_CSS}</style>
