@@ -40,7 +40,8 @@ export function contentSecurityPolicy(env: { S3_ENDPOINT?: string; SENTRY_DSN?: 
   const extra = (list: Array<string | null>) => list.filter((x): x is string => Boolean(x));
   return {
     defaultSrc: ["'self'"],
-    scriptSrc: ["'self'"],
+    // WebAssembly for the identity check's face guidance (docs/10). Compiles wasm only; `eval` of JavaScript stays blocked.
+    scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
     styleSrc: ["'self'", "'unsafe-inline'"],
     imgSrc: ["'self'", "data:", "blob:", ...extra([storage])],
     mediaSrc: ["'self'", "blob:", ...extra([storage])],

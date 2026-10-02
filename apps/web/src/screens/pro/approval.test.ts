@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProApplicationView } from "@pro-now/types";
 
-import { APPROVAL_STEPS_HE, approvalProgress } from "./approval";
+import { APPROVAL_STEPS_HE, approvalProgress, formatDateOfBirthHe, parseDateOfBirthHe } from "./approval";
 
 type Req = ProApplicationView["services"][number]["requirements"][number];
 function view(opts: {
@@ -59,5 +59,20 @@ describe("approvalProgress: the true state, nothing ticking by itself", () => {
   it("a rejected document or licence is shown as needing attention, not as waiting", () => {
     expect(states(view({ documents: ["REJECTED", "VERIFIED", "VERIFIED"] }))[0]).toBe("attention");
     expect(states(view({ credentials: ["REJECTED"] }))[1]).toBe("attention");
+  });
+});
+
+describe("date of birth, as typed in Israel (DD/MM/YYYY)", () => {
+  it("reads a real date into the server's YYYY-MM-DD", () => {
+    expect(parseDateOfBirthHe("14/05/1990")).toBe("1990-05-14");
+    expect(parseDateOfBirthHe("1/5/1990")).toBe("1990-05-01");
+  });
+  it("refuses a day the calendar does not have, and anything that is not a date", () => {
+    expect(parseDateOfBirthHe("31/02/1990")).toBeNull();
+    expect(parseDateOfBirthHe("abc")).toBeNull();
+  });
+  it("shows the server's date back the way it is typed", () => {
+    expect(formatDateOfBirthHe("1990-05-14")).toBe("14/05/1990");
+    expect(formatDateOfBirthHe(null)).toBe("");
   });
 });

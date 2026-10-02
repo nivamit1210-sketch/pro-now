@@ -22,8 +22,9 @@ import { brandColorFromFile } from "../../art/brandColor";
 import { IntroBackdrop } from "../../art/IntroBackdrop";
 import { worldSources } from "../../art/worldSources";
 import { tradeCharacterFor, tradeShopFor } from "../../tradeCharacter";
+import { IdentityCheck } from "../../identity/IdentityCheck";
 import { ErrorScreen, LoadingScreen } from "../../states";
-import { APPROVAL_STEPS_HE } from "./approval";
+import { APPROVAL_STEPS_HE, formatDateOfBirthHe, parseDateOfBirthHe } from "./approval";
 import { ProSignOut } from "./ProSignOut";
 import { ACCOUNT_DOCS } from "./proPages";
 
@@ -77,16 +78,14 @@ function missingHe(code: string, view: ProApplicationView): string {
     case "PORTRAIT": return "תמונה או דמות";
     case "TAX_STATUS": return "איך אתם רשומים במס";
     case "CREDENTIAL": return `${requirementHe(b ?? "")} ל${svc(a)}`;
+    case "IDENTITY": return "בדיקת זהות";
+    case "DATE_OF_BIRTH": return "תאריך לידה";
     default: return code;
   }
 }
 
 /** Uploads a document through the same private storage path as W4. */
-async function uploadDocument(file: File, asPhoto: boolean): Promise<string> {
-  if (asPhoto) {
-    const blob = await compressImage(file);
-    return (await api.uploadMedia({ kind: "PHOTO", mime: "image/jpeg", body: blob })).upload.id;
-  }
+async function uploadDocument(file: File): Promise<string> {
   const mime = file.type || "application/pdf";
   return (await api.uploadMedia({ kind: "DOCUMENT", mime, body: file })).upload.id;
 }
@@ -125,6 +124,8 @@ export function ProJoin() {
   const [welcomed, setWelcomed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorHe, setErrorHe] = useState<string | null>(null);
+  // The server's age rule (docs/10), said under the date of birth rather than as a generic error.
+  const [underAge, setUnderAge] = useState(false);
 
   // 404 before joining is an answer ("not yet"), not an error.
   const application = useQuery({
@@ -145,13 +146,15 @@ export function ProJoin() {
     if (busy) return;
     setBusy(true);
     setErrorHe(null);
+    setUnderAge(false);
     try {
       const result = await fn();
       if (result && typeof result === "object" && "profile" in result) queryClient.setQueryData(applicationKey, result);
       else await queryClient.invalidateQueries({ queryKey: applicationKey });
       if (next !== undefined) setStep(next);
     } catch (e) {
-      setErrorHe(e instanceof ApiError ? e.message : "משהו לא נשמר. נסו שוב.");
+      if (e instanceof ApiError && e.code === "UNDER_MINIMUM_AGE") setUnderAge(true);
+      else setErrorHe(e instanceof ApiError ? e.message : "משהו לא נשמר. נסו שוב.");
     } finally {
       setBusy(false);
     }
@@ -189,6 +192,7 @@ export function ProJoin() {
           <Details
             view={view}
             busy={busy}
+            underAge={underAge}
             onSave={({ business, ...details }) => save(async () => {
               await api.proJoin(details);
               return api.proSetBusiness(business);
@@ -249,11 +253,13 @@ const TAX_STATUS_HE: ReadonlyArray<readonly [TaxStatus, string]> = [
 function Details({
   view,
   busy,
+  underAge,
   onSave,
 }: {
   view: ProApplicationView | null;
   busy: boolean;
-  onSave: (d: { displayName: string; legalName: string; addressAs: "M" | "F"; business: { tradingName: string | null; taxStatus: TaxStatus } }) => void;
+  underAge: boolean;
+  onSave: (d: { displayName: string; legalName: string; addressAs: "M" | "F"; dateOfBirth: string; business: { tradingName: string | null; taxStatus: TaxStatus } }) => void;
 }) {
   const [displayName, setDisplayName] = useState(view?.profile.displayName ?? "");
   const [legalName, setLegalName] = useState(view?.profile.legalName ?? "");
@@ -261,13 +267,34 @@ function Details({
   // The demo's step 2 (Amit, 2026-09-30): a business name if they have one, and how they are registered for tax.
   const [tradingName, setTradingName] = useState(view?.profile.business?.tradingName ?? "");
   const [taxStatus, setTaxStatus] = useState<TaxStatus | null>(view?.profile.business?.taxStatus ?? null);
-  const ok = displayName.trim().length > 0 && legalName.trim().length > 1 && addressAs && taxStatus;
+  // Asked here because the identity check needs it; the reviewer compares it with the ID card (docs/10).
+  const [birthText, setBirthText] = useState(formatDateOfBirthHe(view?.profile.dateOfBirth));
+  const dateOfBirth = parseDateOfBirthHe(birthText);
+  const ok = displayName.trim().length > 0 && legalName.trim().length > 1 && addressAs && taxStatus && dateOfBirth;
   return (
     <View style={styles.section}>
       <Text style={styles.title}>ברוכים הבאים ל־PRO NOW</Text>
       <Text style={styles.soft}>עבודה מגיעה רק אחרי ש־PRO NOW מאשרת את הפרטים, המסמכים וכל שירות בנפרד. זה לוקח כמה דקות.</Text>
       <Field label="השם שהלקוחות יראו" value={displayName} onChange={setDisplayName} max={40} />
       <Field label="שם מלא כפי שבתעודה" value={legalName} onChange={setLegalName} max={80} />
+      <View style={{ gap: 4 }}>
+        <Text style={styles.label}>תאריך לידה</Text>
+        <TextInput
+          value={birthText}
+          onChangeText={setBirthText}
+          accessibilityLabel="תאריך לידה"
+          placeholder="יום/חודש/שנה"
+          placeholderTextColor={colors.textSecondary}
+          style={styles.input}
+          maxLength={10}
+          inputMode="numeric"
+        />
+        {underAge ? (
+          <Text accessibilityRole="alert" style={styles.error}>ההצטרפות לבעלי מקצוע מגיל 18.</Text>
+        ) : birthText.trim().length >= 8 && !dateOfBirth ? (
+          <Text style={styles.note}>למשל 14/05/1990</Text>
+        ) : null}
+      </View>
       <Text style={styles.label}>איך לפנות אליכם?</Text>
       <View style={styles.row}>
         {([["M", "בלשון זכר"], ["F", "בלשון נקבה"]] as const).map(([k, he]) => (
@@ -290,6 +317,7 @@ function Details({
             displayName: displayName.trim(),
             legalName: legalName.trim(),
             addressAs,
+            dateOfBirth,
             business: { tradingName: tradingName.trim() || null, taxStatus },
           })
         }
@@ -364,11 +392,12 @@ function Documents({ view, busy, save, onNext }: { view: ProApplicationView; bus
   const [numbers, setNumbers] = useState<Record<string, string>>({});
   const has = (kind: string) => view.documents.some((d) => d.kind === kind && d.status !== "REJECTED");
   const credentialRows = view.services.flatMap((s) => s.requirements.map((r) => ({ service: s, r })));
-  const accountMissing = view.missing.filter((m) => m.startsWith("DOCUMENT:") || m.startsWith("CREDENTIAL:"));
+  const accountMissing = view.missing.filter((m) => m === "IDENTITY" || m.startsWith("DOCUMENT:") || m.startsWith("CREDENTIAL:"));
   return (
     <View style={styles.section}>
       <Text style={styles.title}>מסמכים</Text>
       <Text style={styles.soft}>מה שהחוק דורש לכל מקצוע, ומה ש־PRO NOW מבקשת מכולם. לא נבקש תעודת יושר — אסור לדרוש אותה.</Text>
+      <IdentityCheck legalNameHe={view.profile.legalName} current={view.identity} onSubmitted={(v) => void save(async () => v)} />
       {ACCOUNT_DOCS.map((d) => (
         <View key={d.kind} style={styles.docRow}>
           <View style={{ flex: 1 }}>
@@ -379,8 +408,8 @@ function Documents({ view, busy, save, onNext }: { view: ProApplicationView; bus
             labelHe={has(d.kind) ? "להחליף" : "העלאה"}
             on={false}
             onPress={() => void (async () => {
-              const file = await pickFile(d.kind === "SELFIE" ? "image/*" : "image/*,application/pdf", d.kind === "SELFIE" ? "user" : undefined);
-              if (file) await save(async () => api.proAddDocument({ kind: d.kind, uploadId: await uploadDocument(file, d.kind === "SELFIE") }));
+              const file = await pickFile("image/*,application/pdf");
+              if (file) await save(async () => api.proAddDocument({ kind: d.kind, uploadId: await uploadDocument(file) }));
             })()}
           />
         </View>
@@ -419,7 +448,7 @@ function Documents({ view, busy, save, onNext }: { view: ProApplicationView; bus
                       serviceId: service.serviceId,
                       requirement: r.requirement,
                       number: (numbers[key] ?? "").trim() || undefined,
-                      uploadId: await uploadDocument(file, false),
+                      uploadId: await uploadDocument(file),
                     })
                   );
                 }
@@ -611,6 +640,12 @@ function Portrait({ view, busy, save, onNext }: { view: ProApplicationView; busy
   );
 }
 
+/** The identity check in the summary: the server's current check, nothing assumed. */
+function identityHe(identity: ProApplicationView["identity"]): string {
+  const status = identity?.status;
+  return status === "VERIFIED" ? "זהות: אושרה" : status === "MANUAL_REVIEW" || status === "PENDING" ? "זהות: בבדיקה" : "זהות: חסרה";
+}
+
 const TAX_HE: Record<string, string> = { EXEMPT: "עוסק פטור", LICENSED: "עוסק מורשה", COMPANY: "חברה בע״מ" };
 
 /**
@@ -620,7 +655,7 @@ const TAX_HE: Record<string, string> = { EXEMPT: "עוסק פטור", LICENSED: 
  */
 function Send({ view, busy, onSubmit, onGoTo }: { view: ProApplicationView; busy: boolean; onSubmit: () => void; onGoTo: (step: number) => void }) {
   const stepOf = (code: string) =>
-    code === "ADDRESS_AS" || code === "TAX_STATUS" ? 0 : code === "SERVICES" ? 1 : code === "AREA" ? 2 : code.startsWith("PRICE") ? 4 : code === "PORTRAIT" ? 6 : 3;
+    code === "ADDRESS_AS" || code === "TAX_STATUS" || code === "DATE_OF_BIRTH" ? 0 : code === "SERVICES" ? 1 : code === "AREA" ? 2 : code.startsWith("PRICE") ? 4 : code === "PORTRAIT" ? 6 : 3;
   const p = view.profile;
   const face =
     p.portrait?.kind === "PHOTO" && p.portrait.uploadId
@@ -634,7 +669,7 @@ function Send({ view, busy, onSubmit, onGoTo }: { view: ProApplicationView; busy
     { t: "פרטים", v: [p.displayName, p.business ? TAX_HE[p.business.taxStatus] : null].filter(Boolean).join(" · ") || "—", to: 0 },
     { t: "שירותים", v: view.services.length ? view.services.map((s) => s.nameHe).join(" · ") : "—", to: 1 },
     { t: "אזור", v: view.area ? `עד ${view.area.radiusKm} ק״מ מהבית` : "—", to: 2 },
-    { t: "מסמכים", v: `${docsIn}/${docsTotal} חובה`, to: 3 },
+    { t: "מסמכים", v: `${identityHe(view.identity)} · ${docsIn}/${docsTotal} חובה`, to: 3 },
     { t: "מחירים", v: `${view.services.filter((s) => s.priced).length}/${view.services.length} שירותים`, to: 4 },
     { t: "החנות", v: p.shop ? p.shop.name : "עיצוב ברירת מחדל, אפשר אחר כך", to: 5 },
     { t: "התמונה", v: p.portrait?.kind === "PHOTO" ? "תמונה שלכם" : p.portrait?.kind === "CHARACTER" ? "הדמות של המקצוע" : "—", to: 6 },

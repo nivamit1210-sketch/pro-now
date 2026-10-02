@@ -57,3 +57,23 @@ export function approvalProgress(view: ProApplicationView): Array<{ labelHe: str
   const states = [documents, licences, reputation, working];
   return APPROVAL_STEPS_HE.map((labelHe, i) => ({ labelHe, state: states[i]! }));
 }
+
+/**
+ * A date of birth as typed in Israel (DD/MM/YYYY, also D/M/YYYY, with / . or -)
+ * into the server's YYYY-MM-DD. Null for anything that is not a real day.
+ * Whether it is old enough is the server's answer (UNDER_MINIMUM_AGE), not this.
+ */
+export function parseDateOfBirthHe(text: string): string | null {
+  const m = /^\s*(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})\s*$/.exec(text);
+  if (!m) return null;
+  const [day, month, year] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month - 1 || d.getUTCDate() !== day) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** The server's YYYY-MM-DD shown back as DD/MM/YYYY. */
+export function formatDateOfBirthHe(iso: string | null | undefined): string {
+  const m = iso ? /^(\d{4})-(\d{2})-(\d{2})/.exec(iso) : null;
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}

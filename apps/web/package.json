@@ -5,7 +5,9 @@
   "type": "module",
   "description": "The PRO NOW web app (PWA). Same screens as the demo, on the real API. See docs/21 W2.",
   "scripts": {
+    "predev": "node scripts/face-runtime.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/face-runtime.mjs",
     "build": "vite build",
     "test": "vitest run src",
     "preview": "vite preview",
@@ -15,6 +17,7 @@
     "parity": "playwright test -c parity.config.ts"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
     "@pro-now/api-client": "*",
     "@pro-now/types": "*",
     "@pro-now/ui": "*",

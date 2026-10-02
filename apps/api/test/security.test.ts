@@ -10,7 +10,7 @@ describe("the content security policy", () => {
     "https://k2@o1.ingest.sentry.io/2"
   );
   it("runs only our own scripts, and is never framed", () => {
-    expect(csp.scriptSrc).toEqual(["'self'"]);
+    expect(csp.scriptSrc).toEqual(["'self'", "'wasm-unsafe-eval'"]);
     expect(csp.frameAncestors).toEqual(["'none'"]);
     expect(csp.objectSrc).toEqual(["'none'"]);
   });

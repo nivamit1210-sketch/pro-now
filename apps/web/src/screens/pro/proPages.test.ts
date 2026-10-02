@@ -21,10 +21,7 @@ function application(over: Partial<ProApplicationView> = {}): ProApplicationView
     ],
     area: null,
     identity: null,
-    documents: [
-      { kind: "GOVERNMENT_ID", status: "VERIFIED" },
-      { kind: "SELFIE", status: "PENDING" },
-    ],
+    documents: [],
     missing: [],
     submitted: true,
     ...over,
@@ -55,11 +52,41 @@ describe("המסמכים שלי — the server's states, never assumed", () => {
   const steps = verificationStepsFor(application());
 
   it("lists the account documents, and one the server has not seen is not started", () => {
-    expect(steps.find((s) => s.id === "doc:GOVERNMENT_ID")?.state).toBe("VERIFIED");
-    expect(steps.find((s) => s.id === "doc:SELFIE")?.state).toBe("IN_REVIEW");
     const tax = steps.find((s) => s.id === "doc:TAX_FILE")!;
     expect(tax.state).toBe("NOT_STARTED");
     expect(tax.actionHe).toBe("עוד לא הועלה.");
+    expect(verificationStepsFor(application({ documents: [{ kind: "TAX_FILE", status: "PENDING" }] })).find((s) => s.id === "doc:TAX_FILE")?.state).toBe("IN_REVIEW");
+    // The ID and the face are the identity check now, not two documents.
+    expect(steps.some((s) => s.id === "doc:GOVERNMENT_ID" || s.id === "doc:SELFIE")).toBe(false);
+  });
+
+  describe("the identity check is one step, read from the current check", () => {
+    const identity = (status: string | null, reasonHe: string | null = null) => {
+      const view = application({ identity: status ? { id: "iv1", status, submittedAt: "2026-10-02T10:00:00Z", reasonHe } : null });
+      return verificationStepsFor(view).find((s) => s.id === "identity")!;
+    };
+    it("is first, and titled זהות", () => {
+      expect(steps[0]).toMatchObject({ id: "identity", titleHe: "זהות" });
+    });
+    it("none yet: to do", () => {
+      expect(identity(null).state).toBe("NOT_STARTED");
+    });
+    it("sent, a person is looking: in review", () => {
+      expect(identity("MANUAL_REVIEW").state).toBe("IN_REVIEW");
+    });
+    it("approved: done", () => {
+      expect(identity("VERIFIED").state).toBe("VERIFIED");
+    });
+    it("a retake asked for: to do, with the reviewer's reason", () => {
+      const s = identity("RETAKE_REQUESTED", "התעודה מטושטשת");
+      expect(s.state).toBe("NOT_STARTED");
+      expect(s.actionHe).toContain("התעודה מטושטשת");
+    });
+    it("refused: to do, with the reason", () => {
+      const s = identity("REJECTED", "התעודה לא בתוקף");
+      expect(s.state).toBe("NOT_STARTED");
+      expect(s.actionHe).toContain("התעודה לא בתוקף");
+    });
   });
 
   it("names each requirement once, by its document name, with the services it holds back", () => {

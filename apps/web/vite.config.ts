@@ -54,6 +54,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html}", "icons/*.png"],
+        // The identity check's face runtime (public/face/) loads only on that screen, never precached.
+        globIgnores: ["face/**"],
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,

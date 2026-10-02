@@ -27,10 +27,11 @@ export function proPageFromPath(pathname: string): ProPage {
   return PRO_TABS.find((t) => t.path === path)?.key ?? "shift";
 }
 
-/** The account documents everyone gives (ProJoin's documents step). */
-export const ACCOUNT_DOCS: ReadonlyArray<{ kind: "GOVERNMENT_ID" | "SELFIE" | "TAX_FILE"; labelHe: string; noteHe: string }> = [
-  { kind: "GOVERNMENT_ID", labelHe: "תעודת זהות", noteHe: "צילום ברור של שני הצדדים, או של הרישיון" },
-  { kind: "SELFIE", labelHe: "תמונת פנים", noteHe: "כדי לוודא שמי שמגיע הוא מי שנרשם" },
+/**
+ * The account documents everyone gives (ProJoin's documents step). The ID
+ * card and the face are not documents: they are the identity check (docs/10).
+ */
+export const ACCOUNT_DOCS: ReadonlyArray<{ kind: "TAX_FILE"; labelHe: string; noteHe: string }> = [
   { kind: "TAX_FILE", labelHe: "תיק עוסק", noteHe: "אישור עוסק פטור/מורשה או חברה" },
 ];
 
@@ -63,7 +64,20 @@ const ACTION_HE: Partial<Record<VerificationStep["state"], string>> = {
 };
 
 /**
- * "המסמכים שלי": the account documents, then each service requirement once,
+ * The identity check as one step, from the current check only. A retake or a
+ * refusal is something to do, with the reviewer's own words.
+ */
+function identityStep(identity: ProApplicationView["identity"]): VerificationStep {
+  const status = identity?.status ?? null;
+  const state: VerificationStep["state"] = status === "VERIFIED" ? "VERIFIED" : status === "MANUAL_REVIEW" || status === "PENDING" ? "IN_REVIEW" : "NOT_STARTED";
+  const reason = identity?.reasonHe ? `: ${identity.reasonHe}` : "";
+  const actionHe =
+    status === "RETAKE_REQUESTED" ? `ביקשנו לצלם שוב${reason}` : status === "REJECTED" ? `הבקשה לא אושרה${reason}` : state === "NOT_STARTED" ? "עוד לא צולם." : null;
+  return { id: "identity", titleHe: "זהות", explainHe: "תעודת הזהות ושלוש תמונות פנים. אדם מצוות PRO NOW בודק אותן.", state, actionHe, gatesServicesHe: [] };
+}
+
+/**
+ * "המסמכים שלי": the identity check, the account documents, then each service requirement once,
  * with the services it holds back. Every state is the server's; a document
  * the server has never seen is "not started", never assumed.
  */
@@ -102,7 +116,7 @@ export function verificationStepsFor(view: ProApplicationView): VerificationStep
       gatesServicesHe: [...new Set(e.mandatoryFor)],
     };
   });
-  return [...account, ...credentials];
+  return [identityStep(view.identity), ...account, ...credentials];
 }
 
 function requirementsHe(requirements: string[]): string {
