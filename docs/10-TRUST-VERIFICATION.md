@@ -147,8 +147,9 @@ Also part of the flow:
 The reviewer's three actions:
 - **"הזהות אושרה"**: `VERIFIED`, method `MANUAL`.
 - **"צילום מחדש"**, with a reason: the professional sees the reason and
-  retakes. This is the only fix-request in piece 1; piece 2 extends the
-  loop to every item.
+  retakes. This is the only fix-request in piece 1. Since piece 2 it is the
+  `IDENTITY` mark in a review round, sent with the other marks (§Review
+  loop below), not an immediate action.
 - **"סירוב"**, reason required: final.
 
 **What customers see.**
@@ -200,6 +201,152 @@ The reviewer's three actions:
 **Not in this piece.** The vendor itself (TBD). The fix-request loop for
 documents, services and the photo (piece 2). Expiry warnings and re-approval
 rules (piece 3).
+
+## Review loop: asking for fixes (pilot design, 2026-10-02)
+
+Approved by Dvir on 2026-10-02. This is piece 2 of 3 (piece 1: the identity
+check above; piece 3: expiry warnings and re-approval rules).
+
+**Why.** Before this, a reviewer could only approve or refuse the whole
+account, verify or reject a licence, or disable a service. Reasons stayed in
+`audit_logs`, the photo and the details had no decision at all, and the
+professional was never told anything. A pilot with real professionals needs
+the reviewer to point at exactly what is wrong, with a reason the
+professional sees, and the professional to fix only that and resend.
+
+**Decisions.**
+- **One batch per round** (Dvir). The reviewer marks items while reviewing,
+  then sends them all at once. The professional gets one notice.
+- **What is approved stays approved.** A round only touches the items marked
+  in it.
+- **Refusal stays separate and final.** Refusing the account, a service or
+  identity is not part of a round.
+- **The identity "retake" joins the round.** Its immediate action is
+  removed; approve and refuse stay immediate.
+
+### Item names
+Every item has one stable name, used by requests, fixes and "what changed":
+
+| Name | Covers |
+|---|---|
+| `IDENTITY` | the identity check |
+| `DETAILS` | names, form of address, date of birth, business and tax status |
+| `AREA` | home and radius |
+| `PORTRAIT` | the photo or trade character |
+| `SHOP` | sign, colour, logo |
+| `DOCUMENT:TAX_FILE` | the account document |
+| `CREDENTIAL:<serviceId>:<requirement>` | a licence or certificate |
+| `SERVICE:<serviceId>` | a service applied for, and its price |
+
+### The reviewer (application card in `/admin`)
+- **Marking.** Every item has **"בקשת תיקון"**. It takes a reason of at
+  least 3 characters and marks the item **"לתיקון: <reason>"**. The mark is
+  a draft and can be cancelled.
+- **Approving** still works per item. Approving an item that has an open
+  request cancels the request.
+- **Sending.** **"החזרה לתיקון (N)"** sends every marked item as one round.
+  It is disabled with nothing marked.
+- **No account approval during a round.** The server refuses it while a
+  round is waiting for fixes.
+- **The returned application** comes back to the queue showing, per item,
+  **"תוקן"** with the original reason. Items changed outside the requests
+  are flagged **"השתנה"**, and earlier rounds are listed below the current
+  one.
+
+### The professional
+- **The notice.** One inbox notice plus a push, linking to the application
+  page: "יש כמה דברים לתקן בבקשה".
+- **The application page** opens with **"צריך לתקן N דברים"** and the list.
+  Each entry shows the reason and a **"לתקן ›"** button into the right step
+  of the join: identity/documents, services, prices, photo or details.
+- **Counting a fix.** An item counts as fixed when it really changes (a new
+  upload, a different value). The server marks it. There is no "fixed"
+  button.
+- **Resending.** **"שליחה מחדש"** is enabled once every request is fixed,
+  and the server enforces it.
+- **Other edits.** The professional may also edit other parts of the
+  application. Those are flagged "השתנה" for the reviewer.
+
+### Data (one migration)
+- **`review_rounds`:** `professionalId`, `createdById`,
+  `status` `DRAFT | SENT | ANSWERED`, `sentAt`, `answeredAt`. A partial
+  unique index allows at most one `DRAFT` per professional.
+- **`fix_requests`:** `roundId`, `professionalId`, `itemKey`, `reasonHe`,
+  `status` `OPEN | FIXED | CANCELLED`, `fixedAt`.
+- **`VerificationStatus` gains `CHANGES_REQUESTED`.** Sending a round sets
+  it, which takes the application out of the queue (the queue lists
+  `SERVICE_REVIEW`). Resending sets `SERVICE_REVIEW` again.
+
+### API
+**Admin** (every endpoint ADMIN-only and written to `audit_logs`):
+- **Mark an item:** `{ itemKey, reasonHe }`. It goes into the draft round,
+  created if needed. The server checks that the item exists in this
+  application. Marking is allowed only while the account is in
+  `SERVICE_REVIEW`.
+- **Cancel a draft mark.**
+- **Send the round.** One transaction:
+  - the round becomes `SENT`;
+  - the account becomes `CHANGES_REQUESTED`;
+  - an `IDENTITY` request sets the current check to `RETAKE_REQUESTED` and
+    deletes its photos (piece 1's path);
+  - the inbox notice is stored.
+
+  The push goes out after commit; a push failure is logged and does not
+  undo the round. Sending with no marks is refused.
+- **`GET /v1/admin/professionals/:id`** adds the draft marks, the current
+  round's requests (open or fixed, with reasons), earlier rounds, and the
+  items changed since the last submission.
+- **`POST /v1/admin/identity/:id/decision`** keeps `APPROVE` and `REJECT`.
+  `RETAKE` becomes the `IDENTITY` mark.
+
+**Professional:**
+- **One helper inside every save endpoint** (details/business, area,
+  documents, credentials, services and pricing, portrait, shop, identity).
+  When the item really changed, it marks the item's `OPEN` request `FIXED`
+  and writes `PRO_APPLICATION_ITEM_CHANGED` with the item name to
+  `audit_logs`.
+  - Uploads always count as changed.
+  - Value fields are compared before and after.
+  - Removing an item resolves its request; the reviewer sees "הוסר".
+- **`ProApplicationView` adds `fixRequests: [{ itemKey, reasonHe, status }]`**
+  for the current round.
+- **`POST /v1/pro/application/submit`** is refused with
+  `409 FIXES_OPEN { open: [...] }` while a request is open. On success it
+  closes the round as `ANSWERED`.
+- **"What changed"** is read from `audit_logs` since the last submission. No
+  extra storage, and it stays the professional's single timeline.
+
+**Concurrency.** Mark, send, every fix and resend take the same row lock on
+the professional's profile as piece 1, and re-read inside the transaction.
+
+### Edge cases
+- **A marked item is approved or refused** by another reviewer: its mark is
+  cancelled.
+- **The application is not in review** (a professional still on a first
+  draft): marking is refused.
+- **A changed approved item** is only flagged "השתנה". Whether it loses its
+  approval is piece 3.
+- **Several rounds** on one application are allowed and all are kept.
+- **Applicants in `DRAFT` from an older full refusal** are untouched. They
+  resend as before.
+
+### Tests
+- **Unit:**
+  - item names: building them and checking one exists in an application;
+  - the "really changed" comparison per value type;
+  - round states: send needs marks; answer needs no open requests.
+- **Integration:**
+  - mark then send → `CHANGES_REQUESTED`, out of the queue, an inbox notice;
+  - an `IDENTITY` mark → retake requested and photos deleted;
+  - each save endpoint fixes its own item, and an unchanged save fixes
+    nothing;
+  - resend refused with `FIXES_OPEN`, then accepted and back in the queue;
+  - approving cancels a mark;
+  - a send racing with a fix;
+  - every new admin endpoint is admin-only and audited.
+- **End to end:** a reviewer marks the tax file and the photo and sends. The
+  professional sees "צריך לתקן 2 דברים" with both reasons, fixes both
+  through "לתקן ›" and resends. The reviewer sees "תוקן" twice and approves.
 
 ## Customer-facing trust badges (factual only)
 `זהות אומתה` · `עסק אומת` · `רישיון מקצועי אומת` (where applicable) ·
