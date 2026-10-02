@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { scale } from "@pro-now/demo-ui";
+import { loadFaceSense, readImage, readVideo, STRAIGHT, TURNED } from "./faceSense";
 
 /*
  * IDENTITY CHECK — the ID card, then the face, then the match.
@@ -31,6 +32,7 @@ const TURNS = [
   { he: "ועכשיו שמאלה", arrow: "←" },
 ] as const;
 const TURN_MS = 1700;
+const FACE_STEPS = ["מביטים ישר", "מסובבים את הראש ימינה", "ועכשיו שמאלה"];
 
 const CORAL = "#FF6B4A";
 const GREEN = "#2FBF8A";
@@ -51,17 +53,30 @@ const CSS = `
 export function IdentityCheck({
   nameHe,
   onPickFile,
+  onTakeSelfie,
   onDone,
 }: {
   nameHe: string;
   onPickFile: () => Promise<{ uri: string; name: string } | null>;
+  /** The phone's own selfie camera (a file picker with capture="user"): used where a live camera is not allowed. */
+  onTakeSelfie?: () => Promise<{ uri: string; name: string } | null>;
   onDone: (r: IdentityResult) => void;
 }) {
   const [phase, setPhase] = useState<Phase>("id");
   const [idUri, setIdUri] = useState<string | null>(null);
   const [read, setRead] = useState(0);
   const [turn, setTurn] = useState(-1);
-  const [camera, setCamera] = useState<"off" | "on" | "none">("off");
+  /* "on": a live camera, read frame by frame · "photo": the phone's selfie camera, one picture per step ·
+     "none": no face sensing on this device — the move is shown, honestly marked. */
+  const [camera, setCamera] = useState<"off" | "on" | "photo" | "none">("off");
+  const [preparing, setPreparing] = useState(false);
+  /* The real check: 0 straight · 1 one way · 2 the other way · 3 done. */
+  const [step, setStep] = useState(0);
+  const [hint, setHint] = useState<string | null>(null);
+  const [faceSeen, setFaceSeen] = useState(false);
+  const firstSign = useRef(0);
+  const holdSince = useRef<number | null>(null);
+  const [shots, setShots] = useState<string[]>([]);
   const [selfie, setSelfie] = useState<string | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -73,6 +88,10 @@ export function IdentityCheck({
     stream.current = null;
   };
   useEffect(() => stop, []);
+  /* Fetched while the ID card is being photographed, so the face step does not wait. */
+  useEffect(() => {
+    void loadFaceSense();
+  }, []);
 
   /* Reading the card: a sweep, then three lines tick in. */
   useEffect(() => {
@@ -87,21 +106,8 @@ export function IdentityCheck({
 
   /* The turns: straight, right, left — each fills a third of the ring. */
   useEffect(() => {
-    if (phase !== "face" || turn < 0) return;
+    if (phase !== "face" || turn < 0 || camera !== "none") return;
     if (turn >= TURNS.length) {
-      const v = video.current;
-      if (v && camera === "on" && v.videoWidth) {
-        const c = document.createElement("canvas");
-        c.width = 360;
-        c.height = Math.round((360 * v.videoHeight) / v.videoWidth);
-        const g = c.getContext("2d");
-        if (g) {
-          g.translate(c.width, 0);
-          g.scale(-1, 1);
-          g.drawImage(v, 0, 0, c.width, c.height);
-          setSelfie(c.toDataURL("image/jpeg", 0.85));
-        }
-      }
       stop();
       setPhase("match");
       return;
@@ -125,7 +131,22 @@ export function IdentityCheck({
     setPhase("reading");
   };
 
+  const finishFace = (selfieUri: string | null) => {
+    stop();
+    setSelfie(selfieUri);
+    setTimeout(() => setPhase("match"), 900);
+  };
+
   const openCamera = async () => {
+    setPreparing(true);
+    const lm = await loadFaceSense();
+    if (!lm) {
+      /* No face sensing here: the old guided move, said plainly. */
+      setPreparing(false);
+      setCamera("none");
+      setTimeout(() => setTurn(0), 500);
+      return;
+    }
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 640 }, audio: false });
       stream.current = s;
@@ -137,9 +158,86 @@ export function IdentityCheck({
         }
       }, 0);
     } catch {
-      setCamera("none");
+      /* No live camera in this page (the demo's host does not allow it): the phone's selfie camera, one picture per step. */
+      setCamera("photo");
     }
-    setTimeout(() => setTurn(0), 700);
+    setPreparing(false);
+  };
+
+  /* LIVE: read the face a few times a second; each step must hold for a moment. */
+  useEffect(() => {
+    if (phase !== "face" || camera !== "on" || step >= 3) return;
+    let alive = true;
+    let raf = 0;
+    let last = 0;
+    const tick = async (now: number) => {
+      if (!alive) return;
+      const v = video.current;
+      const lm = await loadFaceSense();
+      if (lm && v && v.readyState >= 2 && now - last > 90) {
+        last = now;
+        const r = await readVideo(lm, v, now);
+        setFaceSeen(r.found);
+        const want = step === 0 ? r.found && Math.abs(r.turn) < STRAIGHT : step === 1 ? r.found && Math.abs(r.turn) > TURNED : r.found && Math.abs(r.turn) > TURNED && Math.sign(r.turn) === -firstSign.current;
+        setHint(!r.found ? "לא רואים פנים — הביטו למצלמה" : r.size < 0.22 ? "התקרבו קצת למצלמה" : null);
+        if (want) {
+          holdSince.current ??= now;
+          if (now - holdSince.current > (step === 0 ? 600 : 350)) {
+            holdSince.current = null;
+            if (step === 1) firstSign.current = Math.sign(r.turn);
+            if (step === 2) {
+              const c = document.createElement("canvas");
+              c.width = 360;
+              c.height = Math.round((360 * v.videoHeight) / v.videoWidth);
+              const g = c.getContext("2d");
+              if (g) {
+                g.translate(c.width, 0);
+                g.scale(-1, 1);
+                g.drawImage(v, 0, 0, c.width, c.height);
+              }
+              setStep(3);
+              finishFace(g ? c.toDataURL("image/jpeg", 0.85) : null);
+              return;
+            }
+            setStep((n) => n + 1);
+          }
+        } else holdSince.current = null;
+      }
+      raf = requestAnimationFrame((t) => void tick(t));
+    };
+    raf = requestAnimationFrame((t) => void tick(t));
+    return () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [phase, camera, step]);
+
+  /* PHOTO: the phone's selfie camera, then the same reading on the picture. */
+  const shootSelfie = async () => {
+    const pick = onTakeSelfie ?? onPickFile;
+    const f = await pick();
+    if (!f) return;
+    setPreparing(true);
+    const lm = await loadFaceSense();
+    const r = lm ? await readImage(lm, f.uri) : null;
+    setPreparing(false);
+    if (!r || !r.found) {
+      setHint("לא זיהינו פנים בתמונה — נסו שוב, מול האור");
+      return;
+    }
+    const ok = step === 0 ? Math.abs(r.turn) < STRAIGHT * 1.5 : step === 1 ? Math.abs(r.turn) > TURNED : Math.abs(r.turn) > TURNED && Math.sign(r.turn) === -firstSign.current;
+    if (!ok) {
+      setHint(step === 0 ? "הביטו ישר למצלמה וצלמו שוב" : step === 1 ? "סובבו את הראש עוד קצת ימינה וצלמו שוב" : "עכשיו לצד השני — שמאלה — וצלמו שוב");
+      return;
+    }
+    setHint(null);
+    if (step === 1) firstSign.current = Math.sign(r.turn);
+    const next = [...shots, f.uri];
+    setShots(next);
+    if (step === 2) {
+      setStep(3);
+      finishFace(next[0] ?? f.uri);
+    } else setStep((n) => n + 1);
   };
 
   const first = nameHe.trim() || "השם שלך";
@@ -200,20 +298,31 @@ export function IdentityCheck({
 
       {phase === "face" ? (
         <div style={{ animation: "pnIdIn .35s ease both", textAlign: "center" }}>
-          <div style={{ fontSize: scale.section, fontWeight: 900 }}>{turn < 0 ? "עכשיו הפנים" : TURNS[Math.min(turn, TURNS.length - 1)]!.he}</div>
-          <div style={{ fontSize: scale.meta, color: "rgba(247,243,250,.72)", marginTop: 4 }}>{turn < 0 ? "מתאימים אותך לתמונה שבתעודה" : "לאט, בלי למהר"}</div>
+          <div style={{ fontSize: scale.section, fontWeight: 900 }}>
+            {camera === "off" ? "עכשיו הפנים" : camera === "none" ? (turn < 0 ? "עכשיו הפנים" : TURNS[Math.min(turn, TURNS.length - 1)]!.he) : step >= 3 ? "הפנים זוהו" : FACE_STEPS[step]}
+          </div>
+          <div style={{ fontSize: scale.meta, color: hint ? CORAL : "rgba(247,243,250,.72)", marginTop: 4, minHeight: 20, fontWeight: hint ? 800 : 400 }}>
+            {camera === "off" ? "סריקה קצרה: ישר, ימינה ושמאלה" : hint ?? (camera === "photo" ? "צילום אחד לכל כיוון" : camera === "on" ? "לאט, בלי למהר" : "לאט, בלי למהר")}
+          </div>
           <div style={{ position: "relative", margin: "18px auto 0", width: 220, height: 220 }}>
-            {/* The ring fills a third per turn. */}
+            {/* Three arcs: one per check, each turning green when the face did it. */}
             <svg width="220" height="220" viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, transform: "rotate(-90deg)" }} aria-hidden>
-              <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="3" />
-              <circle cx="50" cy="50" r="47" fill="none" stroke={turn >= TURNS.length - 1 ? GREEN : CORAL} strokeWidth="3" strokeLinecap="round" strokeDasharray="295.3" strokeDashoffset={295.3 * (1 - Math.max(0, Math.min(TURNS.length, turn + 1)) / TURNS.length)} style={{ transition: `stroke-dashoffset ${TURN_MS}ms linear, stroke .3s` }} />
+              {[0, 1, 2].map((k) => {
+                const done = camera === "none" ? turn > k : step > k;
+                const now = camera === "none" ? turn === k : step === k;
+                return (
+                  <circle key={k} cx="50" cy="50" r="47" fill="none" stroke={done ? GREEN : now ? CORAL : "rgba(255,255,255,.12)"} strokeWidth="3.4" strokeLinecap="round"
+                    strokeDasharray={`${295.3 / 3 - 6} ${295.3}`} strokeDashoffset={-(295.3 / 3) * k} style={{ transition: "stroke .35s" }} />
+                );
+              })}
             </svg>
-            <div style={{ position: "absolute", inset: 12, borderRadius: "50%", overflow: "hidden", background: "radial-gradient(circle at 50% 40%, #3a2a4a, #15101d)" }}>
+            <div style={{ position: "absolute", inset: 12, borderRadius: "50%", overflow: "hidden", background: "radial-gradient(circle at 50% 40%, #3a2a4a, #15101d)", boxShadow: camera === "on" && faceSeen ? `0 0 0 3px ${GREEN}55, 0 0 28px ${GREEN}55` : "none", transition: "box-shadow .3s" }}>
               {camera === "on" ? (
                 <video ref={video} playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }} />
+              ) : camera === "photo" && shots.length > 0 ? (
+                <img src={shots[shots.length - 1]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               ) : (
-                /* No camera here (or not allowed): a face outline shows the move instead. */
-                <svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden style={{ animation: turn === 1 ? `pnIdTurnR ${TURN_MS}ms ease-in-out` : turn === 2 ? `pnIdTurnL ${TURN_MS}ms ease-in-out` : undefined }}>
+                <svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden style={{ animation: camera === "none" && turn === 1 ? `pnIdTurnR ${TURN_MS}ms ease-in-out` : camera === "none" && turn === 2 ? `pnIdTurnL ${TURN_MS}ms ease-in-out` : undefined }}>
                   <ellipse cx="50" cy="46" rx="22" ry="28" fill="none" stroke="rgba(247,243,250,.55)" strokeWidth="2" />
                   <circle cx="42" cy="42" r="2.4" fill="rgba(247,243,250,.7)" />
                   <circle cx="58" cy="42" r="2.4" fill="rgba(247,243,250,.7)" />
@@ -221,15 +330,36 @@ export function IdentityCheck({
                   <path d="M22 100 Q50 72 78 100" fill="none" stroke="rgba(247,243,250,.4)" strokeWidth="2" />
                 </svg>
               )}
+              {step >= 3 ? (
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,11,23,.45)" }}>
+                  <div style={{ width: 72, height: 72, borderRadius: 36, background: GREEN, display: "flex", alignItems: "center", justifyContent: "center", fontSize: scale.title, fontWeight: 900, color: "#fff", animation: "pnIdPop .45s ease both" }}>✓</div>
+                </div>
+              ) : null}
             </div>
-            {turn >= 1 && turn < TURNS.length ? (
+            {/* Which way to turn, while it is being asked. */}
+            {(camera === "on" || camera === "photo") && (step === 1 || step === 2) ? (
+              <div aria-hidden style={{ position: "absolute", top: "42%", [step === 1 ? "right" : "left"]: -30, fontSize: scale.title, fontWeight: 900, color: CORAL, animation: `${step === 1 ? "pnIdNudgeR" : "pnIdNudgeL"} .7s ease-in-out infinite` }}>{step === 1 ? "→" : "←"}</div>
+            ) : camera === "none" && turn >= 1 && turn < TURNS.length ? (
               <div aria-hidden style={{ position: "absolute", top: "42%", [turn === 1 ? "right" : "left"]: -30, fontSize: scale.title, fontWeight: 900, color: CORAL, animation: `${turn === 1 ? "pnIdNudgeR" : "pnIdNudgeL"} .7s ease-in-out infinite` }}>{TURNS[turn]!.arrow}</div>
             ) : null}
           </div>
-          {turn < 0 ? (
-            <button type="button" onClick={openCamera} style={btn}>פתיחת המצלמה</button>
+          {/* The three checks, ticked as they pass. */}
+          {camera === "on" || camera === "photo" ? (
+            <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 14 }}>
+              {["ישר", "ימינה", "שמאלה"].map((w, k) => (
+                <div key={w} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: scale.meta, fontWeight: 800, color: step > k ? GREEN : step === k ? INK : "rgba(247,243,250,.45)" }}>
+                  <span style={{ width: 20, height: 20, borderRadius: 10, display: "inline-flex", alignItems: "center", justifyContent: "center", background: step > k ? GREEN : "rgba(255,255,255,.1)", color: "#fff", fontSize: scale.micro }}>{step > k ? "✓" : k + 1}</span>
+                  {w}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {camera === "off" ? (
+            <button type="button" onClick={openCamera} disabled={preparing} style={{ ...btn, opacity: preparing ? 0.6 : 1 }}>{preparing ? "מכינים את הסריקה…" : "פתיחת המצלמה"}</button>
+          ) : camera === "photo" && step < 3 ? (
+            <button type="button" onClick={shootSelfie} disabled={preparing} style={{ ...btn, opacity: preparing ? 0.6 : 1 }}>{preparing ? "בודקים את התמונה…" : step === 0 ? "צילום — מביטים ישר" : step === 1 ? "צילום — ראש ימינה" : "צילום — ראש שמאלה"}</button>
           ) : camera === "none" ? (
-            <div style={{ fontSize: scale.micro, color: "rgba(247,243,250,.55)", marginTop: 14 }}>המצלמה לא זמינה כאן — מראים את התנועה</div>
+            <div style={{ fontSize: scale.micro, color: "rgba(247,243,250,.55)", marginTop: 14 }}>סריקת הפנים לא זמינה במכשיר הזה — מראים את התנועה</div>
           ) : null}
         </div>
       ) : null}
@@ -249,7 +379,7 @@ export function IdentityCheck({
         </div>
       ) : null}
 
-      <div style={{ fontSize: scale.micro, color: "rgba(247,243,250,.45)", textAlign: "center", marginTop: 18 }}>בהדגמה הקריאה וההתאמה מדומות · שום תמונה לא יוצאת מהטלפון</div>
+      <div style={{ fontSize: scale.micro, color: "rgba(247,243,250,.45)", textAlign: "center", marginTop: 18 }}>זיהוי הפנים רץ בטלפון עצמו · ההתאמה לתעודה בהדגמה מדומה · שום תמונה לא יוצאת מהטלפון</div>
     </div>
   );
 }

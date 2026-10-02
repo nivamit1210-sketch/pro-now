@@ -19,7 +19,7 @@ const FILE = new URL(process.env.PHOTO || '../public/world/avatar_01_portrait.we
 p.on('filechooser', async (fc) => { await fc.setFiles(FILE).catch(() => {}); });
 let fails = 0; const check = (name, ok) => { if (!ok) fails++; console.log((ok ? 'PASS  ' : 'FAIL  ') + name); };
 const shot = (n) => p.screenshot({ path: `out/fp_${n}.png` });
-await p.goto('http://127.0.0.1:4421/?time=night'); await p.locator('text=אני צריך מקצוען').first().waitFor();
+await p.goto(process.env.URL0 || 'http://127.0.0.1:4421/?time=night'); await p.locator('text=אני צריך מקצוען').first().waitFor();
 await press(/^אני צריך מקצוען/); await p.getByLabel('מספר טלפון').fill('0501234567'); await press(/^שליחת קוד/); await p.getByLabel('קוד האימות').fill('123456'); await press(/^כניסה/);
 await press(/^דילוג על ההסבר/); await press(/^דמות 1$/); await press(/^(אישור הדמות|זו אני)/);
 await setAddress(p, press, { forName: 'סבא יוסף' }); console.log('✓ address for grandpa');

@@ -1124,7 +1124,7 @@ export function App() {
             editing={Boolean(gate.approved)}
             shopFor={onboardShopFor}
             onPickFile={pickLocalFile}
-            renderIdentity={({ nameHe, done }) => <IdentityCheck nameHe={nameHe} onPickFile={pickIdPhoto} onDone={done} />}
+            renderIdentity={({ nameHe, done }) => <IdentityCheck nameHe={nameHe} onPickFile={pickIdPhoto} onTakeSelfie={pickSelfie} onDone={done} />}
             renderShopPreview={(d) => (
               <FacadeWithSign
                 facadeUri={onboardShopFor(d.serviceId).facadeUri}
@@ -1748,14 +1748,21 @@ const voiceRecorder = (() => {
       }),
   };
 })();
+/* The face: straight to the front (selfie) camera on a phone. */
+function pickSelfie(): Promise<{ uri: string; name: string } | null> {
+  return pickPhoto("user");
+}
 /* The ID card: straight to the back camera on a phone (a computer offers its file picker). */
 function pickIdPhoto(): Promise<{ uri: string; name: string } | null> {
+  return pickPhoto("environment");
+}
+function pickPhoto(capture: "user" | "environment"): Promise<{ uri: string; name: string } | null> {
   return new Promise((resolve) => {
     if (typeof document === "undefined") return resolve(null);
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.setAttribute("capture", "environment");
+    input.setAttribute("capture", capture);
     /* In the page, not floating: iPhone Safari sometimes drops the choice of a picker that is not
        attached to the document — the photo "did not load" (Amit, 2026-10-01). */
     input.style.position = "fixed";

@@ -5,13 +5,14 @@
   "description": "Developer-only gallery that renders the demo's own copy of the UI (lib/ui) in a browser via react-native-web. Not a shipping target.",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "node scripts/face-runtime.mjs && vite",
+    "build": "node scripts/face-runtime.mjs && vite build",
     "preview": "vite preview --port 4173",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
     "@pro-now/demo-types": "*",
     "@pro-now/demo-ui": "*",
     "@types/three": "^0.160.0",
