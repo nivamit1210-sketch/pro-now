@@ -11,15 +11,16 @@ import { useKeyboardCover } from "./keyboard";
  * on a laptop, with the connection banner laid out above the screen rather
  * than over it. Every screen reads its size from here.
  */
-const FrameContext = createContext({ width: 390, height: 780 });
+/** `typing`: the on-screen keyboard is up, so the screen is the strip above it (keyboard.ts). */
+const FrameContext = createContext({ width: 390, height: 780, typing: false });
 
 export const useFrame = () => useContext(FrameContext);
 
 /** The frame for whatever sits under a bar the caller draws: same width, the height left. */
 export function SubFrame({ height, children }: { height: number; children: ReactNode }) {
-  const { width } = useFrame();
+  const { width, typing } = useFrame();
   return (
-    <FrameContext.Provider value={{ width, height }}>
+    <FrameContext.Provider value={{ width, height, typing }}>
       <View style={{ width, height, overflow: "hidden" }}>{children}</View>
     </FrameContext.Provider>
   );
@@ -73,6 +74,21 @@ export function Frame({ children }: { children: ReactNode }) {
    * app's to give back, so that is added back before subtracting.
    */
   const keyboard = useKeyboardCover();
+  const typing = keyboard > 0;
+  /*
+   * The field stays in sight. The screen shrinks to the strip above the
+   * keyboard after the field was focused, so whatever scrolled it into view
+   * then measured the old, taller screen; once the strip is laid out, the
+   * focused field is brought into it.
+   */
+  useEffect(() => {
+    if (!typing) return;
+    const t = setTimeout(() => {
+      const el = document.activeElement;
+      if (el instanceof HTMLElement && el !== document.body) el.scrollIntoView({ block: "nearest" });
+    }, 60);
+    return () => clearTimeout(t);
+  }, [typing]);
   const bottomPad = keyboard > 0 ? safeAreaBottom() : 0;
   const pageH = measuredH ?? windowH;
   const height = keyboard > 0 ? Math.max(200, pageH + bottomPad - keyboard) : pageH;
@@ -84,7 +100,7 @@ export function Frame({ children }: { children: ReactNode }) {
   }, [connection]);
 
   return (
-    <FrameContext.Provider value={{ width: w, height: height - bannerH }}>
+    <FrameContext.Provider value={{ width: w, height: height - bannerH, typing }}>
       <View
         style={[styles.root, { backgroundColor: customerDarkTheme.colors.bg }]}
         onLayout={(e) => setMeasuredH(Math.round(e.nativeEvent.layout.height))}

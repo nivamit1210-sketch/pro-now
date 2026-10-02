@@ -148,6 +148,13 @@ export interface DescribeFaultBodyProps {
   onTogglePick?: (id: string) => void;
   width?: number;
   height?: number;
+  /**
+   * The on-screen keyboard is up. On a phone that leaves a strip of about
+   * 300 px, and the send panel alone would cover the field being typed in
+   * (an iPhone recording, 2026-10-02) — so the panel steps aside until the
+   * keyboard closes, and sending is one tap after "✓".
+   */
+  typing?: boolean;
 }
 
 export function DescribeFaultBody({
@@ -175,6 +182,7 @@ export function DescribeFaultBody({
   onSend,
   onBack,
   livePriceHe = null,
+  typing = false,
   detailsNoteHe = null,
   voiceExampleHe = null,
   priceList,
@@ -436,6 +444,7 @@ export function DescribeFaultBody({
         </View>
       </ScrollView>
 
+      {typing ? null : (
       <View style={styles.cta}>
         {livePriceHe ? (
           <View style={styles.livePrice} accessibilityLiveRegion="polite">
@@ -465,6 +474,7 @@ export function DescribeFaultBody({
               : "התיאור, ההקלטה והתמונות עוזרים למקצוען להגיע מוכן.")}
         </Text>
       </View>
+      )}
     </View>
   );
 }

@@ -197,6 +197,7 @@ export function RequestComposer({ serviceId, media, onBack, onOpenAddresses, onS
             onStopRecord={media.capture.onStopRecord}
             onDeleteVoice={media.capture.onDeleteVoice}
             onSend={() => send()}
+            typing={frame.typing}
             onBack={onBack}
             width={width}
             height={formH}

@@ -60,7 +60,7 @@ const HOME_SERVICES = [...catalogHomeServices, ...catalogHiddenServices];
 type Tab = "home" | "menu";
 
 export function Home() {
-  const { width, height } = useFrame();
+  const { width, height, typing } = useFrame();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   // The job screens' header opens this menu (WithHeader).
@@ -132,7 +132,15 @@ export function Home() {
     setComposing(false);
     setRequestServiceId(null);
   };
-  const bodyH = height - HEADER_H - (active ? CAPSULE_HEIGHT : 0);
+  /*
+   * Typing, the screen is the strip above the keyboard, and the field being
+   * typed in needs all of it: the header and the live job's capsule step
+   * aside until the keyboard closes (an iPhone recording, 2026-10-02: the capsule and the
+   * form's send panel covered the text box).
+   */
+  const showCapsule = Boolean(active) && !typing;
+  const headerH = typing ? 0 : HEADER_H;
+  const bodyH = height - headerH - (showCapsule ? CAPSULE_HEIGHT : 0);
 
   const queryClient = useQueryClient();
   const signOut = () => signOutHere(queryClient, () => navigate("/welcome", { replace: true }));
@@ -140,7 +148,9 @@ export function Home() {
   return (
     <View style={{ width, height }}>
       {/* The same button closes the menu again, as in the demo. */}
-      <AppHeader width={width} greetingHe={null} avatarUri={avatarUri} onMenu={() => setTab(tab === "menu" ? "home" : "menu")} onAccount={() => navigate("/avatar")} />
+      {typing ? null : (
+        <AppHeader width={width} greetingHe={null} avatarUri={avatarUri} onMenu={() => setTab(tab === "menu" ? "home" : "menu")} onAccount={() => navigate("/avatar")} />
+      )}
       <View style={{ height: bodyH, overflow: "hidden" }}>
         {tab === "menu" ? (
           <AppMenuBody
@@ -303,7 +313,7 @@ export function Home() {
           />
         )}
       </View>
-      {active ? (
+      {active && showCapsule ? (
         <ActiveJobCapsule
           textHe={`${active.serviceNameHe} · ${ACTIVE_LABEL_HE[active.status] ?? "בטיפול"}`}
           etaMinutes={trip?.etaMinutes ?? null}
