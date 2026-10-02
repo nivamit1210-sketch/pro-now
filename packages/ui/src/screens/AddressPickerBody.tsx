@@ -437,7 +437,8 @@ export function AddressPickerBody({
                         onRemove(a.id);
                       }}
                       accessibilityRole="button"
-                      accessibilityLabel={`הסרת הכתובת ${a.labelHe}`}
+                      // The address too: unlabelled rows all read "כתובת", and a screen reader must tell them apart.
+                      accessibilityLabel={`הסרת הכתובת ${a.labelHe} · ${a.formattedHe}`}
                       hitSlop={8}
                       style={styles.remove}
                     >
