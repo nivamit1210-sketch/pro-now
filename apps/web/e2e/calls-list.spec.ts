@@ -45,8 +45,13 @@ test("a customer's job in the calls list, live, waiting for stars, then closed",
     await openCalls(page);
     await expect(page.getByText("עכשיו", { exact: true })).toBeVisible();
     await expect(page.getByText("הזמנה אחת פעילה")).toBeVisible();
-    const live = page.getByRole("button", { name: /^הזמנה 1 מתוך 1: .*, דנה, בדרך$/ });
+    // On the way: the server's ETA in minutes, as on home's capsule (the demo's "14 דק׳").
+    const live = page.getByRole("button", { name: /^הזמנה 1 מתוך 1: .*, דנה, בדרך, \d+ דקות$/ });
     await expect(live).toBeVisible();
+    const minutes = Number((await live.getAttribute("aria-label"))!.match(/(\d+) דקות$/)![1]);
+    expect(minutes).toBeGreaterThanOrEqual(1);
+    await expect(live.getByText(String(minutes), { exact: true })).toBeVisible();
+    await expect(live.getByText("דק׳", { exact: true })).toBeVisible();
     await shot("calls-live");
     await live.click();
     await expect(page).toHaveURL(new RegExp(`/jobs/${jobId}$`));
@@ -62,6 +67,8 @@ test("a customer's job in the calls list, live, waiting for stars, then closed",
     await openCalls(page);
     await expect(page.getByText("ממתין לך")).toBeVisible();
     await expect(page.getByText("עכשיו", { exact: true })).toHaveCount(0);
+    // Nobody on the way any more: no minutes.
+    await expect(page.getByText("דק׳", { exact: true })).toHaveCount(0);
     await shot("calls-needs-rating");
     await page.getByRole("button", { name: "דירוג המקצוען" }).click();
     await expect(page).toHaveURL(new RegExp(`/jobs/${jobId}$`));
