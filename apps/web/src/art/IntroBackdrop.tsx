@@ -5,13 +5,11 @@
  * person, no rating, no invented supply.
  */
 import { scale } from "@pro-now/ui";
-import { isDaytime } from "./CityHero";
-import { StreetScene } from "./WelcomeScene";
+import { WelcomeScene } from "./WelcomeScene";
 
-const cityBg = () =>
-  isDaytime()
-    ? { src: "/world/splash_city_day.webp", pos: "50% 40%" }
-    : { src: "/world/splash_city.webp", pos: "64% 50%" };
+/* The evening city in both modes, as in the demo (CITY_BG): the daytime
+   render was the foggy one (Amit's UX audit). */
+const cityBg = () => ({ src: "/world/splash_city.webp", pos: "64% 50%" });
 
 export function IntroBackdrop({ slide, side = "customer" }: { slide: number; side?: "customer" | "pro" }) {
   if (side === "pro") {
@@ -21,14 +19,15 @@ export function IntroBackdrop({ slide, side = "customer" }: { slide: number; sid
        what it says (demo 19d78e1, docs/DEMO-SYNC.md, 2026-10-01 P1). */
     if (slide === 2) return <ProOfferScene />;
     if (slide === 3) return <ProPricesScene />;
-    return <StreetScene />;
+    /* "הרחוב הזה הוא גם שלך": the same living street of shops. */
+    return <WelcomeScene />;
   }
   if (slide === 1) return <AvatarsLineup />;
   if (slide === 2) return <ProsLineup />;
   if (slide === 3) return <TrustCard />;
   if (slide === 4) return <FamilyScene />;
-  /* "A whole city", from inside one of its streets. */
-  return <StreetScene />;
+  /* "A whole city": our street of shops with their professionals, alive. */
+  return <WelcomeScene />;
 }
 
 function AvatarsLineup() {
