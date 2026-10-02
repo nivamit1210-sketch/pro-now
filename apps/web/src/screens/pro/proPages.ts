@@ -116,7 +116,10 @@ export function verificationStepsFor(view: ProApplicationView): VerificationStep
       gatesServicesHe: [...new Set(e.mandatoryFor)],
     };
   });
-  return [identityStep(view.identity), ...account, ...credentials];
+  // An account approved before the identity check existed is not asked for
+  // one: nobody reviews it until re-verification exists (docs/10).
+  const identity = view.profile.verificationStatus === "APPROVED" && !view.identity ? [] : [identityStep(view.identity)];
+  return [...identity, ...account, ...credentials];
 }
 
 function requirementsHe(requirements: string[]): string {

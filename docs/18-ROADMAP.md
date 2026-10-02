@@ -70,7 +70,10 @@ and tax answer). Photos, voice and text: **decided 4 days** (D3, a
 setting). Error data: follows Sentry's plan. Identity-check photos (ID card,
 face): **decided, kept until the admin's decision on that check, then
 deleted**; the decision record stays (Dvir, 2026-10-02,
-`10-TRUST-VERIFICATION.md §Identity check`).
+`10-TRUST-VERIFICATION.md §Identity check`). Open: how long an identity
+check nobody decides (an abandoned application) keeps its photos; today
+they are kept until a decision. The same question covers the
+`GOVERNMENT_ID`/`SELFIE` document uploads of earlier applicants.
 
 ### Minimum age for a professional
 **18, for now** (Dvir, 2026-10-02). The server enforces it on the date of

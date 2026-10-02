@@ -61,12 +61,24 @@ describe("המסמכים שלי — the server's states, never assumed", () => {
   });
 
   describe("the identity check is one step, read from the current check", () => {
+    // An applicant still in review: the check is theirs to do.
+    const inReview = (over: Partial<ProApplicationView> = {}) => {
+      const base = application();
+      return application({ profile: { ...base.profile, verificationStatus: "SERVICE_REVIEW" }, ...over });
+    };
     const identity = (status: string | null, reasonHe: string | null = null) => {
-      const view = application({ identity: status ? { id: "iv1", status, submittedAt: "2026-10-02T10:00:00Z", reasonHe } : null });
+      const view = inReview({ identity: status ? { id: "iv1", status, submittedAt: "2026-10-02T10:00:00Z", reasonHe } : null });
       return verificationStepsFor(view).find((s) => s.id === "identity")!;
     };
     it("is first, and titled זהות", () => {
-      expect(steps[0]).toMatchObject({ id: "identity", titleHe: "זהות" });
+      expect(verificationStepsFor(inReview())[0]).toMatchObject({ id: "identity", titleHe: "זהות" });
+    });
+    it("an account approved before the check existed is not asked for one (no reviewer queue for it yet)", () => {
+      expect(steps.some((s) => s.id === "identity")).toBe(false);
+    });
+    it("an approved account with a check on file still shows it", () => {
+      const view = application({ identity: { id: "iv1", status: "VERIFIED", submittedAt: "2026-10-02T10:00:00Z", reasonHe: null } });
+      expect(verificationStepsFor(view).find((s) => s.id === "identity")?.state).toBe("VERIFIED");
     });
     it("none yet: to do", () => {
       expect(identity(null).state).toBe("NOT_STARTED");
