@@ -21,9 +21,15 @@ const addressesKey = ["addresses"] as const;
 /** Long enough to skip the letters of a word being typed, short enough to feel instant. */
 const SUGGEST_DEBOUNCE_MS = 150;
 
-export function Addresses() {
+/**
+ * `onDone`: opened over an order in progress (the service page or the form,
+ * as in the demo's AddressLine "שינוי"), confirming or going back returns
+ * there with everything kept. Without it this is the /addresses screen.
+ */
+export function Addresses({ onDone }: { onDone?: () => void } = {}) {
   const { width, height } = useFrame();
   const navigate = useNavigate();
+  const done = () => (onDone ? onDone() : navigate("/", { replace: true }));
   const queryClient = useQueryClient();
   const addresses = useQuery({ queryKey: addressesKey, queryFn: api.getAddresses });
   /*
@@ -68,7 +74,7 @@ export function Addresses() {
     onSuccess: async ({ address }, { result }) => {
       setOrderTarget(address.id, result);
       await queryClient.invalidateQueries({ queryKey: addressesKey });
-      navigate("/", { replace: true });
+      done();
     },
     onError: (error) => {
       setErrorHe(
@@ -123,7 +129,7 @@ export function Addresses() {
       saving={save.isPending}
       errorHe={errorHe}
       onUseLiveLocation={onUseLiveLocation}
-      onBack={() => navigate(-1)}
+      onBack={() => (onDone ? onDone() : navigate(-1))}
       onConfirm={(r) => {
         if (save.isPending) return;
         setErrorHe(null);
@@ -134,7 +140,7 @@ export function Addresses() {
         const { choice } = r;
         if (choice.kind === "saved") {
           setOrderTarget(choice.addressId, r);
-          navigate("/", { replace: true });
+          done();
         } else if (choice.kind === "street") {
           save.mutate({
             input: {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { IL_MOBILE, resolveAddress } from "./orderTarget";
+import { IL_MOBILE, orderAddressHe, resolveAddress } from "./orderTarget";
 
 describe("resolveAddress", () => {
   const list = [{ id: "a" }, { id: "b" }];
@@ -17,5 +17,14 @@ describe("IL_MOBILE", () => {
     expect(IL_MOBILE.test("050-1234567")).toBe(true);
     expect(IL_MOBILE.test("+972501234567")).toBe(true);
     expect(IL_MOBILE.test("03-1234567")).toBe(false);
+  });
+});
+
+describe("orderAddressHe (the order's 'לאן' line)", () => {
+  it("says the address as written", () => expect(orderAddressHe({ formatted: "הרצל 12, תל אביב - יפו", label: "בית" })).toBe("הרצל 12, תל אביב - יפו"));
+  it("falls back to the label when the address has no words", () => expect(orderAddressHe({ formatted: " ", label: "בית" })).toBe("בית"));
+  it("is null, and the line asks for one, with no address", () => {
+    expect(orderAddressHe(null)).toBeNull();
+    expect(orderAddressHe({ formatted: "", label: null })).toBeNull();
   });
 });
