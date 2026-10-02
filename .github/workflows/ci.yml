@@ -139,6 +139,9 @@ jobs:
       - run: npm ci
       - run: npm run db:generate -w apps/api
       - run: npm run db:migrate:deploy -w apps/api
+        # In CI a street list that fails to load fails the step (production carries on without it).
+        env:
+          STREETS_SYNC_STRICT: "1"
       # The migrations, applied to a fresh database, must produce exactly the
       # Prisma schema. (Diffing against a live database rather than a shadow
       # one: Prisma's shadow reset on the PostGIS image misreports the
@@ -214,6 +217,9 @@ jobs:
       - run: npm ci
       - run: npm run db:generate -w apps/api
       - run: npm run db:migrate:deploy -w apps/api
+        # In CI a street list that fails to load fails the step (production carries on without it).
+        env:
+          STREETS_SYNC_STRICT: "1"
       - run: npm run db:seed
       - name: Create the media bucket
         run: |

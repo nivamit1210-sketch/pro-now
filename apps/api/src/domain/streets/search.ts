@@ -29,7 +29,9 @@ export async function suggestStreets(prisma: PrismaClient, query: string): Promi
   const rows = await prisma.$queryRaw<Array<{ localityCode: number; streetCode: number; streetName: string; localityName: string }>>`
     SELECT "localityCode", "streetCode", "streetName", "localityName"
     FROM street_names
-    WHERE (${inNamedPlace} OR ${inStreet(words)})
+    -- Every word begins a word somewhere in the row, whichever split matches: the trigram index answers this part.
+    WHERE ${Prisma.join(words.map((w) => Prisma.sql`"searchText" LIKE ${`% ${esc(w)}%`}`), " AND ")}
+      AND (${inNamedPlace} OR ${inStreet(words)})
       -- A city as a whole is nobody's door; a village is (locate.ts).
       AND NOT ("streetCode" >= ${WHOLE_LOCALITY_CODE} AND "localityStreets" > ${SMALL_LOCALITY_STREETS})
     ORDER BY

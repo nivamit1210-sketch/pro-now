@@ -15,7 +15,7 @@ only).
 |---|---|
 | Host | Render Free, Frankfurt, one web service (`render.yaml` Blueprint). The API serves the built web app on the same origin. |
 | Database | Neon Postgres + PostGIS (runbook below). |
-| Deploys | `master` only, after its CI passes (`autoDeployTrigger: checksPass`). The start command runs `prisma migrate deploy` first. |
+| Deploys | `master` only, after its CI passes (`autoDeployTrigger: checksPass`). The start command runs `npm run db:migrate:deploy` first: the migrations, then the street list sync (`db:streets`, its own process). |
 | Health | `/health` (Render's check; returns the deployed `commit`), `/api/ready` (for an uptime monitor). |
 | Sign-in | The gated tester sign-in (`DEMO_AUTH_ENABLED=1`, one shared `demo@pronow.test` customer). Must be `0` in a real production. |
 | Free-plan caveat | Sleeps after 15 min idle and takes about a minute to wake. Not acceptable for live dispatch (`21 §4`). |
@@ -25,6 +25,13 @@ readiness, security headers, a non-empty catalogue, the client address,
 and each epic recognised by a route it added. Run it after every deploy.
 
 **Open, as of 2026-10-01:**
+- **Memory: nothing heavy at boot.** The free instance's Node heap is
+  256 MB. On 2026-10-01 loading the street list inside the server (330 MB
+  peak) put it in an out-of-memory restart loop from 21:34 to the fix
+  (`/health` 502). Data loads belong in a step before `npm run start`, as
+  `db:streets` does now: one query when the list is unchanged, about 80 MB
+  for a reload. Render's events (`server_failed`, `nonZeroExit: 134`) and
+  logs ("JavaScript heap out of memory") show it.
 - **Auto-deploy works** (confirmed 2026-10-01: merging #51 deployed by
   itself). Use Manual Deploy only to redeploy a commit or after changing
   the environment. Amit: "Sync" the Blueprint once so the variables

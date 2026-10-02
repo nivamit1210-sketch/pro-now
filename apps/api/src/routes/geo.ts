@@ -16,11 +16,7 @@ export default async function geoRoutes(app: FastifyInstance) {
    */
   app.get("/v1/geo/streets", { onRequest: requireRole("CUSTOMER") }, async (req, reply) => {
     const { q } = streetSuggestQuerySchema.parse(req.query);
-    try {
-      await app.streetsReady;
-    } catch {
-      return reply.status(503).send({ code: "STREETS_UNAVAILABLE", message: "Address suggestions are temporarily unavailable" });
-    }
+    // The list is loaded by the deploy (scripts/sync-streets.ts), never by this server.
     return reply.send({ suggestions: await suggestStreets(app.prisma, q) });
   });
 

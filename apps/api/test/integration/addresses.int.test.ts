@@ -11,7 +11,6 @@ const TEL_AVIV = 5000;
 
 beforeAll(async () => {
   app = await startApp();
-  await app.streetsReady;
   jar = await signInByEmail(app, uniqueEmail("addresses"));
 });
 afterAll(async () => {

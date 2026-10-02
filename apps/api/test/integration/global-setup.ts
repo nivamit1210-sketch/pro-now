@@ -32,6 +32,7 @@ export default async function setup({ provide }: GlobalSetupContext) {
   const env = { ...process.env, DATABASE_URL: databaseUrl };
   execFileSync("npx", ["prisma", "migrate", "deploy"], { cwd: API_DIR, env, stdio: "pipe" });
   execFileSync("npx", ["tsx", "prisma/seed.ts"], { cwd: API_DIR, env, stdio: "pipe" });
+  execFileSync("npx", ["tsx", "scripts/sync-streets.ts"], { cwd: API_DIR, env: { ...env, STREETS_SYNC_STRICT: "1" }, stdio: "pipe" });
 
   provide("databaseUrl", databaseUrl);
 

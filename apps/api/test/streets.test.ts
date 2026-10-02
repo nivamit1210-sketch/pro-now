@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { GeocodingProvider, GeocodingResult, StructuredAddressQuery } from "@pro-now/types";
 
 import { expandStreetName, parseStreetQuery, sameNameKey, searchForm, withoutStreetType } from "../src/domain/streets/normalize.js";
-import { rowsFromSnapshot } from "../src/domain/streets/load.js";
+import { fingerprintOf, rowsFromSnapshot } from "../src/domain/streets/load.js";
 import { locateStreet, SMALL_LOCALITY_STREETS, type StreetToLocate } from "../src/domain/streets/locate.js";
 
 describe("street names", () => {
@@ -39,14 +39,14 @@ describe("street names", () => {
   });
 
   it("derives the rows the search reads, with each locality's size", () => {
-    const rows = rowsFromSnapshot({
+    const rows = [...rowsFromSnapshot({
       cities: { "5000": "תל אביב - יפו", "1": "כפר קטן" },
       streets: [
         [5000, 1, "שד רוטשילד"],
         [5000, 2, "הרצל"],
         [1, 9000, "כפר קטן"],
       ],
-    });
+    })];
     expect(rows[0]).toEqual({
       localityCode: 5000,
       streetCode: 1,
@@ -124,5 +124,14 @@ describe("locating a street from the list", () => {
     expect(g.calls.some((c) => c.street === undefined)).toBe(false);
     const wholeCity = { ...herzl, streetCode: 9000, localityStreets: SMALL_LOCALITY_STREETS + 1 };
     await expect(locateStreet(g, wholeCity)).resolves.toBeNull();
+  });
+});
+
+describe("the street list's fingerprint", () => {
+  it("changes with the snapshot and with nothing else", () => {
+    const a = fingerprintOf(Buffer.from("snapshot a"));
+    expect(fingerprintOf(Buffer.from("snapshot a"))).toBe(a);
+    expect(fingerprintOf(Buffer.from("snapshot b"))).not.toBe(a);
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
   });
 });

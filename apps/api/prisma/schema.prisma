@@ -13,7 +13,7 @@ generator client {
 datasource db {
   // The connection URL lives in prisma.config.ts (Prisma 7).
   provider   = "postgresql"
-  extensions = [postgis]
+  extensions = [postgis, pg_trgm]
 }
 
 // ---------------------------------------------------------------------
@@ -562,6 +562,9 @@ model StreetName {
   localityStreets Int
 
   @@id([localityCode, streetCode])
+  /// Trigram index: the address box's "contains" search (search.ts) reads it
+  /// instead of scanning every street on every keystroke.
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin, map: "street_names_search_trgm")
   @@map("street_names")
 }
 

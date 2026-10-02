@@ -12,7 +12,6 @@ import corsPlugin from "./plugins/cors.js";
 import prismaPlugin from "./plugins/prisma.js";
 import jobLockPlugin from "./plugins/job-lock.js";
 import providersPlugin from "./plugins/providers.js";
-import streetsPlugin from "./plugins/streets.js";
 import dispatchSweeperPlugin from "./plugins/dispatch-sweeper.js";
 import mediaCleanupPlugin from "./plugins/media-cleanup.js";
 import presenceSweeperPlugin from "./plugins/presence-sweeper.js";
@@ -140,7 +139,6 @@ export async function buildServer(opts: { logger?: boolean } = {}) {
   await app.register(prismaPlugin);
   await app.register(jobLockPlugin);
   await app.register(providersPlugin);
-  await app.register(streetsPlugin);
   // After providers and prisma: the sweep needs both.
   await app.register(dispatchSweeperPlugin);
   await app.register(mediaCleanupPlugin);
