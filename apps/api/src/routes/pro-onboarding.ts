@@ -371,6 +371,8 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
    * undecided check, and its photos are deleted (Dvir, 2026-10-02: kept only
    * until a decision, and a replaced check will never get one).
    */
+  const ALREADY_VERIFIED = { code: "IDENTITY_ALREADY_VERIFIED", message: "Identity is already verified" };
+  const IDENTITY_REJECTED = { code: "IDENTITY_REJECTED", message: "The identity check was refused; a refusal is final" };
   app.post("/v1/pro/application/identity", pro, async (req, reply) => {
     const p = await professionalOf(app, req, reply);
     if (!p) return;
@@ -382,7 +384,9 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
 
     const sameFour = (a: { uploadIds: string[] }) => a.uploadIds.length === 4 && a.uploadIds.every((id, i) => id === ids[i]);
     const first = currentCheck(await app.prisma.identityVerification.findMany({ where: { professionalId: p.id } }));
-    if (first?.status === "VERIFIED") return reply.status(409).send({ code: "IDENTITY_ALREADY_VERIFIED", message: "Identity is already verified" });
+    if (first?.status === "VERIFIED") return reply.status(409).send(ALREADY_VERIFIED);
+    // A refusal is final (docs/10): no new check over it.
+    if (first?.status === "REJECTED") return reply.status(409).send(IDENTITY_REJECTED);
     // The same four photos again (a double tap): the same answer, no second attempt.
     if (first && sameFour(first)) return reply.send(await applicationView(app.prisma, p.id));
 
@@ -400,8 +404,9 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
       await tx.$queryRawUnsafe(`SELECT id FROM professional_profiles WHERE id = $1 FOR UPDATE`, p.id);
       const attempts = await tx.identityVerification.findMany({ where: { professionalId: p.id } });
       const current = currentCheck(attempts);
-      if (current?.status === "VERIFIED") return { conflict: true as const, replacedUploadIds: [] as string[] };
-      if (current && sameFour(current)) return { conflict: false as const, replacedUploadIds: [] as string[] };
+      if (current?.status === "VERIFIED") return { conflict: ALREADY_VERIFIED, replacedUploadIds: [] as string[] };
+      if (current?.status === "REJECTED") return { conflict: IDENTITY_REJECTED, replacedUploadIds: [] as string[] };
+      if (current && sameFour(current)) return { conflict: null, replacedUploadIds: [] as string[] };
       const replaced = attempts.filter((a) => a.status === "MANUAL_REVIEW" || a.status === "PENDING");
       await tx.identityVerification.create({
         data: {
@@ -425,9 +430,9 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
         data: { actorId: req.user!.userId, action: "IDENTITY_SUBMITTED", targetType: "professional", targetId: p.id, afterJson: { status: result.status, vendor: app.providers.identity.vendorName }, requestId: req.id },
       });
       // A photo the new check reuses stays: it belongs to the live check now.
-      return { conflict: false as const, replacedUploadIds: replaced.flatMap((a) => a.uploadIds).filter((id) => !ids.includes(id)) };
+      return { conflict: null, replacedUploadIds: replaced.flatMap((a) => a.uploadIds).filter((id) => !ids.includes(id)) };
     });
-    if (outcome.conflict) return reply.status(409).send({ code: "IDENTITY_ALREADY_VERIFIED", message: "Identity is already verified" });
+    if (outcome.conflict) return reply.status(409).send(outcome.conflict);
     await deleteIdentityPhotos(app, outcome.replacedUploadIds);
     return reply.send(await applicationView(app.prisma, p.id));
   });

@@ -51,7 +51,7 @@ GET  /v1/pro/earnings                 (last 7 days; with IN_APP_PAYMENTS=off, fr
 GET  /v1/pro/verification
 POST /v1/pro/join                     (now requires dateOfBirth YYYY-MM-DD; under 18 → 422 UNDER_MINIMUM_AGE and the role is not granted)
 POST /v1/pro/application/identity { documentUploadId, selfieUploadIds: [straight, right, left] }
-                                      (422 UPLOAD_NOT_READY, 409 IDENTITY_ALREADY_VERIFIED; a retake supersedes an undecided check and deletes its photos except any the new check reuses; serialized by a row lock on the profile)
+                                      (422 UPLOAD_NOT_READY, 409 IDENTITY_ALREADY_VERIFIED | IDENTITY_REJECTED (a refusal is final); a retake supersedes an undecided check and deletes its photos except any the new check reuses; serialized by a row lock on the profile)
 POST /v1/admin/identity/:id/decision { action: APPROVE|RETAKE|REJECT, reason? }
                                       (reason required for RETAKE/REJECT; 404 IDENTITY_NOT_FOUND, 409 IDENTITY_NOT_CURRENT | IDENTITY_ALREADY_DECIDED; same row lock; photos deleted after commit)
 GET  /v1/admin/professionals/:id  (gains `identity`: 2-minute signed photo links, each opening audited as IDENTITY_PHOTOS_VIEWED)
@@ -136,6 +136,9 @@ ownership for ADMIN.
 - Missing-item codes `IDENTITY` and `DATE_OF_BIRTH`.
 - Account approval answers 409 `IDENTITY_NOT_VERIFIED` |
   `DATE_OF_BIRTH_MISSING` | `UNDER_MINIMUM_AGE`.
+- An identity submit over a refused check answers 409 `IDENTITY_REJECTED`:
+  a refusal is final. `RETAKE_REQUESTED` is the decision that asks for new
+  photos.
 
 ## API security
 Every object access is authorized to the acting user (no IDOR). Admin

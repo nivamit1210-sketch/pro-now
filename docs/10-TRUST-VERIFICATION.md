@@ -116,11 +116,12 @@ Also part of the flow:
 - The check's own status records the answer; the account's status flow is
   unchanged (the admin queue lists `SERVICE_REVIEW`), and account approval
   requires a `VERIFIED` current check and age 18 (plan deviation,
-  2026-10-02). `REJECTED` asks the professional to retake.
+  2026-10-02). `RETAKE_REQUESTED` asks the professional to retake;
+  `REJECTED` is final (a new submit is 409 `IDENTITY_REJECTED`).
 - A retake supersedes an undecided check and deletes its photos, except
   any the new check reuses. Submit is serialized by a row lock on the
   professional's profile. 422 `UPLOAD_NOT_READY`, 409
-  `IDENTITY_ALREADY_VERIFIED`.
+  `IDENTITY_ALREADY_VERIFIED` | `IDENTITY_REJECTED`.
 - A repeated submit with the same four uploads creates one attempt.
 - In the application's missing items, one `IDENTITY` item replaces the
   `GOVERNMENT_ID` and `SELFIE` documents.
@@ -164,8 +165,8 @@ The reviewer's three actions:
 - Detection fails to load: the manual shutter.
 - Each photo uploads as it is taken and has its own retry. Nothing is
   submitted until all four are uploaded.
-- Leaving halfway: finished uploads are kept, and the check resumes at the
-  first missing photo on any device.
+- Leaving halfway: photos already uploaded are kept on the server. Photos
+  taken but not yet sent live only on that phone, and are retaken.
 - Retaking while a check is under review: the new attempt is current, and
   the reviewer sees the latest.
 - An approved identity later found false: admin suspends the account (an

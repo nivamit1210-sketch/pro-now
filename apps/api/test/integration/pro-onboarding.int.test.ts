@@ -91,6 +91,10 @@ describe("joining as a professional", () => {
     const res = await app.inject({ method: "POST", url: "/api/v1/pro/join", headers: as(minor), payload: { displayName: "נוי", legalName: "נוי כהן", addressAs: "F", dateOfBirth: seventeen } });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("UNDER_MINIMUM_AGE");
+    // Refused before anything is written: no professional role, no profile.
+    const minorId = (await whoAmI(app, minor))!.user.id;
+    expect(await db.userRole.count({ where: { userId: minorId, role: "PROFESSIONAL" } })).toBe(0);
+    expect(await db.professionalProfile.count({ where: { userId: minorId } })).toBe(0);
     const bad = await app.inject({ method: "POST", url: "/api/v1/pro/join", headers: as(minor), payload: { displayName: "נוי", legalName: "נוי כהן", addressAs: "F", dateOfBirth: "14/05/1990" } });
     expect(bad.statusCode).toBe(400);
   });
@@ -236,6 +240,20 @@ describe("joining as a professional", () => {
       expect(await db.upload.count({ where: { id: { in: before.uploadIds.filter((id) => id !== kept) } } })).toBe(0);
       const live = await db.identityVerification.findFirstOrThrow({ where: { professionalId: proId, status: "MANUAL_REVIEW" } });
       expect(live.uploadIds).toContain(kept);
+    });
+
+    it("a refused check is final: a new submission is a 409 IDENTITY_REJECTED (docs/10)", async () => {
+      const other = await signInByEmail(app, uniqueEmail("w7-refused"));
+      const joined = await app.inject({ method: "POST", url: "/api/v1/pro/join", headers: as(other), payload: { displayName: "גל", legalName: "גל שמש", addressAs: "M", dateOfBirth: "1985-03-02" } });
+      expect(joined.statusCode, joined.body).toBe(200);
+      const otherId = joined.json().profile.id as string;
+      expect((await send(await four(other), other)).statusCode).toBe(200);
+      // A person refused it (as admin-pros.ts records a REJECT).
+      await db.identityVerification.updateMany({ where: { professionalId: otherId, status: "MANUAL_REVIEW" }, data: { status: "REJECTED", decisionReason: "התעודה לא בתוקף", decidedAt: new Date() } });
+      const again = await send(await four(other), other);
+      expect(again.statusCode, again.body).toBe(409);
+      expect(again.json().code).toBe("IDENTITY_REJECTED");
+      expect(await db.identityVerification.count({ where: { professionalId: otherId } })).toBe(1);
     });
 
     it("an upload the clean-up already deleted is a 422, not a 500", async () => {
