@@ -117,6 +117,31 @@ describe("identity decisions", () => {
     expect(retake.json().missing).toContain("IDENTITY");
   });
 
+  it("a refusal tells the professional why and deletes the photos", async () => {
+    const user = await db.user.create({ data: { email: uniqueEmail("id-reject"), emailVerified: true, name: "Id Reject" } });
+    const pro = await db.professionalProfile.create({ data: { userId: user.id, legalName: "גיל בר", displayName: "גיל", dateOfBirth: new Date("1990-01-01") } });
+    const up = await db.upload.create({ data: { ownerId: user.id, kind: "IDENTITY", mime: "image/jpeg", bytes: 10, status: "READY", storageKey: `test/id-${Date.now()}.jpg` } });
+    const cur = await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "MANUAL_REVIEW", uploadIds: [up.id] } });
+    const res = await app.inject({ method: "POST", url: `/api/v1/admin/identity/${cur.id}/decision`, headers: as(admin), payload: { action: "REJECT", reason: "המסמך אינו קריא" } });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().identity).toMatchObject({ status: "REJECTED", reasonHe: "המסמך אינו קריא" });
+    const row = await db.identityVerification.findUniqueOrThrow({ where: { id: cur.id } });
+    expect(row).toMatchObject({ status: "REJECTED", uploadIds: [] });
+    expect(row.photosDeletedAt).not.toBeNull();
+    expect(await db.upload.count({ where: { id: up.id } })).toBe(0);
+  });
+
+  it("two simultaneous decisions on one check: one wins, one is refused, one audit row", async () => {
+    const user = await db.user.create({ data: { email: uniqueEmail("id-race"), emailVerified: true, name: "Id Race" } });
+    const pro = await db.professionalProfile.create({ data: { userId: user.id, legalName: "רן כץ", displayName: "רן", dateOfBirth: new Date("1990-01-01") } });
+    const cur = await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "MANUAL_REVIEW" } });
+    const go = (payload: object) => app.inject({ method: "POST", url: `/api/v1/admin/identity/${cur.id}/decision`, headers: as(admin), payload });
+    const [a, b] = await Promise.all([go({ action: "APPROVE" }), go({ action: "REJECT", reason: "לא ברור" })]);
+    expect([a.statusCode, b.statusCode].sort()).toEqual([200, 409]);
+    expect([a, b].find((r) => r.statusCode === 409)!.json().code).toBe("IDENTITY_ALREADY_DECIDED");
+    expect(await db.auditLog.count({ where: { targetId: pro.id, action: { in: ["IDENTITY_APPROVED", "IDENTITY_REJECTED"] } } })).toBe(1);
+  });
+
   it("an under-18 date of birth blocks account approval even with a verified identity", async () => {
     const user = await db.user.create({ data: { email: uniqueEmail("id-minor"), emailVerified: true, name: "Minor" } });
     const dob = new Date();

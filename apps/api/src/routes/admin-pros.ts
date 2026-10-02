@@ -26,8 +26,8 @@ import { applicationView, deleteIdentityPhotos } from "./pro-onboarding.js";
 export default async function adminProsRoutes(app: FastifyInstance) {
   const admin = { onRequest: requireRole("ADMIN") };
 
-  const audit = (actorId: string, action: string, targetType: string, targetId: string, before: unknown, after: unknown, reason: string | undefined, requestId: string) =>
-    app.prisma.auditLog.create({
+  const audit = (actorId: string, action: string, targetType: string, targetId: string, before: unknown, after: unknown, reason: string | undefined, requestId: string, db: Pick<typeof app.prisma, "auditLog"> = app.prisma) =>
+    db.auditLog.create({
       data: {
         actorId,
         action,
@@ -74,19 +74,27 @@ export default async function adminProsRoutes(app: FastifyInstance) {
   app.post("/v1/admin/identity/:id/decision", admin, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = adminIdentityDecisionSchema.parse(req.body);
-    const check = await app.prisma.identityVerification.findUnique({ where: { id } });
-    if (!check) return reply.status(404).send({ code: "IDENTITY_NOT_FOUND", message: "No such identity check" });
-    const current = currentCheck(await app.prisma.identityVerification.findMany({ where: { professionalId: check.professionalId } }));
-    if (current?.id !== check.id) return reply.status(409).send({ code: "IDENTITY_NOT_CURRENT", message: "A newer check replaced this one" });
-    if (!["MANUAL_REVIEW", "PENDING"].includes(check.status)) return reply.status(409).send({ code: "IDENTITY_ALREADY_DECIDED", message: "Already decided" });
+    const found = await app.prisma.identityVerification.findUnique({ where: { id } });
+    if (!found) return reply.status(404).send({ code: "IDENTITY_NOT_FOUND", message: "No such identity check" });
 
     const status = body.action === "APPROVE" ? "VERIFIED" : body.action === "RETAKE" ? "RETAKE_REQUESTED" : "REJECTED";
-    const after = { status, method: body.action === "APPROVE" ? "MANUAL" : null, decidedById: req.user!.userId, decidedAt: new Date(), decisionReason: body.reason ?? null, uploadIds: [] as string[], photosDeletedAt: new Date() };
-    await app.prisma.identityVerification.update({ where: { id }, data: after });
-    await audit(req.user!.userId, `IDENTITY_${body.action === "APPROVE" ? "APPROVED" : body.action === "RETAKE" ? "RETAKE_REQUESTED" : "REJECTED"}`, "professional", check.professionalId, { status: check.status }, { status, method: after.method }, body.reason, req.id);
-    // Kept only until this decision (Dvir, 2026-10-02).
-    await deleteIdentityPhotos(app, check.uploadIds);
-    return reply.send(await applicationView(app.prisma, check.professionalId));
+    const actionName = body.action === "APPROVE" ? "APPROVED" : body.action === "RETAKE" ? "RETAKE_REQUESTED" : "REJECTED";
+    const outcome = await app.prisma.$transaction(async (tx) => {
+      // Same lock as the professional's submit: a decision and a resubmission never interleave.
+      await tx.$queryRawUnsafe(`SELECT id FROM professional_profiles WHERE id = $1 FOR UPDATE`, found.professionalId);
+      const attempts = await tx.identityVerification.findMany({ where: { professionalId: found.professionalId } });
+      const check = attempts.find((a) => a.id === id);
+      if (!check || currentCheck(attempts)?.id !== check.id) return { code: "IDENTITY_NOT_CURRENT" as const, message: "A newer check replaced this one" };
+      if (!["MANUAL_REVIEW", "PENDING"].includes(check.status)) return { code: "IDENTITY_ALREADY_DECIDED" as const, message: "Already decided" };
+      const after = { status, method: body.action === "APPROVE" ? "MANUAL" : null, decidedById: req.user!.userId, decidedAt: new Date(), decisionReason: body.reason ?? null, uploadIds: [] as string[], photosDeletedAt: new Date() };
+      await tx.identityVerification.update({ where: { id }, data: after });
+      await audit(req.user!.userId, `IDENTITY_${actionName}`, "professional", check.professionalId, { status: check.status }, { status, method: after.method }, body.reason, req.id, tx);
+      return { code: null, uploadIds: check.uploadIds };
+    });
+    if (outcome.code) return reply.status(409).send({ code: outcome.code, message: outcome.message });
+    // Kept only until this decision (Dvir, 2026-10-02); deleted after the commit, from the list read under the lock.
+    await deleteIdentityPhotos(app, outcome.uploadIds);
+    return reply.send(await applicationView(app.prisma, found.professionalId));
   });
 
   app.post("/v1/admin/credentials/:id/decision", admin, async (req, reply) => {
