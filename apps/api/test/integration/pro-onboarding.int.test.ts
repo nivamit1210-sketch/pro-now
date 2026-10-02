@@ -243,6 +243,13 @@ describe("joining as a professional", () => {
       await db.upload.delete({ where: { id: payload.selfieUploadIds[1]! } });
       expect((await send(payload)).statusCode).toBe(422);
     });
+
+    it("the 4-day clean-up keeps an undecided check's photos", async () => {
+      const current = await db.identityVerification.findFirstOrThrow({ where: { professionalId: proId, status: "MANUAL_REVIEW" } });
+      await db.upload.updateMany({ where: { id: { in: current.uploadIds } }, data: { createdAt: new Date(Date.now() - 10 * 86400_000) } });
+      await app.cleanupMediaNow();
+      expect(await db.upload.count({ where: { id: { in: current.uploadIds } } })).toBe(4);
+    });
   });
 
   it("with everything required, it goes to review", async () => {

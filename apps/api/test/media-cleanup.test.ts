@@ -16,6 +16,7 @@ describe("cleanupUploads", () => {
       jobMedia: { deleteMany: vi.fn().mockResolvedValue({}) },
       professionalDocument: { updateMany: vi.fn().mockResolvedValue({}), findMany: vi.fn().mockResolvedValue([]) },
       professionalCredential: { findMany: vi.fn().mockResolvedValue([]) },
+      identityVerification: { findMany: vi.fn().mockResolvedValue([]) },
     };
 
     await expect(
@@ -36,6 +37,7 @@ describe("cleanupUploads", () => {
       jobMedia: { deleteMany: vi.fn() },
       professionalDocument: { updateMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
       professionalCredential: { findMany: vi.fn().mockResolvedValue([]) },
+      identityVerification: { findMany: vi.fn().mockResolvedValue([]) },
     };
 
     await expect(
@@ -51,8 +53,23 @@ describe("cleanupUploads", () => {
       jobMedia: { deleteMany: vi.fn() },
       professionalDocument: { updateMany: vi.fn(), findMany: vi.fn().mockResolvedValue([{ uploadId: "id-card" }]) },
       professionalCredential: { findMany: vi.fn().mockResolvedValue([{ documentRef: "licence" }]) },
+      identityVerification: { findMany: vi.fn().mockResolvedValue([]) },
     };
     await cleanupUploads(store, { delete: vi.fn() }, new Date());
     expect(findMany.mock.calls[1]![0].where.id).toEqual({ notIn: ["id-card", "licence"] });
+  });
+
+  it("keeps an undecided identity check's photos past 4 days (Dvir, 2026-10-02: until the admin decides)", async () => {
+    const findMany = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const store = {
+      upload: { findMany, delete: vi.fn() },
+      jobMedia: { deleteMany: vi.fn() },
+      professionalDocument: { updateMany: vi.fn(), findMany: vi.fn().mockResolvedValue([]) },
+      professionalCredential: { findMany: vi.fn().mockResolvedValue([]) },
+      identityVerification: { findMany: vi.fn().mockResolvedValue([{ uploadIds: ["id-card", "face-1", "face-2", "face-3"] }]) },
+    };
+    await cleanupUploads(store, { delete: vi.fn() }, new Date());
+    expect(store.identityVerification.findMany).toHaveBeenCalledWith({ where: { status: { in: ["MANUAL_REVIEW", "PENDING"] } }, select: { uploadIds: true } });
+    expect(findMany.mock.calls[1]![0].where.id.notIn).toEqual(expect.arrayContaining(["id-card", "face-1", "face-2", "face-3"]));
   });
 });

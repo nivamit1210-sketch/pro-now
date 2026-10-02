@@ -21,6 +21,9 @@ export interface UploadCleanupStore {
   professionalCredential: {
     findMany(args: { where: { documentRef: { not: null } }; select: { documentRef: true } }): Promise<Array<{ documentRef: string | null }>>;
   };
+  identityVerification: {
+    findMany(args: { where: { status: { in: string[] } }; select: { uploadIds: true } }): Promise<Array<{ uploadIds: string[] }>>;
+  };
 }
 
 export interface MediaCleanupResult {
@@ -44,10 +47,12 @@ export async function cleanupUploads(
    * licence four days after it arrived — before review, or right after
    * approval, taking the evidence with it. Their retention is part of the
    * open data-retention decision (docs/18 §Open decisions).
+   * Identity photos are evidence only until a decision; the decision deletes them itself (docs/10).
    */
   const evidence = [
     ...(await store.professionalDocument.findMany({ where: { uploadId: { not: null } }, select: { uploadId: true } })).map((d) => d.uploadId),
     ...(await store.professionalCredential.findMany({ where: { documentRef: { not: null } }, select: { documentRef: true } })).map((c) => c.documentRef),
+    ...(await store.identityVerification.findMany({ where: { status: { in: ["MANUAL_REVIEW", "PENDING"] } }, select: { uploadIds: true } })).flatMap((v) => v.uploadIds),
   ].filter((id): id is string => Boolean(id));
   const retained = await store.upload.findMany({
     where: { status: "READY", createdAt: { lt: new Date(now.getTime() - READY_RETENTION_MS) }, id: { notIn: evidence } },
