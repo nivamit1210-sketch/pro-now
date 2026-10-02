@@ -65,8 +65,9 @@ export default defineConfig({
             handler: "StaleWhileRevalidate",
             options: {
               cacheName: "art",
-              // Room for every file under /world and /clips (about 100), not more.
-              expiration: { maxEntries: 150 },
+              // Room for every file under /world and /clips (about 140 with the
+              // street's walkers, traffic and props), with headroom, not more.
+              expiration: { maxEntries: 200 },
             },
           },
         ],

@@ -20,6 +20,8 @@ import {
 import { createPlayer, movePlayer, createContactShadow, type PlayerState } from "./player";
 import { createRoom } from "./shopRooms";
 import { paving, asphalt, plaster, neonGlow, glow, skyGradient } from "./textures";
+import { advanceAlongStreet } from "./ambient";
+import { createFrameGovernor } from "./frameGovernor";
 import { createPostProcessing, type PostProcessingHandle } from "./postProcessing";
 
 const VEHICLE_BY_DEPARTMENT: Partial<Record<string, WorldAssetId>> = {
@@ -69,22 +71,6 @@ function createSprite(
   return sprite;
 }
 
-function createCutout(
-  tex: THREE.Texture,
-  height: number,
-): THREE.Sprite {
-  const mat = new THREE.SpriteMaterial({
-    map: tex,
-    transparent: true,
-    depthWrite: false,
-    alphaTest: 0.1,
-  });
-  const sprite = new THREE.Sprite(mat);
-  const aspect = tex.image ? tex.image.width / tex.image.height : 1;
-  sprite.scale.set(height * aspect, height, 1);
-  return sprite;
-}
-
 function disposeObject(root: THREE.Object3D): void {
   root.traverse((object) => {
     const mesh = object as THREE.Mesh;
@@ -111,6 +97,7 @@ function isDaytime(): boolean {
 interface NPC {
   sprite: THREE.Sprite;
   shadow: THREE.Sprite;
+  x: number;
   z: number;
   speed: number;
   direction: 1 | -1;
@@ -237,8 +224,9 @@ function buildStreetGeometry(
 
             if (Math.random() > 0.6) {
               const base = 0.7;
+              const rate = 1.5 + Math.random();
               ticking.push((_dt, t) => {
-                winMat.opacity = base + Math.sin(t * (1.5 + Math.random())) * 0.2;
+                winMat.opacity = base + Math.sin(t * rate) * 0.2;
               });
             }
           }
@@ -658,18 +646,15 @@ function buildNPCs(
     shadow.position.set(npcX, 0.02, npcZ);
     root.add(shadow);
 
-    const npc: NPC = { sprite, shadow, z: npcZ, speed, direction, lane, frameDistance: 0, textures: [tex] };
+    const npc: NPC = { sprite, shadow, x: npcX, z: npcZ, speed, direction, lane, frameDistance: 0, textures: [tex] };
     npcs.push(npc);
   }
 
   ticking.push((dt) => {
     for (const npc of npcs) {
-      npc.z += npc.direction * npc.speed * dt;
-      if (npc.z > halfStreet + 10) npc.z = -halfStreet - 10;
-      if (npc.z < -halfStreet - 10) npc.z = halfStreet + 10;
-      const npcX = npc.lane * (KERB_X + PAVEMENT * 0.35);
-      npc.sprite.position.set(npcX, 0.85, npc.z);
-      npc.shadow.position.set(npcX, 0.02, npc.z);
+      npc.z = advanceAlongStreet(npc.z, npc.direction * npc.speed, dt, halfStreet, 10);
+      npc.sprite.position.set(npc.x, 0.85, npc.z);
+      npc.shadow.position.set(npc.x, 0.02, npc.z);
     }
   });
 
@@ -743,9 +728,7 @@ function buildTraffic(
 
   ticking.push((dt) => {
     for (const veh of vehicles) {
-      veh.z += veh.lane * -1 * veh.speed * dt;
-      if (veh.z > halfStreet + 20) veh.z = -halfStreet - 20;
-      if (veh.z < -halfStreet - 20) veh.z = halfStreet + 20;
+      veh.z = advanceAlongStreet(veh.z, -veh.lane * veh.speed, dt, halfStreet, 20);
       const laneX = veh.lane * (ROAD_HALF * 0.5);
       veh.group.position.set(laneX, 0, veh.z);
     }
@@ -980,6 +963,8 @@ export function createWorldScene({
   } catch {
     /* graceful fallback: render without post-processing */
   }
+  // Too slow with the glow on (software WebGL, a weak phone)? Drop it once.
+  const glowGovernor = createFrameGovernor();
 
   let model = initialModel;
   let lastMs = performance.now();
@@ -1094,14 +1079,23 @@ export function createWorldScene({
         frameStreet(camera, reducedMotion);
       }
 
-      for (const fn of ticking) fn(dt, elapsed);
+      // Ambient loops (flicker, steam, walkers, traffic) are decoration: with
+      // reduced motion they hold still. The player and camera still move.
+      if (!reducedMotion) for (const fn of ticking) fn(dt, elapsed);
 
+      if (postProcessing && glowGovernor.record(nowMs - lastMs) === "drop") {
+        postProcessing.dispose();
+        postProcessing = null;
+      }
       if (postProcessing) {
         postProcessing.render(nowMs);
       } else {
         renderer.render(scene, camera);
       }
       lastMs = nowMs;
+    },
+    resize(width: number, height: number) {
+      postProcessing?.resize(width, height);
     },
     dispose() {
       disposeObject(root);

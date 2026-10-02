@@ -21,6 +21,8 @@ export interface WorldSceneHandle {
   move(command: WorldMoveCommand): void;
   enter?(): void;
   render(nowMs: number): void;
+  /** The canvas changed size; anything sized to it (post-processing) follows. */
+  resize?(width: number, height: number): void;
   dispose(): void;
 }
 
@@ -140,6 +142,7 @@ export function WorldCanvas({
       renderer.setSize(width, height, false);
       camera.aspect = width / Math.max(height, 1);
       camera.updateProjectionMatrix();
+      handle.resize?.(width, height);
     };
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(host);
