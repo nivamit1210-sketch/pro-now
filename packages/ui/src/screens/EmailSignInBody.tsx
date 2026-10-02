@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { BackButton } from "../components/BackButton";
+import { BackButton, BACK_BUTTON_CLEARANCE } from "../components/BackButton";
 import { customerTheme, elevation, proTheme, radii, scale, spacing, tabular, type } from "../theme";
 import { ShieldCheckMark } from "../components/marks";
 import { breakableEmail, isPlausibleEmail } from "../email";
@@ -69,6 +69,13 @@ export function EmailSignInBody({
     <View style={[styles.screen, { width, height, backgroundColor: colors.bg }]}>
       <BackButton onPress={onBack} tone={"light"} placement="absolute" />
 
+      {/*
+        * Scrolls, so a short screen never stacks the button on the field:
+        * with the keyboard up an iPhone leaves about 300 px, and the fixed
+        * layout pushed "שליחת קישור" over the email box. With room, the
+        * content grows to fill it and looks as it always did.
+        */}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <View style={styles.body}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>
           {stage === "email" ? "מה המייל שלך?" : "בדקו את המייל"}
@@ -186,12 +193,14 @@ export function EmailSignInBody({
       ) : (
         <View style={styles.footer} />
       )}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { overflow: "hidden", borderRadius: radii.xl, justifyContent: "space-between" },
+  screen: { overflow: "hidden", borderRadius: radii.xl },
+  scroll: { flexGrow: 1, justifyContent: "space-between" },
 
   /*
    * ---------------------------------------------------------------------
@@ -221,7 +230,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxl,
+    // Clear of the back control, which floats over the scroll.
+    paddingTop: BACK_BUTTON_CLEARANCE,
     paddingBottom: spacing.xl,
     alignItems: "flex-end",
   },
