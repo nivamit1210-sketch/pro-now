@@ -107,7 +107,9 @@ describe("identity decisions", () => {
     const user = await db.user.create({ data: { email: uniqueEmail("id-retake"), emailVerified: true, name: "Id Retake" } });
     const pro = await db.professionalProfile.create({ data: { userId: user.id, legalName: "דנה לוי", displayName: "דנה", dateOfBirth: new Date("1992-03-01") } });
     const old = await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "SUPERSEDED", createdAt: new Date(Date.now() - 60_000) } });
-    const cur = await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "MANUAL_REVIEW" } });
+    const photo = () => db.upload.create({ data: { ownerId: user.id, kind: "IDENTITY", mime: "image/jpeg", bytes: 10, status: "READY", storageKey: `test/id-${crypto.randomUUID()}.jpg` } });
+    const photos = [await photo(), await photo(), await photo(), await photo()].map((u) => u.id);
+    const cur = await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "MANUAL_REVIEW", uploadIds: photos } });
     const decideId = (id: string, payload: object) => app.inject({ method: "POST", url: `/api/v1/admin/identity/${id}/decision`, headers: as(admin), payload });
 
     expect((await decideId(old.id, { action: "APPROVE" })).json().code).toBe("IDENTITY_NOT_CURRENT");
@@ -115,6 +117,12 @@ describe("identity decisions", () => {
     expect(retake.statusCode, retake.body).toBe(200);
     expect(retake.json().identity).toMatchObject({ status: "RETAKE_REQUESTED", reasonHe: "התמונה מטושטשת, אפשר לצלם שוב באור טוב?" });
     expect(retake.json().missing).toContain("IDENTITY");
+    // A retake is a decision too: the check's photos are deleted.
+    expect(await db.upload.count({ where: { id: { in: photos } } })).toBe(0);
+    expect(await db.identityVerification.findUniqueOrThrow({ where: { id: cur.id } })).toMatchObject({ uploadIds: [] });
+    // The record says what the reviewer compared the photos against.
+    const record = await db.auditLog.findFirstOrThrow({ where: { targetId: pro.id, action: "IDENTITY_RETAKE_REQUESTED" } });
+    expect(record.afterJson).toMatchObject({ status: "RETAKE_REQUESTED", declared: { legalName: "דנה לוי", dateOfBirth: "1992-03-01" } });
   });
 
   it("a refusal tells the professional why and deletes the photos", async () => {

@@ -88,7 +88,10 @@ export default async function adminProsRoutes(app: FastifyInstance) {
       if (!["MANUAL_REVIEW", "PENDING"].includes(check.status)) return { code: "IDENTITY_ALREADY_DECIDED" as const, message: "Already decided" };
       const after = { status, method: body.action === "APPROVE" ? "MANUAL" : null, decidedById: req.user!.userId, decidedAt: new Date(), decisionReason: body.reason ?? null, uploadIds: [] as string[], photosDeletedAt: new Date() };
       await tx.identityVerification.update({ where: { id }, data: after });
-      await audit(req.user!.userId, `IDENTITY_${actionName}`, "professional", check.professionalId, { status: check.status }, { status, method: after.method }, body.reason, req.id, tx);
+      // What the photos were compared against, as it stood at the decision (the photos themselves are deleted).
+      const pro = await tx.professionalProfile.findUniqueOrThrow({ where: { id: check.professionalId }, select: { legalName: true, dateOfBirth: true } });
+      const declared = { legalName: pro.legalName, dateOfBirth: pro.dateOfBirth ? pro.dateOfBirth.toISOString().slice(0, 10) : null };
+      await audit(req.user!.userId, `IDENTITY_${actionName}`, "professional", check.professionalId, { status: check.status }, { status, method: after.method, declared }, body.reason, req.id, tx);
       return { code: null, uploadIds: check.uploadIds };
     });
     if (outcome.code) return reply.status(409).send({ code: outcome.code, message: outcome.message });
