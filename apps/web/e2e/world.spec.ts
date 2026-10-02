@@ -96,15 +96,27 @@ test.describe("arriving on a slow network", () => {
     await signInByEmail(page, uniqueEmail("e2e-world-arrival"));
     await finishFirstRun(page);
 
-    // A slow network: every picture of the street takes a moment longer.
+    /*
+     * A slow network, held by the test rather than by a clock: the street's
+     * pictures wait until the arrival screen has been checked. A fixed delay
+     * let them land mid-check (about 2 s in); the frame that then uploads all
+     * of them blocks the page for seconds on CI's software renderer, and the
+     * screen had lifted by the time the next check could run.
+     */
+    let releaseArt!: () => void;
+    const artHeld = new Promise<void>((release) => (releaseArt = release));
     await page.route(/\/world\/.+\.webp$/, async (route) => {
-      await new Promise((done) => setTimeout(done, 1500));
+      await artHeld;
       await route.continue();
     });
     await page.goto("/world");
     const arrival = page.getByRole("status").filter({ hasText: "נכנסים לעיר" });
-    await expect(arrival).toBeVisible();
     await expect(arrival.getByText("PRO NOW")).toBeVisible();
+    // No art yet, so it holds (well inside its 12 s cap).
+    await page.waitForTimeout(1500);
+    await expect(arrival).toBeVisible();
+
+    releaseArt();
     await expect(arrival).toBeHidden({ timeout: 30_000 });
     await expect(page.locator(".world-canvas__surface canvas")).toBeVisible();
   });
