@@ -20,6 +20,12 @@ export const otpVerifySchema = z.object({
 
 export const createJobSchema = z.object({
   serviceId: z.string().min(1),
+  /**
+   * The catalogue service the customer picked ("svc-clean"). The server
+   * takes its name from the catalogue and shows it on every screen after
+   * ordering; it must bridge to `serviceId` (catalog-bridge.ts).
+   */
+  catalogServiceId: z.string().min(1).max(80).optional(),
   addressId: z.string().min(1),
   description: z.string().max(2000).optional(),
   mediaRefs: z.array(z.string()).max(10).default([]),

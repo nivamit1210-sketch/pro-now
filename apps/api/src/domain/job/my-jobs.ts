@@ -1,5 +1,6 @@
 import type { JobState, MyJobSummary } from "@pro-now/types";
 import { addressAsView } from "../address-as.js";
+import { jobServiceNameHe } from "./service-name.js";
 
 /**
  * One row of the customer's own job list (`GET /v1/jobs`): the home
@@ -15,6 +16,8 @@ export interface MyJobRow {
   id: string;
   status: JobState;
   createdAt: Date;
+  /** The name the customer picked in the catalogue (audit v2 #1). */
+  catalogServiceNameHe: string | null;
   service: { nameHe: string; code: string };
   assignedProfessional: { id: string; displayName: string; addressAs: string | null } | null;
   review: { overallRating: number } | null;
@@ -33,7 +36,7 @@ export function toMyJobSummary(j: MyJobRow): MyJobSummary {
     id: j.id,
     status: j.status,
     createdAt: j.createdAt.toISOString(),
-    serviceNameHe: j.service.nameHe,
+    serviceNameHe: jobServiceNameHe(j),
     serviceCode: j.service.code,
     professional: j.assignedProfessional
       ? { id: j.assignedProfessional.id, displayName: j.assignedProfessional.displayName, addressAs: addressAsView(j.assignedProfessional.addressAs) }

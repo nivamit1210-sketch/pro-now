@@ -97,8 +97,9 @@ export function Job() {
   }
 
   const { job: data, receipt, cancellationReason } = job.data;
-  const serviceNameHe = data.service.nameHe;
-  const pilotId = pilotServiceIdForDatabaseCode(data.service.code);
+  // The name, mark and street the customer picked (audit v2 #1); older jobs go by the service.
+  const serviceNameHe = job.data.serviceNameHe;
+  const pilotId = data.catalogServiceId ?? pilotServiceIdForDatabaseCode(data.service.code);
   const mark = ((pilotId && catalogServicePages[pilotId]?.mark) || "wrench") as MarkName;
   const departmentCode = pilotId ? (departmentCodeByServiceId[pilotId] ?? null) : null;
 

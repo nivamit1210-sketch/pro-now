@@ -41,12 +41,17 @@ test("on a phone, dragging on the street walks to a shop", async ({ page }) => {
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 2;
 
+  // The demo's hint over the high opening view, until the first step.
+  const hint = page.getByText("גררו באצבע על המסך כדי ללכת");
+  await expect(hint).toBeVisible({ timeout: 30_000 });
+
   // Held still after the move, the offset keeps walking: up and to the left.
   await page.mouse.move(x, y);
   await page.mouse.down();
   await page.mouse.move(x - 60, y - 60, { steps: 4 });
   // The thumb stick shows where the finger came down, as in the demo.
   await expect(page.locator(".world-canvas__stick")).toBeVisible();
+  await expect(hint).toBeHidden();
   await expect(page.getByRole("button", { name: "היכנסו" })).toBeVisible({ timeout: 10_000 });
   await page.mouse.up();
   await expect(page.locator(".world-canvas__stick")).toBeHidden();

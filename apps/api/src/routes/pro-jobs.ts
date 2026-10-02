@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { requireRole } from "../auth/access.js";
 import type { ProJobDetailView, QuoteView } from "@pro-now/types";
+import { jobServiceNameHe } from "../domain/job/service-name.js";
 
 /**
  * GET /v1/pro/jobs/:id — the assigned job, as the professional sees it.
@@ -128,7 +129,7 @@ export default async function proJobsRoutes(app: FastifyInstance) {
       jobId: job.id,
       status: job.status,
       serviceId: job.serviceId,
-      serviceNameHe: job.service.nameHe,
+      serviceNameHe: jobServiceNameHe(job),
       serviceCode: job.service.code,
       priceModel: job.service.priceModel,
       addressHe: job.address?.formatted ?? "",

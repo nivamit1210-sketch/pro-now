@@ -126,3 +126,14 @@ test("a double tap on 'send link' sends one email", async ({ page }) => {
   ).json()) as { messages: unknown[] };
   expect(found.messages).toHaveLength(1);
 });
+
+test("home's hero is the evening city at noon too, like the demo", async ({ page }) => {
+  await signInByEmail(page, uniqueEmail("e2e-hero"));
+  await finishFirstRun(page);
+  // Noon on the phone's clock (set after the intro, whose steps run on it), then home again.
+  await page.clock.setFixedTime(new Date("2026-10-02T12:00:00"));
+  await page.reload();
+  await expect(home(page)).toBeVisible();
+  await expect(page.locator('img[src="/world/splash_city.webp"]').first()).toBeAttached();
+  await expect(page.locator('img[src="/world/splash_city_day.webp"]')).toHaveCount(0);
+});

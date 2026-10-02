@@ -682,6 +682,14 @@ model Job {
 
   status               JobStatus @default(DRAFT)
   description          String?
+  /// The service as the customer picked it in the app's catalogue
+  /// (pilot-catalog id, e.g. "svc-clean") and its name as they read it
+  /// ("ניקיון דחוף"). Every screen after ordering shows this name, the
+  /// customer's and the professional's (audit v2 #1). Set by the server
+  /// from the catalogue, never from client text; null on older jobs,
+  /// which show the service's own name.
+  catalogServiceId     String?
+  catalogServiceNameHe String?
   /// Ordering for someone else (docs/21 W6): the person at home, with this
   /// one order only. Personal data about somebody who is not a user: erased
   /// with the orderer's account.

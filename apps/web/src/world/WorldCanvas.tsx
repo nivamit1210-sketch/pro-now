@@ -81,10 +81,23 @@ export function WorldCanvas({
   // The demo's arrival: the city's picture, the brand and a filling bar while
   // the street's art arrives, instead of a street that paints itself in.
   const [arriving, setArriving] = useState(false);
+  // The demo's hint over the high opening view, until the first step.
+  const [walked, setWalked] = useState(false);
+  const walkedRef = useRef(false);
+  const markWalked = (command: WorldMoveCommand) => {
+    if (walkedRef.current || (command.x === 0 && command.z === 0)) return;
+    walkedRef.current = true;
+    setWalked(true);
+  };
+  const markWalkedRef = useRef(markWalked);
+  markWalkedRef.current = markWalked;
 
   useWorldInput({
     enabled: scene.mode === "EXPLORE" || scene.mode === "ROUTE",
-    onMove: (command) => sceneHandleRef.current?.move(command),
+    onMove: (command) => {
+      markWalked(command);
+      sceneHandleRef.current?.move(command);
+    },
     onAction: (action) => {
       if (action === "EXIT") onEventRef.current({ type: "EXIT" });
       else sceneHandleRef.current?.enter?.();
@@ -198,7 +211,9 @@ export function WorldCanvas({
       if (drag?.id !== event.pointerId) return;
       const dx = event.clientX - drag.x;
       const dy = event.clientY - drag.y;
-      handle.move(movementFromPointer(dx, dy, DRAG_RADIUS));
+      const command = movementFromPointer(dx, dy, DRAG_RADIUS);
+      markWalkedRef.current(command);
+      handle.move(command);
       const offset = stickKnobOffset(dx, dy, DRAG_RADIUS);
       knob.style.transform = `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`;
     };
@@ -250,6 +265,9 @@ export function WorldCanvas({
             <div />
           </div>
         </div>
+      ) : null}
+      {arrival && !arriving && !walked ? (
+        <div className="world-canvas__hint">גררו באצבע על המסך כדי ללכת</div>
       ) : null}
       {fallback}
     </div>

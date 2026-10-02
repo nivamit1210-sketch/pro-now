@@ -110,6 +110,8 @@ export function RequestComposer({ serviceId, media, onBack, onOpenAddresses, onS
         const { job } = await api.createJob(
           {
             serviceId: dispatchServiceId,
+            // The name the customer picked here is the one every later screen shows (audit v2 #1).
+            catalogServiceId: serviceId,
             addressId: address.id,
             description: composeDescription(serviceId, text, pickedIds, needsDestination ? destinationHe : null),
             mediaRefs,

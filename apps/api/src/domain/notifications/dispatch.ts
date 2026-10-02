@@ -3,6 +3,7 @@ import type { NotificationProvider } from "@pro-now/types";
 import type { JobEventNotice } from "../../realtime/job-event-bus.js";
 import type { UserEventBus } from "../../realtime/user-event-bus.js";
 import { deliveriesFor, type Delivery } from "./policy.js";
+import { jobServiceNameHe } from "../job/service-name.js";
 
 /**
  * Turns job events into notifications (docs/21 W9), for every event from
@@ -56,7 +57,7 @@ export async function notifyForJobEvent(deps: DispatchDeps, notice: JobEventNoti
 
   const deliveries = deliveriesFor(notice, {
     jobId: job.id,
-    serviceNameHe: job.service.nameHe,
+    serviceNameHe: jobServiceNameHe(job),
     customer: { userId: job.customer.user.id, email: job.customer.user.email },
     professional,
     offeredTo,

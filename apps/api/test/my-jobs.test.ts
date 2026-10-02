@@ -6,6 +6,7 @@ const row = (over: Partial<MyJobRow> = {}): MyJobRow => ({
   id: "job_1",
   status: "CLOSED",
   createdAt: new Date("2026-09-30T10:00:00.000Z"),
+  catalogServiceNameHe: null,
   service: { nameHe: "תיקון נזילה", code: "PLUMB_LEAK" },
   assignedProfessional: { id: "pro_1", displayName: "יוסי", addressAs: "M" },
   review: { overallRating: 4 },
@@ -32,6 +33,10 @@ describe("the customer's job list row (GET /v1/jobs)", () => {
     expect(toMyJobSummary(row({ assignedProfessional: she })).professional).toEqual(she);
     expect(toMyJobSummary(row({ assignedProfessional: { ...she, addressAs: null } })).professional?.addressAs).toBeNull();
     expect(toMyJobSummary(row({ assignedProfessional: { ...she, addressAs: "x" } })).professional?.addressAs).toBeNull();
+  });
+
+  it("names the service as the customer picked it, when the job kept that name (audit v2 #1)", () => {
+    expect(toMyJobSummary(row({ catalogServiceNameHe: "נזילה או דליפת מים" })).serviceNameHe).toBe("נזילה או דליפת מים");
   });
 
   it("invents nothing for a job nobody has taken yet", () => {

@@ -4,7 +4,17 @@ import { routeAt } from "@pro-now/types";
 import type { WorldSceneFactoryArgs, WorldSceneHandle } from "../WorldCanvas";
 import { WORLD_ASSETS, type WorldAssetId, worldAssetUrl } from "../assets";
 import type { WorldMoveCommand, WorldSceneModel, WorldTrade } from "../types";
-import { followCharacter, frameStreet, followInsideShop, frameShop } from "./camera";
+import {
+  DESCENT_SECONDS,
+  easeTowards,
+  entryPose,
+  followFactor,
+  followPose,
+  followInsideShop,
+  frameStreet,
+  shopPose,
+  smoothstep01,
+} from "./camera";
 import {
   canEnterTrade,
   nearestShop,
@@ -991,6 +1001,9 @@ export function createWorldScene({
   let insideShopId: string | null = null;
   let moveCommand: WorldMoveCommand = { x: 0, z: 0, sprint: false };
   let elapsed = 0;
+  // The entry flight: 0 high over the street, 1 behind the walker; it runs once.
+  let descend = 0;
+  let leaving = false;
 
   const emitNear = () => {
     const shop = nearestShop(player.x, player.z);
@@ -1073,26 +1086,36 @@ export function createWorldScene({
       if (insideShopId) {
         followInsideShop(camera, reducedMotion);
       } else if (model.mode === "EXPLORE" || model.mode === "ROUTE") {
-        if (moveCommand.x !== 0 || moveCommand.z !== 0) {
-          // The walk keeps its own 200 ms cap (#62): a slow renderer (SwiftShader
-          // in CI at 2-3 fps) must still cover ground. Animations use the 50 ms dt.
-          movePlayer(
-            player,
-            moveCommand,
-            Math.min(0.2, Math.max(0, (nowMs - lastMs) / 1000)),
-          );
+        // The walk keeps its own 200 ms cap (#62): a slow renderer (SwiftShader
+        // in CI at 2-3 fps) must still cover ground. Animations use the 50 ms dt.
+        // The entry's descent uses it too, so it takes 1.9 s on any renderer.
+        const walkDt = Math.min(0.2, Math.max(0, (nowMs - lastMs) / 1000));
+        const moving = moveCommand.x !== 0 || moveCommand.z !== 0;
+        if (moving) {
+          leaving = true;
+          movePlayer(player, moveCommand, walkDt);
           emitNear();
           updateShadowTarget();
           tintPlayerFromLamps();
         }
         poolLampLights();
 
+        // As in the demo: the world opens high over the street and the first
+        // move flies the camera down behind the walker. Standing by a shop
+        // frames it; walking on brings the camera back in behind you.
+        if (reducedMotion) descend = 1;
+        else if (leaving && descend < 1) descend = Math.min(1, descend + walkDt / DESCENT_SECONDS);
         const nearShop = nearestShop(player.x, player.z, 6);
-        if (nearShop && !insideShopId) {
-          frameShop(camera, player.group.position, nearShop, reducedMotion);
-        } else {
-          followCharacter(camera, player.group.position, reducedMotion);
-        }
+        const ground =
+          nearShop && !moving
+            ? shopPose(player.group.position, nearShop)
+            : followPose(player.group.position);
+        easeTowards(
+          camera,
+          entryPose(player.group.position, smoothstep01(descend), ground),
+          followFactor(walkDt),
+          reducedMotion,
+        );
       } else {
         poolLampLights();
         frameStreet(camera, reducedMotion);

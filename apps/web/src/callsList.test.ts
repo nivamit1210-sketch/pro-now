@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { JOB_STATES, type JobState, type MyJobSummary } from "@pro-now/types";
 
-import { STATUS_VIEW, callsFromJobs, markForDatabaseCode, toCallListItem, whenHe } from "./callsList";
+import { capsuleTrip } from "./activeCapsule";
+import { STATUS_VIEW, callsFromJobs, markForDatabaseCode, onTheWayJobIds, toCallListItem, whenHe, type CallMatch } from "./callsList";
 
 const NOW = new Date(2026, 9, 2, 12, 0); // 2 October 2026, noon, local time
 
@@ -138,5 +139,49 @@ describe("callsFromJobs", () => {
 
   it("an empty list stays empty (the screen shows its empty state)", () => {
     expect(callsFromJobs([], NOW).calls).toEqual([]);
+  });
+});
+
+describe("minutes on a live call", () => {
+  // The server read the ETA 2 minutes ago: 16 minutes then, so 14 now.
+  const match: CallMatch = {
+    eta: { etaSeconds: 16 * 60, computedAt: new Date(NOW.getTime() - 2 * 60_000).toISOString() } as CallMatch["eta"],
+    etaSecondsAtAssignment: 20 * 60,
+  };
+  const enRoute = job({ status: "PRO_EN_ROUTE", ratingGiven: null, amountMinorUnits: null });
+
+  it("shows the server's ETA, counted down since it was read", () => {
+    expect(toCallListItem(enRoute, NOW, match).etaMinutes).toBe(14);
+  });
+
+  it("agrees with home's capsule to the minute", () => {
+    for (const status of ["PRO_ASSIGNED", "PRO_EN_ROUTE"] as JobState[]) {
+      expect(toCallListItem(job({ status }), NOW, match).etaMinutes).toBe(capsuleTrip(status, match, NOW.getTime()).etaMinutes);
+    }
+  });
+
+  it("invents nothing: no match, no ETA, or nobody on the way means no minutes", () => {
+    expect(toCallListItem(enRoute, NOW).etaMinutes).toBeNull();
+    expect(toCallListItem(enRoute, NOW, { eta: null, etaSecondsAtAssignment: null }).etaMinutes).toBeNull();
+    for (const status of ["SEARCHING", "PRO_ARRIVED", "IN_PROGRESS", "CLOSED"] as JobState[]) {
+      expect(toCallListItem(job({ status }), NOW, match).etaMinutes, status).toBeNull();
+    }
+  });
+
+  it("never below one minute", () => {
+    const late: CallMatch = { ...match, eta: { ...match.eta!, etaSeconds: 30 } };
+    expect(toCallListItem(enRoute, NOW, late).etaMinutes).toBe(1);
+  });
+
+  it("callsFromJobs gives each call its own job's minutes", () => {
+    const a = job({ id: "a", status: "PRO_EN_ROUTE", createdAt: new Date(2026, 9, 2, 10).toISOString() });
+    const b = job({ id: "b", status: "PRO_ASSIGNED", createdAt: new Date(2026, 9, 2, 11).toISOString() });
+    const { calls } = callsFromJobs([a, b], NOW, { a: match });
+    expect(calls.map((c) => [c.id, c.etaMinutes])).toEqual([["a", 14], ["b", null]]);
+  });
+
+  it("reads matches only for the jobs somebody is on the way to", () => {
+    const ids = onTheWayJobIds([job({ id: "s", status: "SEARCHING" }), job({ id: "a", status: "PRO_ASSIGNED" }), job({ id: "r", status: "PRO_EN_ROUTE" }), job({ id: "x", status: "PRO_ARRIVED" })]);
+    expect(ids).toEqual(["a", "r"]);
   });
 });

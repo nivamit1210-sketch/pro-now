@@ -5,6 +5,7 @@ import { customerJob, notFound, requireRole } from "../auth/access.js";
 import { portraitForViewer } from "../domain/portrait.js";
 import { currentCheck, identityBadge } from "../domain/identity-check.js";
 import { addressAsView } from "../domain/address-as.js";
+import { jobServiceNameHe } from "../domain/job/service-name.js";
 
 /**
  * ORDERING FOR SOMEONE ELSE (docs/21 W6; Amit, 2026-09-28): a plumber for
@@ -77,7 +78,7 @@ export default async function onSiteRoutes(app: FastifyInstance) {
       // The orderer's first name only: the person at home knows who they are.
       ordererNameHe: (job.customer.fullName ?? job.customer.user.name ?? "").trim().split(/\s+/)[0] || "מי שהזמין",
       onSiteNameHe: job.onSiteName,
-      serviceNameHe: job.service.nameHe,
+      serviceNameHe: jobServiceNameHe(job),
       serviceCode: job.service.code,
       stage: STAGE[job.status] ?? "coming",
       professional: pro
