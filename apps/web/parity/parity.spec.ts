@@ -163,6 +163,23 @@ test("the product's screens match the demo's", async ({ browser }) => {
     await p.getByRole("button", { name: "תפריט" }).click({ timeout: 10_000 });
     await p.getByRole("button", { name: /^הקריאות שלי/ }).click({ timeout: 5000 });
   });
+
+  // At the door (the demo's ArrivalVerifyBody): who to expect and the code. Reported.
+  await step("13-arrival", async (p) => {
+    if (p === product) {
+      if (!job) throw new Error("no job on the product");
+      await pro.step(job, "arrive");
+      await p.goto(`${PRODUCT}/jobs/${job}`);
+      await p.getByText("קוד האימות שלכם").waitFor({ timeout: 15_000 });
+    } else {
+      // The live order from the calls list, its tracking, then the demo's own "almost there".
+      await p.getByRole("button", { name: /^הזמנה 1 מתוך 1/ }).click({ timeout: 5000 });
+      const follow = p.getByRole("button", { name: /^לעקוב אחרי/ });
+      if (await follow.count()) await follow.first().click({ timeout: 5000 });
+      await p.getByRole("button", { name: /המקצוען כמעט אצלך$/ }).click({ timeout: 10_000 });
+      await p.getByText("קוד האימות שלכם").waitFor({ timeout: 10_000 });
+    }
+  });
   await pro.dispose();
 
   writeFileSync(path.join(OUT, "unreachable.json"), JSON.stringify(unreachable, null, 2));

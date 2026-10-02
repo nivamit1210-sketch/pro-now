@@ -670,6 +670,12 @@ export interface CustomerJobResponse {
   ratingGiven: number | null;
   /** Ordered for someone else: who is at home, and the door code once assigned. */
   onSite: { name: string; doorCode: string | null } | null;
+  /**
+   * The four digits the assigned professional says at the door, issued by
+   * the server at assignment for every job. Null before anyone is assigned.
+   * The client renders it and never derives it.
+   */
+  doorCode: string | null;
 }
 
 /**

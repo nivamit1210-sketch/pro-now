@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@pro-now/api-client";
 import { formatMoney, money, pilotServiceIdForDatabaseCode, type JobState } from "@pro-now/types";
 import {
+  ArrivalVerifyBody,
   JobClosedBody,
   JobCompleteBody,
   MatchConfirmBody,
@@ -26,6 +27,7 @@ import { tradeCharacterFor } from "../tradeCharacter";
 import { useJobSocket } from "../useJobSocket";
 import { JobWorldBackdrop } from "../world";
 import { CityHero } from "../art/CityHero";
+import { arrivalHeadlineHe, showsArrival } from "./arrival";
 
 /**
  * One job, from "looking for a professional" to the review (docs/21 W6).
@@ -71,6 +73,7 @@ export function Job() {
   const queryClient = useQueryClient();
   const { width, height } = useFrame();
   const [matchSeen, setMatchSeen] = useState(false);
+  const [arrivalSeen, setArrivalSeen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -268,6 +271,29 @@ export function Job() {
         hasAlternative={false}
         onAccept={() => setMatchSeen(true)}
         onBack={() => navigate("/")}
+        width={width}
+        height={height}
+      />
+    );
+  }
+
+  /*
+   * AT THE DOOR: who to expect and the server's code to ask for. No
+   * vehicle (the server records none) and no call or message (no masking
+   * vendor yet) — the screen shows only what is real. Sharing exists only
+   * for an order for someone else: the link with the code, for them.
+   */
+  if (showsArrival(data.status, arrivalSeen)) {
+    return withError(
+      <ArrivalVerifyBody
+        displayNameHe={professional.displayName}
+        photoUri={professional.profilePhotoUrl}
+        headlineHe={arrivalHeadlineHe(serviceNameHe, professional.proNowCompletedJobs)}
+        codeHe={job.data.doorCode}
+        onSiteNameHe={onSite?.name ?? null}
+        etaMinutes={null}
+        onShare={shareOnSite}
+        onBack={() => setArrivalSeen(true)}
         width={width}
         height={height}
       />

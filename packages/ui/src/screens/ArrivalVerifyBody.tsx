@@ -142,7 +142,8 @@ export function ArrivalVerifyBody({
           )}
           <Text style={styles.codeNote}>
             {onSiteNameHe
-              ? `הקוד נשלח גם ל${onSiteNameHe} בהודעה, והוא/היא יבקשו אותו בדלת. רק מי שקיבל את הקריאה יודע אותו.`
+              ? /* No SMS yet (vendor TBD): the code is on the link the orderer shares. */
+                `הקוד מופיע גם בקישור של ${onSiteNameHe}, והוא/היא יבקשו אותו בדלת. רק מי שקיבל את הקריאה יודע אותו.`
               : "בקשו את הקוד בדלת. רק מי שקיבל את הקריאה יודע אותו."}
           </Text>
         </View>
@@ -169,16 +170,23 @@ export function ArrivalVerifyBody({
           </Text>
         </View>
 
-        {/* ---------------- What you can do ---------------- */}
-        <View style={styles.actions}>
-          <Action labelHe="שיחה" onPress={onCall} />
-          <Action labelHe="הודעה" onPress={onMessage} />
-          <Action labelHe="שיתוף הקריאה" onPress={onShare} />
-        </View>
+        {/* ---------------- What you can do ----------------
+            Only what exists, as on the tracking screen: a call or message
+            button with no calling behind it is a promise the screen cannot
+            keep (no number-masking vendor yet, CLAUDE.md §4). */}
+        {onCall || onMessage || onShare ? (
+          <View style={styles.actions}>
+            {onCall ? <Action labelHe="שיחה" onPress={onCall} /> : null}
+            {onMessage ? <Action labelHe="הודעה" onPress={onMessage} /> : null}
+            {onShare ? <Action labelHe="שיתוף הקריאה" onPress={onShare} /> : null}
+          </View>
+        ) : null}
 
-        <Pressable onPress={onReport} accessibilityRole="button" style={styles.report}>
-          <Text style={styles.reportText}>משהו לא נראה לי תקין</Text>
-        </Pressable>
+        {onReport ? (
+          <Pressable onPress={onReport} accessibilityRole="button" style={styles.report}>
+            <Text style={styles.reportText}>משהו לא נראה לי תקין</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </View>
   );

@@ -174,6 +174,8 @@ export default async function jobsRoutes(app: FastifyInstance) {
       ratingGiven: job.review?.overallRating ?? null,
       // Ordered for someone else: who is at home, and the code once a professional is assigned.
       onSite: job.onSiteName ? { name: job.onSiteName, doorCode: job.doorCode } : null,
+      // The code to ask for at the door (the arrival screen). Only once someone is assigned.
+      doorCode: job.assignedProfessionalId ? job.doorCode : null,
       paymentsInApp: app.config.IN_APP_PAYMENTS !== "off",
     });
   });

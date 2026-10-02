@@ -40,8 +40,8 @@ export async function acceptOffer(deps: AcceptOfferDeps, offerId: string, profes
     return prisma.$transaction(async (tx) => {
       // Row-lock the job so a concurrent transaction cannot double-assign,
       // whether or not a job lock ran in front of this one.
-      const [job] = await tx.$queryRawUnsafe<Array<{ id: string; status: string; onSiteName: string | null }>>(
-        `SELECT id, status, "onSiteName" FROM jobs WHERE id = $1 FOR UPDATE`,
+      const [job] = await tx.$queryRawUnsafe<Array<{ id: string; status: string }>>(
+        `SELECT id, status FROM jobs WHERE id = $1 FOR UPDATE`,
         offer.jobId
       );
       if (!job) throw new OfferNoLongerAvailableError(offerId);
@@ -78,8 +78,10 @@ export async function acceptOffer(deps: AcceptOfferDeps, offerId: string, profes
         data: {
           status: "PRO_ASSIGNED",
           assignedProfessionalId: professionalId,
-          // Ordered for someone else: the code the professional says at the door.
-          ...(job.onSiteName ? { doorCode: issueDoorCode() } : {}),
+          // The code the professional says at the door (the customer's arrival
+          // screen, docs/21 W6). Every job gets one: a stranger is at the door
+          // whether the job was ordered for yourself or for someone else.
+          doorCode: issueDoorCode(),
         },
       });
 
