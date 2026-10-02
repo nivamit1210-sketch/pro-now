@@ -114,7 +114,7 @@ Screenshots go to `qa/out/`.
 
 - **Demo, 2026-10-01 (Amit's track), published as one version before a live presentation:**
   - Professional's join: free text recognises the trade, with autocomplete. Prices are his own and every line is editable. The join ends in his own shop: his sign with PRO NOW above his name, in his colour.
-  - Identity check: ID card, then face straight/right/left, then a match. Without it and the required documents nobody is approved for work.
+  - Identity check: date of birth (18+), ID card, then face straight/right/left; a person decides in admin and the photos are deleted on decision. Without it and the required documents nobody is approved for work.
   - Customers find his shop by searching inside the 3D city. Every customer back button now goes back.
   - Ordered for someone else: even a repair is quoted in the app (photo plus written findings) to the person who ordered, who approves and pays there. The person at home only gets SMS: the door code, then "עמית אישר ושילם".
   - The customer's name is עמית.
@@ -147,8 +147,8 @@ Screenshots go to `qa/out/`.
 1. **Production** (`docs/16 §Production`): a domain for email sign-in, Google sign-in keys,
    Amit's iPhone pass, an uptime monitor.
 2. **Next demo catch-up** from the marker in `docs/DEMO-SYNC.md` — the
-   2026-10-01 demo work (several orders, the repair quoted to the orderer,
-   the identity check) is waiting.
+   2026-10-01 demo work (several orders, the repair quoted to the orderer;
+   the identity check is shipped) is waiting.
 3. **Re-record the three films** so they show the new shops, search,
    pricing, joining and ordering for someone else.
 4. **"Request for a later time"**, the agreed next stage.

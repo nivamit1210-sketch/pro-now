@@ -111,17 +111,27 @@ Also part of the flow:
   [straight, right, left] }`. The server checks that all four uploads belong
   to the caller, are `READY` and are of kind `IDENTITY`. It sends them to
   `IdentityVerificationProvider.submit()` and stores the result.
-- The provider's answer moves the account:
-  - `MANUAL_REVIEW` → account `IDENTITY_REVIEW`.
-  - `VERIFIED` (only a real vendor can answer this) → `IDENTITY_VERIFIED`.
-  - `REJECTED` → the professional is asked to retake.
+- The check's own status records the answer; the account's status flow is
+  unchanged (the admin queue lists `SERVICE_REVIEW`), and account approval
+  requires a `VERIFIED` current check and age 18 (plan deviation,
+  2026-10-02). `REJECTED` asks the professional to retake.
+- A retake supersedes an undecided check and deletes its photos, except
+  any the new check reuses. Submit is serialized by a row lock on the
+  professional's profile. 422 `UPLOAD_NOT_READY`, 409
+  `IDENTITY_ALREADY_VERIFIED`.
 - A repeated submit with the same four uploads creates one attempt.
 - In the application's missing items, one `IDENTITY` item replaces the
   `GOVERNMENT_ID` and `SELFIE` documents.
 - **The server refuses to approve an account** unless the current check is
-  `VERIFIED`. No screen can bypass this.
-- Every submit and decision is written to the event timeline and
-  `audit_logs`.
+  `VERIFIED` and the date of birth shows 18 (409 `IDENTITY_NOT_VERIFIED` |
+  `DATE_OF_BIRTH_MISSING` | `UNDER_MINIMUM_AGE`). No screen can bypass this.
+- Web: CSP `script-src` adds only `'wasm-unsafe-eval'`. The face runtime
+  lives under `/face/` (model committed, wasm copied at predev/prebuild,
+  excluded from the offline precache).
+- Customers see the badge `IDENTITY_CHECKED` ("הזהות נבדקה על ידי PRO NOW")
+  for a manual approval.
+- Every submit and decision is written to `audit_logs` (a professional's
+  timeline).
 
 **Admin review.** The application card opens with a "זהות" block:
 - The four photos side by side, through short-lived private links. Each

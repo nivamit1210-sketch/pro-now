@@ -8,6 +8,12 @@ is 403 for anyone not in `ADMIN_EMAILS`, and every admin mutation writes an
 ## What exists (W8)
 - **Applications / verification queue** per professional and per service:
   account documents, licences, approve or reject with a reason.
+- **Identity block** on the professional's page: date of birth, the check's
+  status and the four photos (2-minute signed links; each opening is
+  audited as `IDENTITY_PHOTOS_VIEWED`). Three decisions: approve, retake
+  (reason required), reject (reason required). The photos are deleted
+  after the decision commits; the decision record stays. Account approval
+  stays blocked until a `VERIFIED` check and age 18.
 - **Job inspector** with the full `job_events` timeline. It is what turns
   "I waited half an hour and nobody came" into an answer:
   ```

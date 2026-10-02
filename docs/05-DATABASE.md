@@ -36,6 +36,15 @@ refunds, disputes, support_tickets, risk_signals, risk_actions,
 blocked_relationships, admin_users, admin_roles, audit_logs, app_config,
 market_activations, street_names, geocode_cache`.
 
+## Identity check
+`identity_verifications` holds one row per attempt (the unique on
+`professionalId` is dropped; index `(professionalId, createdAt)`). New
+columns: `method` (VENDOR | MANUAL), `verificationId`, `uploadIds`
+(`[idCard, straight, right, left]`, emptied on deletion), `photosDeletedAt`,
+`decidedById`, `decidedAt`, `decisionReason`. `professional_profiles` gains
+`dateOfBirth` (date). The media clean-up keeps photos of `MANUAL_REVIEW` /
+`PENDING` checks.
+
 ## Addresses
 An `Address` is saved from one of two sources only (`POST /v1/me/addresses`):
 a street from `street_names` — Israel's official street list (data.gov.il),
