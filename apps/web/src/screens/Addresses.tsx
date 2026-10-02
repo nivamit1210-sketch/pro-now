@@ -81,6 +81,23 @@ export function Addresses() {
     },
   });
 
+  /*
+   * The ×: off my list (audit v2 #4). A job that went there keeps it on the
+   * server. If it was the one chosen for the next order, that choice and
+   * the person at its door go with it: the order then goes to the newest
+   * address still listed (resolveAddress), or asks for one, as in the demo.
+   */
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteAddress(id),
+    onSuccess: async (_, id) => {
+      if (target.addressId === id) setTarget({ addressId: null, onSite: null });
+      await queryClient.invalidateQueries({ queryKey: addressesKey });
+    },
+    onError: () => {
+      setErrorHe(!navigator.onLine ? "אין חיבור לאינטרנט. נסו שוב כשהחיבור יחזור." : "לא הצלחנו להסיר את הכתובת. נסו שוב בעוד רגע.");
+    },
+  });
+
   const saved: SavedAddress[] = (addresses.data?.addresses ?? []).map((address) => ({
     id: address.id,
     labelHe: address.label ?? "כתובת",
@@ -123,6 +140,11 @@ export function Addresses() {
       saving={save.isPending}
       errorHe={errorHe}
       onUseLiveLocation={onUseLiveLocation}
+      onRemove={(id) => {
+        if (remove.isPending) return;
+        setErrorHe(null);
+        remove.mutate(id);
+      }}
       onBack={() => navigate(-1)}
       onConfirm={(r) => {
         if (save.isPending) return;

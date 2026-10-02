@@ -102,6 +102,8 @@ export interface AddressPickerBodyProps {
   errorHe?: string | null;
   onUseLiveLocation?: () => void;
   onSelect?: (id: string) => void;
+  /** Take an address off my list (the demo's ×). */
+  onRemove?: (id: string) => void;
   onConfirm?: (result: AddressPickerResult) => void;
   onBack?: () => void;
   width?: number;
@@ -130,6 +132,7 @@ export function AddressPickerBody({
   errorHe = null,
   onUseLiveLocation,
   onSelect,
+  onRemove,
   onConfirm,
   onBack,
   width = 390,
@@ -395,7 +398,8 @@ export function AddressPickerBody({
               {saved.map((a) => {
                 const on = pick?.kind === "saved" && pick.id === a.id;
                 return (
-                  <Pressable key={a.id} onPress={() => pickSaved(a.id)} accessibilityRole="radio" aria-checked={on}>
+                  <View key={a.id}>
+                  <Pressable onPress={() => pickSaved(a.id)} accessibilityRole="radio" aria-checked={on}>
                     <Surface
                       colors={colors}
                       level={1}
@@ -424,6 +428,23 @@ export function AddressPickerBody({
                       </View>
                     </Surface>
                   </Pressable>
+                  {/* Removing an address from my list (Dvir, 2026-10-02: "אין אפשרות להסיר כתובת"). */}
+                  {onRemove ? (
+                    <Pressable
+                      onPress={() => {
+                        // The one that is gone is no longer the choice; nothing else is chosen for you.
+                        if (on) setPick(null);
+                        onRemove(a.id);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`הסרת הכתובת ${a.labelHe}`}
+                      hitSlop={8}
+                      style={styles.remove}
+                    >
+                      <Text style={styles.removeText}>×</Text>
+                    </Pressable>
+                  ) : null}
+                  </View>
                 );
               })}
             </View>
@@ -616,6 +637,8 @@ const styles = StyleSheet.create({
   savedLabel: { ...type.bodyStrong, color: colors.textPrimary, writingDirection: "rtl" },
   savedFor: { ...type.caption, color: colors.actionText },
   savedAddr: { ...type.caption, color: colors.textSecondary, writingDirection: "rtl" },
+  remove: { position: "absolute", top: 6, left: 6, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: tint.neutralDark(0.06) },
+  removeText: { color: colors.textSecondary, fontSize: scale.body, fontWeight: "800", lineHeight: 20 },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.border },
   radioOn: { borderColor: colors.action, borderWidth: 6 },
 

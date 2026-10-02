@@ -549,6 +549,10 @@ model Address {
   /// rows saved before 2026-10-01, when the client sent the coordinates.
   geoPrecision String?
   createdAt  DateTime        @default(now())
+  /// Taken off the customer's list (the picker's ×, audit v2 #4) while a
+  /// job still points here: the job keeps its address, the list and new
+  /// orders do not see it. An address no job used is deleted outright.
+  archivedAt DateTime?
 
   jobs Job[]
 

@@ -44,7 +44,8 @@ export default async function jobsRoutes(app: FastifyInstance) {
     }
 
     const address = await app.prisma.address.findUnique({ where: { id: body.addressId } });
-    if (!address || address.customerId !== customer.id) {
+    // An address taken off the list (audit v2 #4) is not somewhere to send anyone new.
+    if (!address || address.customerId !== customer.id || address.archivedAt) {
       return reply.status(404).send({ code: "ADDRESS_NOT_FOUND", message: "Address not found for this customer" });
     }
 

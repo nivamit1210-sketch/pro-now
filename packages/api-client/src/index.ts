@@ -204,6 +204,8 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
     sendMatchFeedback: (input: MatchFeedbackInput) => request<void>("POST", "/match/feedback", input),
     getAddresses: () => request<{ addresses: AddressView[] }>("GET", "/me/addresses"),
     createAddress: (input: CreateAddressInput) => request<{ address: AddressView }>("POST", "/me/addresses", input),
+    /** Takes a saved address off my list (audit v2 #4); a job that used it keeps it ("archived"). */
+    deleteAddress: (id: string) => request<{ removed: "deleted" | "archived" }>("DELETE", `/me/addresses/${encodeURIComponent(id)}`),
     suggestStreets: (query: string) =>
       request<{ suggestions: StreetSuggestion[] }>("GET", `/geo/streets?q=${encodeURIComponent(query)}`),
     searchAddresses: (query: string) => request<{ results: GeocodingResult[] }>("GET", `/geo/search?q=${encodeURIComponent(query)}`),

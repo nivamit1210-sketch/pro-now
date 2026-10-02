@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { Prisma } from "@prisma/client";
 import { requireRole } from "../auth/access.js";
 import { createAddressSchema } from "@pro-now/validation";
 
@@ -38,9 +39,19 @@ import { locateStreet, WHOLE_LOCALITY_CODE, type Located } from "../domain/stree
  * Until 2026-10-01 the client sent text and coordinates of its choosing,
  * and the app paired whatever was typed with the live location.
  *
- * No deletion, yet. An address referenced by a job cannot simply
- * disappear, because the job's history points at it; the right shape is a
- * soft archive, and that is a schema change rather than a route.
+ * ---------------------------------------------------------------------
+ * TAKING ONE OFF THE LIST (audit v2 #4, the picker's ×)
+ * ---------------------------------------------------------------------
+ * A job points at its address row: where the professional went, what the
+ * customer, the professional and admin see about it afterwards. So an
+ * address some job used is archived (`archivedAt`), never edited or
+ * removed: the job keeps it word for word, and only the list and new
+ * orders stop seeing it. An address no job ever used is deleted outright,
+ * since nothing needs it and the customer asked for it gone.
+ *
+ * There is no default on the server. The app keeps the one chosen for the
+ * next order, and when that one is gone it falls back to the newest still
+ * listed, or asks (apps/web orderTarget.tsx).
  */
 export default async function addressesRoutes(app: FastifyInstance) {
   /**
@@ -61,7 +72,7 @@ export default async function addressesRoutes(app: FastifyInstance) {
   app.get("/v1/me/addresses", { onRequest: requireRole("CUSTOMER") }, async (req) => {
     const customer = await customerFor(req.user!.userId);
     const addresses = await app.prisma.address.findMany({
-      where: { customerId: customer.id },
+      where: { customerId: customer.id, archivedAt: null },
       orderBy: { createdAt: "desc" },
     });
     return { addresses };
@@ -119,8 +130,9 @@ export default async function addressesRoutes(app: FastifyInstance) {
      * coordinate: two GPS fixes at one doorstep differ by metres, and
      * rounding them to decide sameness invents a tolerance nobody chose.
      */
+    // One taken off the list stays with its jobs; saving the place again starts a new row.
     const existing = await app.prisma.address.findFirst({
-      where: { customerId: customer.id, formatted: place.formatted },
+      where: { customerId: customer.id, formatted: place.formatted, archivedAt: null },
     });
     if (existing) return reply.send({ address: existing });
 
@@ -139,5 +151,31 @@ export default async function addressesRoutes(app: FastifyInstance) {
       },
     });
     return reply.status(201).send({ address });
+  });
+  app.delete<{ Params: { id: string } }>("/v1/me/addresses/:id", { onRequest: requireRole("CUSTOMER") }, async (req, reply) => {
+    const customer = await customerFor(req.user!.userId);
+    /*
+     * Only the caller's own, still listed. Someone else's address answers
+     * exactly as one that does not exist: this route must not tell anybody
+     * whether an id is a stranger's address.
+     */
+    const address = await app.prisma.address.findFirst({
+      where: { id: req.params.id, customerId: customer.id, archivedAt: null },
+      select: { id: true },
+    });
+    if (!address) return reply.status(404).send({ code: "ADDRESS_NOT_FOUND", message: "Address not found for this customer" });
+
+    const usedByJob = await app.prisma.job.findFirst({ where: { addressId: address.id }, select: { id: true } });
+    if (!usedByJob) {
+      try {
+        await app.prisma.address.delete({ where: { id: address.id } });
+        return reply.send({ removed: "deleted" });
+      } catch (error) {
+        // A job created against it a moment ago (the foreign key refused): keep it for that job.
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003")) throw error;
+      }
+    }
+    await app.prisma.address.update({ where: { id: address.id }, data: { archivedAt: new Date() } });
+    return reply.send({ removed: "archived" });
   });
 }
