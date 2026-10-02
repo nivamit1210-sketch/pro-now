@@ -76,6 +76,7 @@ describe("every admin mutation writes an audit row", () => {
       data: { userId: (await db.user.create({ data: { email: uniqueEmail("w8-idpro"), emailVerified: true, name: "Id Pro" } })).id, legalName: "Id Pro", displayName: "Id", dateOfBirth: new Date("1985-01-01") },
     });
     const pendingId = await db.identityVerification.create({ data: { professionalId: idPro.id, vendorName: "sandbox-identity", status: "MANUAL_REVIEW" } });
+    const ticket = await db.supportTicket.create({ data: { kind: "SAFETY", userId: customerId, subject: "test", reason: "OTHER" } });
 
     const cases: Record<string, { url: string; payload: object }> = {
       "POST /api/v1/admin/professionals/:id/decision": { url: `/api/v1/admin/professionals/${pro.id}/decision`, payload: { approve: true } },
@@ -86,6 +87,7 @@ describe("every admin mutation writes an audit row", () => {
       "POST /api/v1/admin/pro-services/:id/decision": { url: `/api/v1/admin/pro-services/${ps.id}/decision`, payload: { approve: true } },
       "POST /api/v1/admin/users/:id/roles": { url: `/api/v1/admin/users/${customerId}/roles`, payload: { role: "PROFESSIONAL", grant: true, reason: "test grant" } },
       "PATCH /api/v1/admin/market/:id": { url: `/api/v1/admin/market/${activation.id}`, payload: { customerVisible: true, reason: "test switch" } },
+      "POST /api/v1/admin/support-tickets/:id/handled": { url: `/api/v1/admin/support-tickets/${ticket.id}/handled`, payload: { reason: "test handled" } },
     };
     // The debug routes change nothing: they throw, on purpose (monitoring, docs/16).
     const mutations = adminRoutes().filter((r) => r.method !== "GET" && !r.url.includes("/debug/"));

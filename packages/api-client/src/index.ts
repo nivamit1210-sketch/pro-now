@@ -32,7 +32,7 @@ import type {
   RequestMatch,
   StreetSuggestion,
 } from "@pro-now/types";
-import type { CreateAddressInput, CustomerOnboardingInput, MatchFeedbackInput, MeResponse } from "@pro-now/validation";
+import type { CreateAddressInput, CustomerOnboardingInput, MatchFeedbackInput, MeResponse, SafetyReportInput } from "@pro-now/validation";
 
 export type UploadKind = "PHOTO" | "VOICE_NOTE" | "DOCUMENT" | "IDENTITY";
 export interface UploadRecord {
@@ -116,6 +116,9 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
       request<{ url: string; expiresAt: string }>("POST", `/jobs/${encodeURIComponent(id)}/on-site-link`, {}),
     /** The page the person at home opens: no account, no address, no price. */
     getOnSite: (token: string) => request<OnSiteView>("GET", `/on-site/${encodeURIComponent(token)}`),
+    /** "משהו לא נראה לי תקין" (audit v2 #8b): to a person on the team; the same report again is the first one. */
+    reportSafety: (jobId: string, input: SafetyReportInput) =>
+      request<{ ticketId: string; receivedHe: string; replayed: boolean }>("POST", `/jobs/${encodeURIComponent(jobId)}/safety-report`, input),
     // --- The professional (docs/21 W7) ---
     proJoin: (input: { displayName: string; legalName: string; addressAs: "M" | "F"; dateOfBirth: string }) =>
       request<ProApplicationView>("POST", "/pro/join", input),
@@ -187,6 +190,10 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
         request<AdminActivationRow>("PATCH", `/admin/market/${encodeURIComponent(id)}`, input),
       matchFeedback: () => request<{ feedback: AdminFeedbackRow[] }>("GET", "/admin/match-feedback"),
       usage: () => request<AdminUsageView>("GET", "/admin/usage"),
+      supportTickets: (status: "OPEN" | "HANDLED" = "OPEN") =>
+        request<{ open: number; tickets: AdminSupportTicketRow[] }>("GET", `/admin/support-tickets?status=${status}`),
+      ticketHandled: (id: string, input: { reason: string }) =>
+        request<{ id: string; status: string; handledAt: string }>("POST", `/admin/support-tickets/${encodeURIComponent(id)}/handled`, input),
     },
     // --- Notifications (docs/21 W9) ---
     inbox: () =>
@@ -324,4 +331,19 @@ export interface AdminUsageView {
   jobs: Record<string, number>;
   storage: { bytes: number; files: number; limitBytes: number | null };
   database: { bytes: number; limitBytes: number | null };
+}
+/** A report or request for help (audit v2 #8b): who, about which visit and professional, and why. */
+export interface AdminSupportTicketRow {
+  id: string;
+  kind: string;
+  status: string;
+  subject: string;
+  reason: string | null;
+  reasonHe: string | null;
+  noteHe: string | null;
+  createdAt: string;
+  handledAt: string | null;
+  job: { id: string; serviceNameHe: string; statusAtReport: string | null; statusNow: string } | null;
+  reporter: { name: string | null; email: string } | null;
+  professional: { id: string; displayName: string } | null;
 }

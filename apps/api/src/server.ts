@@ -29,6 +29,7 @@ import onSiteRoutes from "./routes/on-site.js";
 import proOnboardingRoutes from "./routes/pro-onboarding.js";
 import adminProsRoutes from "./routes/admin-pros.js";
 import adminRoutes from "./routes/admin.js";
+import safetyReportRoutes from "./routes/safety-reports.js";
 import notificationRoutes from "./routes/notifications.js";
 import offersRoutes from "./routes/offers.js";
 import proRoutes from "./routes/pro.js";
@@ -264,6 +265,7 @@ export async function buildServer(opts: { logger?: boolean } = {}) {
   await app.register(proOnboardingRoutes, { prefix: API_PREFIX });
   await app.register(adminProsRoutes, { prefix: API_PREFIX });
   await app.register(adminRoutes, { prefix: API_PREFIX });
+  await app.register(safetyReportRoutes, { prefix: API_PREFIX });
   await app.register(notificationRoutes, { prefix: API_PREFIX });
   await app.register(offersRoutes, { prefix: API_PREFIX });
   await app.register(proRoutes, { prefix: API_PREFIX });

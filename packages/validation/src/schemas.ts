@@ -425,3 +425,25 @@ export const adminMarketChangeSchema = z
   .refine((d) => d.customerVisible !== undefined || d.providerOnboardingEnabled !== undefined || d.dispatchEnabled !== undefined, {
     message: "Change at least one switch",
   });
+
+/*
+ * `POST /api/v1/jobs/:id/safety-report` (audit v2 #8b): "משהו לא נראה לי
+ * תקין" at the door. One of four reasons (the same list as
+ * `SAFETY_REPORT_REASONS` in @pro-now/types) and, if they want, a line in
+ * their own words. A blank note is no note.
+ */
+export const safetyReportSchema = z
+  .object({
+    reason: z.enum(["NOT_THE_PERSON", "WRONG_CODE", "FEELS_UNSAFE", "OTHER"]),
+    note: z
+      .string()
+      .trim()
+      .max(500)
+      .nullish()
+      .transform((v) => (v ? v : null)),
+  })
+  .strict();
+export type SafetyReportInput = z.input<typeof safetyReportSchema>;
+
+/** `POST /api/v1/admin/support-tickets/:id/handled`: what ops did, kept in the audit log. */
+export const adminTicketHandledSchema = z.object({ reason: z.string().trim().min(3).max(500) }).strict();

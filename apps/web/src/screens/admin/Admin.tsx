@@ -19,6 +19,7 @@ import { ErrorScreen, LoadingScreen } from "../../states";
  */
 const TABS = [
   ["queue", "בקשות הצטרפות"],
+  ["reports", "דיווחים"],
   ["jobs", "קריאות"],
   ["users", "משתמשים"],
   ["market", "שוק"],
@@ -48,19 +49,27 @@ export function Admin() {
   if (me.isPending) return <LoadingScreen />;
   if (me.isError) return <ErrorScreen offline={!navigator.onLine} onRetry={() => void me.refetch()} />;
   if (!me.data.roles.includes("ADMIN")) return <Navigate to="/" replace />;
+  return <AdminTabs tab={tab} setTab={setTab} width={width} height={height} />;
+}
+
+function AdminTabs({ tab, setTab, width, height }: { tab: Tab; setTab: (t: Tab) => void; width: number; height: number }) {
+  // Open safety reports are counted on their tab, whichever tab is showing (audit v2 #8b).
+  const reports = useQuery({ queryKey: ["admin", "tickets", "OPEN"], queryFn: () => api.admin.supportTickets("OPEN"), refetchInterval: 60_000 });
+  const openReports = reports.data?.open ?? 0;
 
   return (
     <View style={[styles.screen, { width, height }]}>
       <Text style={styles.heading}>ניהול</Text>
-      <ScrollView horizontal contentContainerStyle={styles.tabs} showsHorizontalScrollIndicator={false}>
+      {/* flexGrow 0: on the web a horizontal ScrollView otherwise grows, and the pills stretched tall. */}
+      <ScrollView horizontal style={{ flexGrow: 0 }} contentContainerStyle={styles.tabs} showsHorizontalScrollIndicator={false}>
         {TABS.map(([id, he]) => (
           <Pressable key={id} onPress={() => setTab(id)} accessibilityRole="tab" accessibilityState={{ selected: tab === id }} style={[styles.tab, tab === id && styles.tabOn]}>
-            <Text style={[styles.tabText, tab === id && styles.tabTextOn]}>{he}</Text>
+            <Text style={[styles.tabText, tab === id && styles.tabTextOn]}>{id === "reports" && openReports > 0 ? `${he} (${openReports})` : he}</Text>
           </Pressable>
         ))}
       </ScrollView>
       <ScrollView contentContainerStyle={styles.body}>
-        {tab === "queue" ? <Queue /> : tab === "jobs" ? <Jobs /> : tab === "users" ? <Users /> : tab === "market" ? <Market /> : tab === "feedback" ? <Feedback /> : <Usage />}
+        {tab === "queue" ? <Queue /> : tab === "reports" ? <Reports /> : tab === "jobs" ? <Jobs /> : tab === "users" ? <Users /> : tab === "market" ? <Market /> : tab === "feedback" ? <Feedback /> : <Usage />}
       </ScrollView>
     </View>
   );
@@ -310,6 +319,64 @@ function JobStory({ id, onBack }: { id: string; onBack: () => void }) {
         <Text key={q.version} style={styles.rowSub}>הצעת מחיר {q.version} · {q.status} · ₪{(q.totalMinorUnits / 100).toFixed(0)}</Text>
       ))}
       {j.review ? <Text style={styles.rowSub}>דירוג {j.review.overallRating}{j.review.text ? ` · ״${j.review.text}״` : ""}</Text> : null}
+    </View>
+  );
+}
+
+/**
+ * SAFETY REPORTS (audit v2 #8b): "משהו לא נראה לי תקין" from a customer at
+ * the door, newest first. Each one was also sent to the ops Telegram
+ * channel when it came in. Closing one says what was done: it goes to the
+ * audit log and the job's timeline.
+ */
+function Reports() {
+  const queryClient = useQueryClient();
+  const [status, setStatus] = useState<"OPEN" | "HANDLED">("OPEN");
+  const [openJobId, setOpenJobId] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const list = useQuery({ queryKey: ["admin", "tickets", status], queryFn: () => api.admin.supportTickets(status) });
+  const { busy, errorHe, run } = useAct();
+  if (openJobId) return <JobStory id={openJobId} onBack={() => setOpenJobId(null)} />;
+  return (
+    <View style={styles.list}>
+      <View style={styles.actions}>
+        <Chip labelHe="פתוחים" on={status === "OPEN"} onPress={() => setStatus("OPEN")} />
+        <Chip labelHe="טופלו" on={status === "HANDLED"} onPress={() => setStatus("HANDLED")} />
+      </View>
+      {status === "OPEN" ? <Field label="מה נעשה (חובה לסגירה, נשמר ביומן)" value={reason} onChange={setReason} /> : null}
+      {list.isPending ? <LoadingScreen /> : list.isError ? <ErrorScreen offline={!navigator.onLine} onRetry={() => void list.refetch()} /> : list.data.tickets.length === 0 ? (
+        <Text style={styles.soft}>{status === "OPEN" ? "אין דיווחים פתוחים." : "אין דיווחים שטופלו."}</Text>
+      ) : (
+        list.data.tickets.map((tk) => (
+          <View key={tk.id} style={[styles.row, tk.status === "OPEN" && styles.missed]} accessibilityLabel={`דיווח: ${tk.reasonHe ?? tk.subject}`}>
+            <Text style={styles.rowTitle}>{tk.reasonHe ?? tk.subject}</Text>
+            {tk.noteHe ? <Text style={styles.rowTitle}>״{tk.noteHe}״</Text> : null}
+            <Text style={styles.rowSub}>
+              {new Date(tk.createdAt).toLocaleString("he-IL")}
+              {tk.job ? ` · ${tk.job.serviceNameHe} · בזמן הדיווח: ${JOB_STATUS_HE[tk.job.statusAtReport ?? ""] ?? tk.job.statusAtReport ?? "—"} · עכשיו: ${JOB_STATUS_HE[tk.job.statusNow] ?? tk.job.statusNow}` : ""}
+            </Text>
+            <Text style={styles.rowSub}>
+              מדווח/ת: {tk.reporter ? `${tk.reporter.name ?? ""} ${tk.reporter.email}`.trim() : "—"} · מקצוען: {tk.professional?.displayName ?? "—"}
+              {tk.handledAt ? ` · טופל ${new Date(tk.handledAt).toLocaleString("he-IL")}` : ""}
+            </Text>
+            <View style={styles.actions}>
+              {tk.job ? <Action labelHe="פתיחת הקריאה" onPress={() => setOpenJobId(tk.job!.id)} /> : null}
+              {tk.status === "OPEN" ? (
+                <Action
+                  labelHe="סימון כטופל"
+                  disabled={busy || reason.trim().length < 3}
+                  onPress={() => run(async () => {
+                    await api.admin.ticketHandled(tk.id, { reason: reason.trim() });
+                    setReason("");
+                    await queryClient.invalidateQueries({ queryKey: ["admin", "tickets"] });
+                  })}
+                />
+              ) : null}
+            </View>
+          </View>
+        ))
+      )}
+      {errorHe ? <Text accessibilityRole="alert" style={styles.error}>{errorHe}</Text> : null}
     </View>
   );
 }

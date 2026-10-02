@@ -155,6 +155,22 @@ describe("Monitor", () => {
     monitor.dispose();
   });
 
+  it("announces a non-error to ops every time: no grouping, no throttle (audit v2 #8b)", async () => {
+    const { monitor, sent } = harness();
+    for (let i = 0; i < 40; i++) monitor.announce("🛡️ <b>safety</b>");
+    await monitor.settle();
+    expect(sent).toHaveLength(40);
+    monitor.dispose();
+  });
+
+  it("an announcement survives a notifier that fails, and logs it", async () => {
+    const { monitor, warn } = harness({ notifier: { name: "broken", send: () => Promise.reject(new Error("network down")) } });
+    expect(() => monitor.announce("x")).not.toThrow();
+    await monitor.settle();
+    expect(warn).toHaveBeenCalledWith({ err: "network down", notifier: "broken" }, "Alert could not be sent");
+    monitor.dispose();
+  });
+
   it("reports things that are not Errors", async () => {
     const { monitor, sent } = harness();
     monitor.report({ source: "process", kind: "unhandledRejection", error: "plain string reason" });
@@ -206,7 +222,7 @@ describe("POST /api/v1/client-errors", () => {
   async function app() {
     const report = vi.fn().mockReturnValue({});
     const server = Fastify({ logger: false });
-    server.decorate("monitor", { report, settle: async () => {}, flush: async () => {}, dispose: () => {} });
+    server.decorate("monitor", { report, announce: () => {}, settle: async () => {}, flush: async () => {}, dispose: () => {} });
     server.setErrorHandler((err, _req, reply) => reply.status((err as { name?: string }).name === "ZodError" ? 400 : 500).send());
     await server.register(clientErrorsRoutes, { prefix: "/api" });
     return { server, report };

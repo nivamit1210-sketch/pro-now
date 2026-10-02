@@ -1114,14 +1114,26 @@ model Dispute {
   @@map("disputes")
 }
 
+/// A person asking for help. kind SAFETY: "משהו לא נראה לי תקין" at the door
+/// (audit v2 #8b) — the job, who reported, about which professional, why,
+/// and when ops handled it (with an audit row).
 model SupportTicket {
-  id        String   @id @default(cuid())
-  jobId     String?
-  userId    String
-  subject   String
-  status    String   @default("OPEN")
-  createdAt DateTime @default(now())
+  id             String    @id @default(cuid())
+  jobId          String?
+  userId         String
+  subject        String
+  status         String    @default("OPEN") // OPEN | HANDLED
+  createdAt      DateTime  @default(now())
+  kind           String    @default("SUPPORT") // SUPPORT | SAFETY
+  reason         String? // SAFETY: NOT_THE_PERSON | WRONG_CODE | FEELS_UNSAFE | OTHER
+  noteHe         String?
+  professionalId String?
+  jobStatus      String? // the job's status when it was reported
+  handledAt      DateTime?
+  handledById    String?
 
+  @@index([kind, status, createdAt])
+  @@index([jobId])
   @@map("support_tickets")
 }
 

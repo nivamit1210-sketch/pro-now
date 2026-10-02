@@ -43,6 +43,13 @@ export interface MonitorOptions {
 
 export interface Monitor {
   report(incident: Incident): { eventId?: string };
+  /**
+   * Tells ops something that is not an error, e.g. a customer's safety
+   * report (audit v2 #8b). Not grouped and not throttled: each one is a
+   * person asking for a person, and the route that calls it caps how often.
+   * Never throws, and `settle`/`flush` wait for it like any alert.
+   */
+  announce(html: string): void;
   /** Resolves when every alert already queued has been sent or has failed. */
   settle(): Promise<void>;
   flush(timeoutMs: number): Promise<void>;
@@ -170,6 +177,13 @@ export function createMonitor(opts: MonitorOptions): Monitor {
       } catch (err) {
         opts.log.warn({ err: normalise(err).message }, "Error reporting failed");
         return {};
+      }
+    },
+    announce(html) {
+      try {
+        send(html);
+      } catch (err) {
+        opts.log.warn({ err: normalise(err).message }, "Announcement failed");
       }
     },
     async settle() {

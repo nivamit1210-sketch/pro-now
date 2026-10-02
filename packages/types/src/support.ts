@@ -53,3 +53,30 @@ export function supportEmailUrl(subjectHe?: string): string {
 export function supportHoursHe(): string {
   return "אדם קורא את ההודעות. אם זה דחוף — ואטסאפ מגיע מהר יותר ממייל.";
 }
+
+/*
+ * ---------------------------------------------------------------------
+ * "משהו לא נראה לי תקין" — A SAFETY REPORT FROM THE DOOR (audit v2 #8b)
+ * ---------------------------------------------------------------------
+ * The arrival screen's link. The customer picks what is wrong, may add a
+ * line, and it lands with a person: a support ticket of kind SAFETY, an
+ * alert to ops (the Telegram channel the error alerts use) and a row in
+ * the admin's "דיווחים". What the customer is told is only what is true:
+ * it was received and somebody will come back to them — no response time
+ * (see `supportHoursHe`), and the police number for an emergency.
+ */
+export const SAFETY_REPORT_REASONS = ["NOT_THE_PERSON", "WRONG_CODE", "FEELS_UNSAFE", "OTHER"] as const;
+export type SafetyReportReason = (typeof SAFETY_REPORT_REASONS)[number];
+
+/** In words that need no gender (the reporter's or the professional's). */
+export const SAFETY_REASON_HE: Record<SafetyReportReason, string> = {
+  NOT_THE_PERSON: "זה לא האדם שבתמונה",
+  WRONG_CODE: "הקוד לא תואם",
+  FEELS_UNSAFE: "לא מרגיש לי בטוח",
+  OTHER: "משהו אחר",
+};
+
+export const SAFETY_NOTE_MAX = 500;
+export const SAFETY_RECEIVED_HE = "קיבלנו, נחזור אליך";
+/** Israel's police. Said on the sheet before and after sending. */
+export const EMERGENCY_POLICE_NUMBER = "100";

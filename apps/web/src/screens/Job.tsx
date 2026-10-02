@@ -28,6 +28,7 @@ import { useJobSocket } from "../useJobSocket";
 import { JobWorldBackdrop } from "../world";
 import { CityHero } from "../art/CityHero";
 import { arrivalHeadlineHe, showsArrival } from "./arrival";
+import { SafetySheet } from "./SafetySheet";
 
 /**
  * One job, from "looking for a professional" to the review (docs/21 W6).
@@ -77,6 +78,7 @@ export function Job() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [safetyOpen, setSafetyOpen] = useState(false);
 
   // The socket is the fast path; this interval is the net under it.
   const job = useQuery({ queryKey: jobKey(id), queryFn: () => api.getJob(id), refetchInterval: 20_000 });
@@ -151,11 +153,12 @@ export function Job() {
       })
     : undefined;
 
-  const withError = (screen: React.ReactNode) => (
+  const withError = (screen: React.ReactNode, overlay?: React.ReactNode) => (
     <View style={{ flex: 1 }}>
       {screen}
       {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
       {notice && !actionError ? <Text style={styles.notice}>{notice}</Text> : null}
+      {overlay}
     </View>
   );
 
@@ -300,6 +303,17 @@ export function Job() {
         etaMinutes={null}
         onShare={shareOnSite}
         onBack={() => setArrivalSeen(true)}
+        // "משהו לא נראה לי תקין": the demo's safety sheet, and a report that reaches a person (audit v2 #8b).
+        onReport={() => setSafetyOpen(true)}
+        width={width}
+        height={height}
+      />,
+      <SafetySheet
+        visible={safetyOpen}
+        onClose={() => setSafetyOpen(false)}
+        jobId={id}
+        onSiteNameHe={onSite?.name ?? null}
+        onShare={shareOnSite}
         width={width}
         height={height}
       />
