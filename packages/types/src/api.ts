@@ -413,6 +413,9 @@ export interface ExternalReputationView {
   profileUrl: string | null;
 }
 
+/** How a professional asked to be addressed: masculine or feminine Hebrew. */
+export type ProAddressAs = "M" | "F";
+
 export interface ProfessionalSummaryView {
   id: string;
   displayName: string;
@@ -420,6 +423,11 @@ export interface ProfessionalSummaryView {
   profilePhotoUrl: string | null;
   /** What they chose while joining: "CHARACTER" means draw the job's trade character. */
   portraitKind: "PHOTO" | "CHARACTER" | null;
+  /**
+   * How they asked to be addressed while joining ("M" / "F"), so the customer's
+   * screens say הגיע / הגיעה about them. null: not chosen — screens use the masculine.
+   */
+  addressAs: ProAddressAs | null;
   verifications: VerificationBadgeKind[];
   /** Jobs completed through PRO NOW. Never an imported or invented count. */
   proNowCompletedJobs: number;
@@ -651,7 +659,7 @@ export interface MyJobSummary {
   /** The catalogue code (`Service.code`), for the service's mark. */
   serviceCode: string;
   /** The assigned professional; null until someone accepts. */
-  professional: { id: string; displayName: string } | null;
+  professional: { id: string; displayName: string; addressAs: ProAddressAs | null } | null;
   /** The customer's own stars for this job, once given. */
   ratingGiven: number | null;
   /** What the work came to, once it closed outside the app (D1); else null. */
@@ -702,6 +710,8 @@ export interface OnSiteView {
     /** Their photo, through a short-lived link (D1). */
     photoUrl: string | null;
     portraitKind: "PHOTO" | "CHARACTER" | null;
+    /** See ProfessionalSummaryView.addressAs. */
+    addressAs: ProAddressAs | null;
     verifications: VerificationBadgeKind[];
   } | null;
   etaSeconds: number | null;

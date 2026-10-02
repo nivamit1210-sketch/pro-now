@@ -121,7 +121,7 @@ export default async function jobsRoutes(app: FastifyInstance) {
         status: true,
         createdAt: true,
         service: { select: { nameHe: true, code: true } },
-        assignedProfessional: { select: { id: true, displayName: true } },
+        assignedProfessional: { select: { id: true, displayName: true, addressAs: true } },
         review: { select: { overallRating: true } },
         // Only the receipt's event, not the job's whole history.
         events: { where: { type: "SETTLED_OUTSIDE_APP" }, select: { type: true, metadata: true } },

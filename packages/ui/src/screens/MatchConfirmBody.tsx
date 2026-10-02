@@ -112,6 +112,8 @@ export interface MatchReason {
 export interface MatchConfirmBodyProps {
   serviceNameHe: string;
   displayNameHe: string;
+  /** The professional asked to be addressed in the feminine (addressAs "F"): מגיעה, זמינה. */
+  professionalFemale?: boolean;
   /** "ספרית עד הבית · תספורות ועיצוב" — the line under the name. */
   headlineHe: string;
   /**
@@ -201,7 +203,8 @@ export function MatchConfirmBody({
   price,
   presence = "ONLINE",
   animateReveal = true,
-  presenceLabelHe = "זמין עכשיו",
+  professionalFemale = false,
+  presenceLabelHe = professionalFemale ? "זמינה עכשיו" : "זמין עכשיו",
   voiceNote,
   hasAlternative,
   onAccept,
@@ -388,7 +391,7 @@ export function MatchConfirmBody({
           */}
         <View style={styles.when}>
           <Glow color="signal" width={width - spacing.lg * 2} height={112} intensity={0.1} originY={0.5} spread={0.5} />
-          <Text style={styles.whenLead}>מגיע אליך בעוד</Text>
+          <Text style={styles.whenLead}>{professionalFemale ? "מגיעה אליך בעוד" : "מגיע אליך בעוד"}</Text>
           <Text style={styles.whenValue}>
             {etaMinutes === null ? "—" : `${etaMinutes} דקות`}
           </Text>

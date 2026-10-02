@@ -42,6 +42,8 @@ const colors = customerTheme.colors;
 
 export interface ArrivalVerifyBodyProps {
   displayNameHe: string;
+  /** The professional asked to be addressed in the feminine (addressAs "F"): הגיעה, מגיעה. */
+  professionalFemale?: boolean;
   photoUri?: string | null;
   /** "חשמלאי מוסמך · 214 עבודות דרך PRO NOW" */
   headlineHe: string;
@@ -70,6 +72,7 @@ export interface ArrivalVerifyBodyProps {
 
 export function ArrivalVerifyBody({
   displayNameHe,
+  professionalFemale = false,
   photoUri,
   headlineHe,
   codeHe,
@@ -124,7 +127,7 @@ export function ArrivalVerifyBody({
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.status}>
-          {arrived ? `${displayNameHe} הגיע` : `${displayNameHe} כמעט אצלך`}
+          {arrived ? `${displayNameHe} ${professionalFemale ? "הגיעה" : "הגיע"}` : `${displayNameHe} כמעט אצלך`}
         </Text>
         {!arrived ? (
           <Text style={styles.eta}>
@@ -151,7 +154,7 @@ export function ArrivalVerifyBody({
         {/* ---------------- What to look for ---------------- */}
         {vehicleHe || plateTailHe ? (
           <View style={styles.vehicle}>
-            <Text style={styles.vehicleLabel}>מגיע ב</Text>
+            <Text style={styles.vehicleLabel}>{professionalFemale ? "מגיעה ב" : "מגיע ב"}</Text>
             <View style={styles.vehicleRow}>
               <Text style={styles.vehicleText}>{vehicleHe ?? "רכב פרטי"}</Text>
               {plateTailHe ? (

@@ -35,6 +35,8 @@ export interface OnSiteBodyProps {
   onSiteNameHe: string;
   serviceNameHe: string;
   proNameHe: string;
+  /** The professional asked to be addressed in the feminine (addressAs "F"): תגיע, עברה, ממנה. */
+  proFemale?: boolean;
   proPhotoUri?: string | null;
   /** What was checked, in words: "זהות מאומתת", "רישיון אינסטלציה". */
   verifiedHe: string[];
@@ -58,6 +60,7 @@ export function OnSiteBody({
   onSiteNameHe,
   serviceNameHe,
   proNameHe,
+  proFemale = false,
   proPhotoUri = null,
   verifiedHe,
   stage,
@@ -74,6 +77,7 @@ export function OnSiteBody({
 }: OnSiteBodyProps) {
   const first = onSiteNameHe.split(" ")[0] ?? onSiteNameHe;
   const proFirst = proNameHe.split(" ")[0] ?? proNameHe;
+  const g = (male: string, female: string) => (proFemale ? female : male);
   const headline =
     stage === "coming"
       ? `${proFirst} בדרך אליך`
@@ -85,12 +89,12 @@ export function OnSiteBody({
   const when =
     stage === "coming"
       ? minutesAway !== null && minutesAway > 0
-        ? `יגיע בעוד כ־${minutesAway} דקות${arrivalClockHe ? ` · בערך ב־${arrivalClockHe}` : ""}`
+        ? `${g("יגיע", "תגיע")} בעוד כ־${minutesAway} דקות${arrivalClockHe ? ` · בערך ב־${arrivalClockHe}` : ""}`
         : arrivalClockHe
-          ? `יגיע בערך ב־${arrivalClockHe}`
-          : "יגיע בקרוב"
+          ? `${g("יגיע", "תגיע")} בערך ב־${arrivalClockHe}`
+          : g("יגיע בקרוב", "תגיע בקרוב")
       : stage === "at_door"
-        ? "לפני שפותחים — בקשו ממנו את הקוד"
+        ? `לפני שפותחים — בקשו ${g("ממנו", "ממנה")} את הקוד`
         : stage === "inside"
           ? `${ordererNameHe} רואה הכול ומאשר את המחיר מהטלפון שלו`
           : `${ordererNameHe} אישר ושילם. אין צורך לעשות דבר.`;
@@ -108,8 +112,8 @@ export function OnSiteBody({
         <View style={styles.sms}>
           <Text style={styles.smsFrom}>PRO NOW · הודעה</Text>
           <Text style={styles.smsText}>
-            שלום {first}, {ordererNameHe} הזמין אליך בעל מקצוע דרך PRO NOW ({serviceNameHe}). {proFirst} עבר
-            אימות זהות. התמונה שלו וקוד לדלת — בקישור.
+            שלום {first}, {ordererNameHe} הזמין אליך בעל מקצוע דרך PRO NOW ({serviceNameHe}). {proFirst} {g("עבר", "עברה")}
+            אימות זהות. התמונה {g("שלו", "שלה")} וקוד לדלת — בקישור.
           </Text>
         </View>
 
@@ -122,7 +126,7 @@ export function OnSiteBody({
             <View style={{ flex: 1 }}>
               <Text style={styles.proName} numberOfLines={1}>{proNameHe}</Text>
               <Text style={styles.proService} numberOfLines={1}>{serviceNameHe}</Text>
-              {vehicleHe ? <Text style={styles.proService} numberOfLines={1}>מגיע ב{vehicleHe}</Text> : null}
+              {vehicleHe ? <Text style={styles.proService} numberOfLines={1}>{g("מגיע", "מגיעה")} ב{vehicleHe}</Text> : null}
             </View>
           </View>
           {verifiedHe.map((v) => (
@@ -135,11 +139,11 @@ export function OnSiteBody({
 
         {stage === "coming" || stage === "at_door" ? (
           <View style={[styles.code, stage === "at_door" && styles.codeNow]}>
-            <Text style={styles.codeLabel}>כשהוא בדלת, בקשו ממנו את הקוד:</Text>
+            <Text style={styles.codeLabel}>{g("כשהוא בדלת, בקשו ממנו את הקוד:", "כשהיא בדלת, בקשו ממנה את הקוד:")}</Text>
             <Text style={styles.codeDigits} accessibilityLabel={`הקוד ${codeHe ?? ""}`}>
               {codeHe ? codeHe.split("").join(" ") : "הקוד יגיע רגע לפני"}
             </Text>
-            <Text style={styles.codeWarn}>אם הוא לא יודע את הקוד — אל תפתחו, והתקשרו ל{ordererNameHe}.</Text>
+            <Text style={styles.codeWarn}>{g("אם הוא לא יודע", "אם היא לא יודעת")} את הקוד — אל תפתחו, והתקשרו ל{ordererNameHe}.</Text>
           </View>
         ) : null}
 

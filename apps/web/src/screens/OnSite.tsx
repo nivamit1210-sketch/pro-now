@@ -57,6 +57,7 @@ export function OnSite() {
       onSiteNameHe={v.onSiteNameHe}
       serviceNameHe={v.serviceNameHe}
       proNameHe={v.professional.displayName}
+      proFemale={v.professional.addressAs === "F"}
       proPhotoUri={v.professional.portraitKind === "CHARACTER" ? tradeCharacterFor(v.serviceCode) : v.professional.photoUrl}
       verifiedHe={verifiedHe}
       stage={v.stage}

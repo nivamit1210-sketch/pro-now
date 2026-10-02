@@ -827,7 +827,7 @@ export function TrackingBody({
         <Pressable
           onPress={onOpenRealMap}
           accessibilityRole="button"
-          accessibilityLabel={geo ? "חזרה לעיר" : "איפה הוא עכשיו — מפה אמיתית"}
+          accessibilityLabel={geo ? "חזרה לעיר" : `איפה ${professionalFemale ? "היא" : "הוא"} עכשיו — מפה אמיתית`}
           style={({ pressed }) => [styles.etaClock, { top: Math.round(openMapH * 0.22) }, pressed && { opacity: 0.85 }]}
         >
           <Text style={styles.etaClockMin}>{Math.max(1, Math.round(eta.etaSeconds / 60))}</Text>
@@ -835,7 +835,7 @@ export function TrackingBody({
           {eta.distanceMeters !== null ? (
             <Text style={styles.etaClockKm}>{(eta.distanceMeters / 1000).toFixed(1)} ק״מ</Text>
           ) : null}
-          <Text style={styles.etaClockHint}>{geo ? "חזרה לעיר" : "איפה הוא ›"}</Text>
+          <Text style={styles.etaClockHint}>{geo ? "חזרה לעיר" : `איפה ${professionalFemale ? "היא" : "הוא"} ›`}</Text>
         </Pressable>
       ) : null}
 
@@ -856,7 +856,7 @@ export function TrackingBody({
             ) : null}
             {rating ? <Text style={styles.proCardLine}>★ {rating.rating} ({rating.count}) ב-PRO NOW</Text> : null}
             {jobsLine ? <Text style={styles.proCardLine}>{jobsLine}</Text> : null}
-            {etaDisplay ? <Text style={styles.proCardEta}>מגיע בעוד {etaDisplay.value} {etaDisplay.unit}</Text> : null}
+            {etaDisplay ? <Text style={styles.proCardEta}>{professionalFemale ? "מגיעה" : "מגיע"} בעוד {etaDisplay.value} {etaDisplay.unit}</Text> : null}
             <View style={styles.proCardRow}>
               {onCall ? (
                 <Pressable onPress={onCall} style={styles.proCardBtn} accessibilityRole="button"><Text style={styles.proCardBtnText}>שיחה</Text></Pressable>
