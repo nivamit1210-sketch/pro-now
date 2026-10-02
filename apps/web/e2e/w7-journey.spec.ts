@@ -87,7 +87,9 @@ test("the customer and the professional, two browsers, request to review", async
     await p.getByRole("tab", { name: "המסמכים שלי" }).click();
     await expect(p).toHaveURL(/\/pro\/documents$/);
     await expect(p.getByRole("heading", { name: "המסמכים שלי" })).toBeVisible();
-    await expect(p.getByText("זהות", { exact: true })).toBeVisible();
+    await expect(p.getByText("תיק עוסק", { exact: true })).toBeVisible();
+    // Approved before the identity check existed: not asked for one until re-verification exists (docs/10).
+    await expect(p.getByText("זהות", { exact: true })).toHaveCount(0);
 
     // Her profile as customers see it (the demo's profile tab): the job she just did counts, and "עריכה" leads to her details.
     await p.getByRole("tab", { name: "הפרופיל" }).click();
