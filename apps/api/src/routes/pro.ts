@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { notFound, ownShift, requireRole } from "../auth/access.js";
-import { earningsFor } from "../domain/payments/earnings.js";
+import { earningsFor, outsideAppEarningsFor } from "../domain/payments/earnings.js";
 import { startShiftSchema, locationPingSchema } from "@pro-now/validation";
 import { assertPresenceTransition, canEndShift } from "../domain/job/pro-presence-transitions.js";
 import type { OfferCardView, ProPresenceState } from "@pro-now/types";
@@ -129,7 +129,11 @@ export default async function proRoutes(app: FastifyInstance) {
      * shipped screen has never rendered it, because this endpoint could
      * not feed it. The ledger has held the shape since §21.
      */
-    const breakdown = await earningsFor(app.prisma, professional.id);
+    // No money moves through the app (D1): the receipts are the record, not the ledger.
+    const breakdown =
+      app.config.IN_APP_PAYMENTS === "off"
+        ? await outsideAppEarningsFor(app.prisma, professional.id)
+        : await earningsFor(app.prisma, professional.id);
 
     return reply.send({
       netMinorUnits,

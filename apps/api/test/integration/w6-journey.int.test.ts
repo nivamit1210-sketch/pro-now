@@ -117,6 +117,14 @@ describe("a job from request to review, no money in the app (D1)", () => {
     expect(view).toMatchObject({ paymentsInApp: false, receipt: { amountMinorUnits: 22000, paidInApp: false } });
   });
 
+  it("the professional's earnings show the job, paid directly, with no net", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/v1/pro/earnings", headers: as(pro) });
+    expect(res.statusCode, res.body).toBe(200);
+    const { breakdown } = res.json();
+    expect(breakdown).toMatchObject({ paidDirectly: true, periodNetMinorUnits: null, awaitingCommissionDecision: false });
+    expect(breakdown.jobs).toContainEqual(expect.objectContaining({ jobId, grossMinorUnits: 22000, netMinorUnits: null }));
+  });
+
   it("the review closes the job", async () => {
     const res = await app.inject({ method: "POST", url: `/api/v1/jobs/${jobId}/reviews`, headers: as(customer), payload: { overallRating: 5, text: "מעולה" } });
     expect(res.statusCode, res.body).toBe(200);

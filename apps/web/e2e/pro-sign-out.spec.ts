@@ -50,22 +50,25 @@ test("a professional signs out and back in; the next person on the device starts
   await expect(page).toHaveURL(/\/welcome$/);
 });
 
-test("an approved professional signs out while offline; online, going offline comes first", async ({ page, baseURL }) => {
+test("an approved professional signs out from the profile tab, and the shift ends first", async ({ page, baseURL }) => {
   test.setTimeout(120_000);
   const pro = await dispatchableProfessional({ serviceCode: "HOME_PLUMB_LEAK", lat: 32.08, lng: 34.78, baseURL: baseURL!, offline: true });
   try {
     await signInAsPro(page, pro.email);
     const signOut = page.getByRole("button", { name: "יציאה מהחשבון" });
-    await expect(signOut).toBeVisible();
-
-    await page.getByRole("button", { name: "התחברות לקבלת עבודות" }).click();
-    await expect(page.getByText(/השאירי את האפליקציה פתוחה/)).toBeVisible();
+    // The shift screen is about the shift; signing out lives in the profile tab.
     await expect(signOut).toHaveCount(0);
 
-    await page.getByRole("button", { name: "סיום משמרת" }).click();
-    await expect(signOut).toBeVisible();
+    await page.getByRole("button", { name: "התחלת משמרת" }).click();
+    await expect(page.getByText(/השאירי את האפליקציה פתוחה/)).toBeVisible();
+
+    // Online on every tab: the profile tab still says so, and signing out ends the shift.
+    await page.getByRole("tab", { name: "הפרופיל" }).click();
+    await expect(page).toHaveURL(/\/pro\/profile$/);
+    await expect(page.getByText(/השאירי את האפליקציה פתוחה/)).toBeVisible();
     await signOut.click();
     await expect(page).toHaveURL(/\/welcome$/);
+    expect((await pro.status()).shiftId).toBeNull();
   } finally {
     await pro.dispose();
   }

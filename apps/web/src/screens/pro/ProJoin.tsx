@@ -25,6 +25,7 @@ import { tradeCharacterFor, tradeShopFor } from "../../tradeCharacter";
 import { ErrorScreen, LoadingScreen } from "../../states";
 import { APPROVAL_STEPS_HE } from "./approval";
 import { ProSignOut } from "./ProSignOut";
+import { ACCOUNT_DOCS } from "./proPages";
 
 /**
  * JOINING AS A PROFESSIONAL (docs/21 W7), in the demo's order and words
@@ -45,12 +46,8 @@ export const applicationKey = ["pro-application"] as const;
 
 const STEPS = ["פרטים", "מה אתם עושים", "אזור", "מסמכים", "מחירים", "החנות שלכם", "התמונה שלכם", "סיכום ושליחה"] as const;
 const SHOP_STEP = 5;
+const DOCUMENTS_STEP = 3;
 const RADII_KM = [5, 10, 15, 25, 40];
-const ACCOUNT_DOCS: Array<{ kind: "GOVERNMENT_ID" | "SELFIE" | "TAX_FILE"; labelHe: string; noteHe: string }> = [
-  { kind: "GOVERNMENT_ID", labelHe: "תעודת זהות", noteHe: "צילום ברור של שני הצדדים, או של הרישיון" },
-  { kind: "SELFIE", labelHe: "תמונת פנים", noteHe: "כדי לוודא שמי שמגיע הוא מי שנרשם" },
-  { kind: "TAX_FILE", labelHe: "תיק עוסק", noteHe: "אישור עוסק פטור/מורשה או חברה" },
-];
 const PRICE_FIELDS: Record<string, Array<{ key: "basePriceMinorUnits" | "minimumBillableMinutes" | "perKmMinorUnits"; labelHe: string; minutes?: boolean }>> = {
   VISIT_QUOTE: [{ key: "basePriceMinorUnits", labelHe: "דמי ביקור ואבחון (₪)" }],
   FIXED: [{ key: "basePriceMinorUnits", labelHe: "מחיר לעבודה (₪)" }],
@@ -111,7 +108,7 @@ export function ProJoin() {
   // Coming back to edit a sent application opens at the summary, as in the demo.
   const [params] = useSearchParams();
   const at = params.get("at");
-  const [step, setStep] = useState(at === "summary" ? STEPS.length - 1 : at === "shop" ? SHOP_STEP : 0);
+  const [step, setStep] = useState(at === "summary" ? STEPS.length - 1 : at === "shop" ? SHOP_STEP : at === "documents" ? DOCUMENTS_STEP : 0);
   /*
    * The four explanation slides, then the welcome — once, for someone who has
    * not started joining (the demo's order, docs/DEMO-SYNC.md, 2026-10-01 P1).

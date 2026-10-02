@@ -1,18 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { Navigate, useNavigate } from "react-router";
+import { Navigate, useLocation, useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@pro-now/api-client";
-import { pilotServiceIdForDatabaseCode, type OfferCardView } from "@pro-now/types";
-import { ProOfferBody, ProOnlineBody, catalogServicePages, customerDarkTheme, spacing, type as t, type MarkName } from "@pro-now/ui";
+import type { OfferCardView } from "@pro-now/types";
+import { ProOfferBody, ProShiftBody, customerDarkTheme, spacing, type as t } from "@pro-now/ui";
 
 import { api } from "../../api";
 import { useFrame } from "../../frame";
+import { CityHero } from "../../art/CityHero";
 import { ErrorScreen, LoadingScreen } from "../../states";
-import { ProSignOut } from "./ProSignOut";
+import { ProDocumentsTab, ProEarningsTab, ProPricingPage, ProProfileTab } from "./ProTabs";
+import { PRO_TAB_BAR_H, ProTabBar } from "./ProTabBar";
+import { markFor, proPageFromPath, shiftChipsFor } from "./proPages";
 
 /**
- * ONLINE, IN THE BROWSER (docs/21 W7).
+ * THE PROFESSIONAL'S SIDE, ONCE APPROVED (docs/21 W7; the demo's tabs,
+ * 2026-10-01): המשמרת · הרווחים · המסמכים שלי · הפרופיל.
+ *
+ * Presence lives here, above the tabs, because it is not a tab's business:
+ * a professional reading their earnings is still online, their phone must
+ * still send its position, and an offer must still take the screen.
  *
  * A web page on iOS cannot track location or wake in the background, so
  * this says plainly: keep the app open while online. While it is open it
@@ -22,16 +30,17 @@ import { ProSignOut } from "./ProSignOut";
  *
  * The offer shows the server's countdown and the expected earnings when
  * they are knowable (CLAUDE.md §3, transparent payout); accepting goes
- * through the atomic accept.
- *
- * Offers now arrive on the person's live channel (W9) and, with the phone's
- * notifications on, as a push; the poll below is only the fallback.
+ * through the atomic accept. Offers arrive on the person's live channel
+ * (W9) and, with the phone's notifications on, as a push; the poll below
+ * is only the fallback.
  */
 const PING_MS = 20_000;
 /** The live channel brings offers the moment they are sent (W9); this is the net under it. */
 const OFFER_POLL_MS = 15_000;
 const ONLINE = new Set(["AVAILABLE", "OFFER_RECEIVED", "RESERVED"]);
+const KEEP_OPEN_H = 44;
 export const proStatusKey = ["pro-status"] as const;
+export const proServicesKey = ["pro-services"] as const;
 
 function position(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) =>
@@ -41,6 +50,8 @@ function position(): Promise<GeolocationPosition> {
 
 export function ProOnline() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const page = proPageFromPath(pathname);
   const queryClient = useQueryClient();
   const { width, height } = useFrame();
   const [busy, setBusy] = useState(false);
@@ -56,8 +67,9 @@ export function ProOnline() {
     enabled: online,
     refetchInterval: OFFER_POLL_MS,
   });
+  const services = useQuery({ queryKey: proServicesKey, queryFn: api.proServices });
 
-  // The heartbeat: position while online, every 20 s.
+  // The heartbeat: position while online, every 20 s, whatever tab is open.
   useEffect(() => {
     if (!online) return;
     const watch = navigator.geolocation.watchPosition((p) => (last.current = p), () => {}, { enableHighAccuracy: true });
@@ -111,19 +123,7 @@ export function ProOnline() {
     }
   };
 
-  const toggle = act(async () => {
-    if (online) {
-      if (s.shiftId) await api.proEndShift(s.shiftId);
-      return;
-    }
-    const p = await position();
-    await api.proStartShift({
-      lat: p.coords.latitude,
-      lng: p.coords.longitude,
-      enabledServiceIds: s.approvedServices.map((x) => x.id),
-    });
-  });
-
+  // An offer takes the whole screen, on any tab: the bar would cover "לא עכשיו".
   const current: OfferCardView | null = offer.data ?? null;
   if (current && new Date(current.expiresAt).getTime() > nowMs) {
     return (
@@ -132,6 +132,7 @@ export function ProOnline() {
         nowMs={nowMs}
         proFemale={s.addressAs === "F"}
         responding={busy}
+        backdrop={<CityHero />}
         onAccept={act(async () => {
           await api.proAcceptOffer(current.offerId, `accept-${current.offerId}`);
           navigate(`/pro/jobs/${current.jobId}`);
@@ -146,41 +147,79 @@ export function ProOnline() {
     );
   }
 
+  const toggle = act(async () => {
+    if (online) {
+      if (s.shiftId) await api.proEndShift(s.shiftId);
+      return;
+    }
+    const p = await position();
+    await api.proStartShift({
+      lat: p.coords.latitude,
+      lng: p.coords.longitude,
+      enabledServiceIds: s.approvedServices.map((x) => x.id),
+    });
+  });
+
+  // Online: keep the app open — said on every tab, because every tab keeps them online.
+  const strip = online ? KEEP_OPEN_H : 0;
+  const bodyH = height - PRO_TAB_BAR_H - strip;
+  const names = s.approvedServices.map((x) => x.nameHe);
+
+  const body = (() => {
+    switch (page) {
+      case "earnings":
+        return <ProEarningsTab width={width} height={bodyH} />;
+      case "documents":
+        return <ProDocumentsTab width={width} height={bodyH} />;
+      case "profile":
+        return <ProProfileTab width={width} height={bodyH} />;
+      case "pricing":
+        return <ProPricingPage width={width} height={bodyH} onBack={() => navigate("/pro", { replace: true })} />;
+      default:
+        return (
+          <ProShiftBody
+            backdrop={<CityHero />}
+            displayNameHe={s.displayName}
+            tradeHe={names.length ? `${names[0]}${names.length > 1 ? ` ועוד ${names.length - 1}` : ""}` : null}
+            presenceState={s.presenceState}
+            shift={{
+              onlineSinceMs: online && s.shiftStartedAt ? new Date(s.shiftStartedAt).getTime() : null,
+              // No money moves through the app (D1): there is no settled amount to divide by the hour.
+              settledNetMinorUnits: null,
+              completedJobs: s.shiftJobs,
+            }}
+            // The server has no area reading yet; the screen shows no briefing rather than a guess.
+            briefing={{}}
+            services={
+              services.data
+                ? shiftChipsFor(services.data.services)
+                : s.approvedServices.map((x) => ({ id: x.id, nameHe: x.nameHe, mark: markFor(x.code), live: true }))
+            }
+            onToggleOnline={busy ? undefined : toggle}
+            onOpenEarnings={() => navigate("/pro/earnings", { replace: true })}
+            onManageServices={() => navigate("/pro/documents", { replace: true })}
+            manageLabelHe="פרטים ›"
+            onOpenPricing={() => navigate("/pro/pricing")}
+            width={width}
+            height={bodyH}
+          />
+        );
+    }
+  })();
+
   return (
-    <View style={{ width, height }}>
-      <ProOnlineBody
-        presenceState={s.presenceState}
-        proFemale={s.addressAs === "F"}
-        displayNameHe={s.displayName}
-        // No money moves through the app (D1): nothing to total here.
-        todayNetMinorUnits={null}
-        todayJobCount={s.jobsToday}
-        services={s.approvedServices.map((x) => {
-          const pilotId = pilotServiceIdForDatabaseCode(x.code);
-          return {
-            id: x.id,
-            nameHe: x.nameHe,
-            mark: ((pilotId && catalogServicePages[pilotId]?.mark) || "wrench") as MarkName,
-            enabled: true,
-          };
-        })}
-        onToggleOnline={busy ? undefined : toggle}
-        width={width}
-        height={height - 44}
-      />
-      {/* Online: keep the app open. Offline: the way out (signing out while
-          online would leave dispatch counting on someone who has gone). */}
+    <View style={{ width, height, backgroundColor: colors.bg }}>
+      <View style={{ width, height: bodyH, overflow: "hidden" }}>{body}</View>
       {online ? (
         <Text style={styles.keepOpen}>
           {s.addressAs === "F"
-            ? "את מחוברת — השאירי את האפליקציה פתוחה כדי לקבל קריאות."
-            : "אתה מחובר — השאר את האפליקציה פתוחה כדי לקבל קריאות."}
+            ? "את במשמרת — השאירי את האפליקציה פתוחה כדי לקבל קריאות."
+            : s.addressAs === "M"
+              ? "אתה במשמרת — השאר את האפליקציה פתוחה כדי לקבל קריאות."
+              : "במשמרת — השאירו את האפליקציה פתוחה כדי לקבל קריאות."}
         </Text>
-      ) : (
-        <View style={styles.strip}>
-          <ProSignOut />
-        </View>
-      )}
+      ) : null}
+      <ProTabBar page={page} width={width} />
       {problemHe ? <Text accessibilityRole="alert" style={styles.problem}>{problemHe}</Text> : null}
     </View>
   );
@@ -188,7 +227,6 @@ export function ProOnline() {
 
 const colors = customerDarkTheme.colors;
 const styles = StyleSheet.create({
-  keepOpen: { ...t.meta, height: 44, color: colors.textSecondary, textAlign: "center", writingDirection: "rtl", paddingHorizontal: spacing.lg, backgroundColor: colors.bg },
-  strip: { height: 44, justifyContent: "center", backgroundColor: colors.bg },
-  problem: { ...t.body, position: "absolute", bottom: spacing.xxl, left: spacing.lg, right: spacing.lg, color: colors.statusDanger, textAlign: "center", writingDirection: "rtl" },
+  keepOpen: { ...t.meta, height: KEEP_OPEN_H, lineHeight: KEEP_OPEN_H, color: colors.textSecondary, textAlign: "center", writingDirection: "rtl", paddingHorizontal: spacing.lg, backgroundColor: colors.bg },
+  problem: { ...t.body, position: "absolute", bottom: PRO_TAB_BAR_H + spacing.xl, left: spacing.lg, right: spacing.lg, color: colors.statusDanger, textAlign: "center", writingDirection: "rtl" },
 });

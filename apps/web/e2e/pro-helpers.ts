@@ -91,6 +91,13 @@ export class Professional {
     throw new Error(`No offer for job ${jobId} reached the professional`);
   }
 
+  /** The server's own view of this professional: presence and the open shift. */
+  async status(): Promise<{ presenceState: string; shiftId: string | null }> {
+    const res = await this.api.get("/api/v1/pro/status");
+    if (!res.ok()) throw new Error(`/pro/status: ${res.status()} ${await res.text()}`);
+    return res.json();
+  }
+
   step(jobId: string, step: "en-route" | "arrive" | "start" | "complete") {
     return this.post(`/jobs/${jobId}/${step}`);
   }

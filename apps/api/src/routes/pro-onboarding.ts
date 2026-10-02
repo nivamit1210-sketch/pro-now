@@ -162,12 +162,18 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
       }),
       app.prisma.job.count({ where: { assignedProfessionalId: p.id, updatedAt: { gte: startOfDay }, status: { in: ["COMPLETED", "REVIEW_PENDING", "CLOSED"] } } }),
     ]);
+    // The shift clock and its count start at the server's own start time, not the screen's.
+    const shiftJobs = shift
+      ? await app.prisma.job.count({ where: { assignedProfessionalId: p.id, updatedAt: { gte: shift.startedAt }, status: { in: ["COMPLETED", "REVIEW_PENDING", "CLOSED"] } } })
+      : 0;
     return reply.send({
       displayName: p.displayName,
       addressAs: p.addressAs,
       verificationStatus: p.verificationStatus,
       presenceState: p.presenceState,
       shiftId: shift?.id ?? null,
+      shiftStartedAt: shift?.startedAt.toISOString() ?? null,
+      shiftJobs,
       activeJobId: activeJob?.id ?? null,
       approvedServices: services.map((s) => s.service),
       jobsToday: doneToday,

@@ -1,9 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import {
   formatMoney,
-  groundDisclosureHe,
   money,
   type ProPresenceState,
   type WorldGeo,
@@ -17,12 +16,9 @@ import type { WorldAssetSources } from "../components/livingmap/AssetSlot";
 
 /** How tall the band at the top of this screen is. */
 const MAP_BAND_HEIGHT = 172;
-import { Chip } from "../components/surfaces";
 import { Mark, type MarkName } from "../components/marks";
 import {
   briefingLines,
-  formatOnlineDuration,
-  rateWithheldCopy,
   readShift,
   type ShiftBriefing,
   type ShiftSnapshot,
@@ -78,10 +74,13 @@ export interface ShiftServiceChip {
   nameHe: string;
   mark: MarkName;
   live: boolean;
+  /** He switched it off himself (as opposed to a missing document). */
+  off?: boolean;
 }
 
-function ShiftClock({ baseMinutes, style }: { baseMinutes: number; style: object }) {
-  const [start] = React.useState(() => Date.now() - Math.max(0, baseMinutes) * 60_000);
+function ShiftClock({ baseMinutes, sinceMs = null, style }: { baseMinutes: number; sinceMs?: number | null; style: object }) {
+  /* From the moment the shift began, to the second — it used to restart at whole minutes on every return. */
+  const [start] = React.useState(() => sinceMs ?? Date.now() - Math.max(0, baseMinutes) * 60_000);
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -101,6 +100,8 @@ export interface ProShiftBodyProps {
   geo?: WorldGeo | null;
 
   displayNameHe: string;
+  /** His trade, under his name: "וטרינר עד הבית". */
+  tradeHe?: string | null;
   presenceState: ProPresenceState;
   /** The live shift, as the server reports it. */
   shift: ShiftSnapshot;
@@ -111,6 +112,12 @@ export interface ProShiftBodyProps {
   /** Injected so the screen is deterministic in tests and in the gallery. */
   nowMs?: number;
   onToggleOnline?: () => void;
+  /**
+   * Not approved for work yet — the identity check or required documents
+   * are missing (Amit, 2026-10-01: you may look around, you may not work).
+   * The shift button gives way to what is missing and the way to finish it.
+   */
+  notApproved?: { missingHe: string; onFinish: () => void } | null;
   /**
    * "פנוי בעוד XX דקות" — Amit, 2026-09-27: a professional finishing
    * another job can say when he will be free; to a customer he already
@@ -127,6 +134,8 @@ export interface ProShiftBodyProps {
   onCancelAvailableIn?: () => void;
   onOpenEarnings?: () => void;
   onManageServices?: () => void;
+  /** The link beside "השירותים שלי"; "עריכה ›" where it edits them, "פרטים ›" where it explains them. */
+  manageLabelHe?: string;
   /**
    * Where the professional sets what they charge.
    *
@@ -155,30 +164,36 @@ export interface ProShiftBodyProps {
   worldSources?: WorldAssetSources;
   /** False holds the city still, for screenshots and tests. */
   animate?: boolean;
+  /** Taller when the band shows his own shop. */
+  bandHeight?: number;
 }
 
 export function ProShiftBody({
   backdrop,
   geo = null,
   displayNameHe,
+  tradeHe = null,
   presenceState,
   shift,
   briefing,
   services,
   nowMs,
   onToggleOnline,
+  notApproved = null,
   availableAtMs = null,
   pendingPriceHe = null,
   onAvailableIn,
   onCancelAvailableIn,
-  onOpenEarnings,
+  onOpenEarnings: _onOpenEarnings,
   onManageServices,
+  manageLabelHe = "עריכה ›",
   onOpenPricing,
-  onOpenPresence,
+  onOpenPresence: _onOpenPresence,
   width = 390,
   height = 780,
   worldSources,
   animate = true,
+  bandHeight = MAP_BAND_HEIGHT,
 }: ProShiftBodyProps) {
   const now = nowMs ?? Date.now();
   const reading = readShift(shift, now);
@@ -187,6 +202,7 @@ export function ProShiftBody({
   const liveServices = services.filter((s) => s.live);
 
   const lines = briefingLines(briefing ?? {});
+  const [soonOpen, setSoonOpen] = useState(false);
   /*
    * A pack of one file is a complete world — see the professional app's
    * `worldSources`. What is NOT a world is an empty object, which is what
@@ -223,7 +239,7 @@ export function ProShiftBody({
         * a blank rectangle when a file is missing is worse than the
         * placeholder it replaced.
         */}
-      <View style={styles.mapBand}>
+      <View style={[styles.mapBand, { height: bandHeight }]}>
         {hasWorld ? (
           <>
             {backdrop ?? <WorldBackdrop
@@ -247,15 +263,10 @@ export function ProShiftBody({
               */}
             <View style={styles.worldStatus} pointerEvents="none">
               <Text style={styles.worldStatusText} numberOfLines={1}>
-                {isOnline ? "מחובר — קריאות באזור שלך יגיעו לכאן" : "לא מחובר"}
+                {isOnline ? "במשמרת · מחכים לקריאה" : "מחוץ למשמרת"}
               </Text>
             </View>
-            {/* The one line that keeps an invented city honest. */}
-            <View style={styles.worldNote} pointerEvents="none">
-              <Text style={styles.worldNoteText} numberOfLines={1}>
-                {groundDisclosureHe({ realStreets: Boolean(geo?.real) })}
-              </Text>
-            </View>
+            {/* No engineer's note over his shop (UX audit): the band is his storefront, not a map. */}
           </>
         ) : (
           <MapSurface
@@ -263,297 +274,155 @@ export function ProShiftBody({
             dark
             height={MAP_BAND_HEIGHT}
             pulsing={isOnline}
-            statusText={isOnline ? "מחובר — קריאות באזור שלך יגיעו לכאן" : "לא מחובר"}
+            statusText={isOnline ? "במשמרת · מחכים לקריאה" : "מחוץ למשמרת"}
             statusTopOffset={16}
           />
         )}
         <View style={styles.mapFade} pointerEvents="none" />
       </View>
 
+      {/*
+        * ------------------------------------------------------------------
+        * ONE SCREEN, ONE DECISION.
+        *
+        * Amit: *"העמוד הזה עמוססססס — מלא מלל, מלא מלבנים."* It had five
+        * boxes, three small links, a row of chips, a "פנוי בעוד" row and the
+        * button, all competing — and two paragraphs addressed to engineers
+        * ("המספרים מגיעים מהשרת…"). What is left: who you are, the shift
+        * clock while you are on it, what you offer and at what price, and
+        * the one button. The status is said once, in the band, in one
+        * vocabulary: במשמרת / מחוץ למשמרת.
+        * ------------------------------------------------------------------
+        */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollInner}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headRow}>
-          <Text style={styles.name} numberOfLines={1}>
-            {displayNameHe}
-          </Text>
-          <View style={styles.headLeft}>
-            {isOnline ? <Beacon color={colors.trust} /> : null}
-            <Text
-              style={[
-                styles.headState,
-                {
-                  color: isTransitioning
-                    ? colors.statusWarning
-                    : isOnline
-                      ? colors.trust
-                      : colors.textSecondary,
-                },
-              ]}
-            >
-              {isTransitioning ? "רגע…" : isOnline ? "במשמרת" : "מחוץ למשמרת"}
+          <View style={{ flexShrink: 1 }}>
+            <Text style={styles.name} numberOfLines={1} accessibilityRole="header">
+              {displayNameHe}
             </Text>
+            {tradeHe ? <Text style={styles.trade} numberOfLines={1}>{tradeHe}</Text> : null}
           </View>
+          {isOnline ? <Beacon color={colors.trust} /> : null}
         </View>
 
         {isOnline ? (
-          // -------------------------------------------------------------
-          // בזמן המשמרת — is this shift working?
-          // -------------------------------------------------------------
-          <>
-            <View style={styles.bigCard}>
-              <Text style={styles.bigLabel}>מחובר כבר</Text>
-              {/*
-               * A clock that runs. Amit: *"שהוא עולה לזמינות יהיה שעון שרץ
-               * ולא שיהיה רשום פחות מדקה."* Seconds from the moment the shift
-               * is seen online, seeded with the minutes the reading already has.
-               */}
-              <ShiftClock baseMinutes={reading.onlineMinutes} style={styles.bigValue} />
-              {reading.onlineMinutes >= 1 ? <Text style={styles.bigSub}>{formatOnlineDuration(reading.onlineMinutes)}</Text> : null}
-              <Text style={styles.bigSub}>
-                {reading.inProgressJobs > 0
-                  ? "עבודה פעילה עכשיו — תיסגר בסיום"
-                  : "כל עוד אתה מחובר, קריאות מתאימות יישלחו אליך אחת בכל פעם"}
-              </Text>
-            </View>
-
-            <View style={styles.metrics}>
-              <Metric
-                label="הרווח במשמרת"
-                value={money0(reading.settledNetMinorUnits)}
-                sub={
-                  reading.completedJobs === 0
-                    ? "טרם נסגרה עבודה"
-                    : reading.completedJobs === 1
-                      ? "עבודה אחת נסגרה"
-                      : `${reading.completedJobs} עבודות נסגרו`
-                }
-                tone="trust"
-              />
-              <Metric
-                label="לשעת חיבור"
-                value={money0(reading.perOnlineHourMinorUnits)}
-                /**
-                 * The most important string on the screen. When the rate is
-                 * missing, the professional is told WHY — not left to
-                 * conclude the app is broken, and not handed a wild number
-                 * computed from nine minutes of data.
-                 */
-                sub={rateWithheldCopy(reading) ?? "מבוסס על עבודות שנסגרו במשמרת"}
-                tone={reading.perOnlineHourMinorUnits === null ? "muted" : "trust"}
-              />
-            </View>
-
-            {reading.utilisation !== null ? (
-              <View style={styles.util}>
-                <View style={styles.utilTrack}>
-                  <View style={[styles.utilFill, { width: `${Math.round(reading.utilisation * 100)}%` }]} />
-                </View>
-                <Text style={styles.utilText}>
-                  {Math.round(reading.utilisation * 100)}% מזמן החיבור עבר על עבודות
-                </Text>
-              </View>
-            ) : null}
-
-            {/* ------------------------------------------------------------
-                THE AREA, WHICH USED TO VANISH AT THE MOMENT IT MATTERED.
-
-                Amit: *"האונליין לא מספיק ברור, רוצה שיהיה יותר איכותי
-                ומרשים עם יותר נתוני אונליין."*
-
-                The briefing — how many in your trade are online near you,
-                what the area has actually been asking for — was drawn
-                only while OFFLINE, as an answer to "is it worth
-                connecting". It is at least as useful once you are
-                connected: being one of two online is a different shift
-                from being one of nine, and nothing on the screen said
-                which.
-
-                Same lines, same server, same refusal to forecast. The
-                only change is that connecting no longer hides them.
-                ------------------------------------------------------------ */}
-            {lines.length > 0 ? (
-              <View style={styles.briefing}>
-                {lines.map((l) => (
-                  <View key={l.kind} style={styles.briefRow}>
-                    <View
-                      style={[
-                        styles.briefDot,
-                        { backgroundColor: l.kind === "DEMAND" ? colors.action : colors.trust },
-                      ]}
-                    />
-                    <Text style={styles.briefText}>{l.textHe}</Text>
-                  </View>
-                ))}
-                <Text style={styles.briefNote}>
-                  המספרים מגיעים מהשרת ומתארים מה קרה בפועל. אין כאן תחזית.
-                </Text>
-              </View>
-            ) : null}
-          </>
-        ) : (
-          // -------------------------------------------------------------
-          // היום שלי — is it worth going online right now?
-          // -------------------------------------------------------------
-          <>
-            <View style={styles.bigCard}>
-              <Text style={styles.bigLabel}>היום שלך</Text>
-              <Text style={styles.bigValue}>
-                {liveServices.length === 0
-                  ? "אין שירות פעיל"
-                  : liveServices.length === 1
-                    ? "שירות אחד מוכן"
-                    : `${liveServices.length} שירותים מוכנים`}
-              </Text>
-              <Text style={styles.bigSub}>
-                {liveServices.length === 0
-                  ? "השלם אימות לשירות אחד לפחות כדי להתחיל לקבל קריאות"
-                  : "ברגע שתתחבר, קריאות מתאימות באזור שלך יגיעו אליך"}
-              </Text>
-            </View>
-
-            {lines.length > 0 ? (
-              <View style={styles.briefing}>
-                {lines.map((l) => (
-                  <View key={l.kind} style={styles.briefRow}>
-                    <View
-                      style={[
-                        styles.briefDot,
-                        { backgroundColor: l.kind === "DEMAND" ? colors.action : colors.trust },
-                      ]}
-                    />
-                    <Text style={styles.briefText}>{l.textHe}</Text>
-                  </View>
-                ))}
-                <Text style={styles.briefNote}>
-                  המספרים מגיעים מהשרת ומתארים מה קרה בפועל. אין כאן תחזית.
-                </Text>
-              </View>
-            ) : (
-              /**
-               * The zero-line case, designed rather than tolerated. An empty
-               * briefing is the normal state early in a pilot and after any
-               * server hiccup, and a screen that collapses without it would
-               * push the next engineer to invent a number to fill the hole.
-               */
-              <View style={styles.briefing}>
-                <Text style={styles.briefText}>
-                  אין כרגע נתוני אזור לשעה האחרונה.
-                </Text>
-                <Text style={styles.briefNote}>
-                  לא נציג מספר שלא קיבלנו מהשרת. אפשר להתחבר ולראות מה מגיע.
-                </Text>
-              </View>
-            )}
-          </>
-        )}
-
-        {/* --- Services armed for this shift --- */}
-        {/* ----------------------------------------------------------------
-            THREE DOORS, EACH SAYING WHERE IT GOES.
-
-            Amit: *"איך מנהלים את העמוד הזה? איך אני מוריד ומעלה
-            אפשרויות?"*
-
-            There was one link here, "ניהול", sitting beside "שירותים
-            במשמרת" — and it opened the PRESENCE screen, which is about
-            location and shift state. From there a second "ניהול" reached
-            the services. So the link that looked like the answer was two
-            hops from it and the first hop went somewhere else entirely.
-
-            A label next to a list of services promises that list. These
-            say which one they mean.
-            ---------------------------------------------------------------- */}
-        <View style={styles.servicesHead}>
-          <Pressable onPress={onManageServices} accessibilityRole="button" style={styles.manageHit}>
-            <Text style={styles.manage}>שירותים</Text>
-          </Pressable>
-          {onOpenPresence ? (
-            <Pressable
-              onPress={onOpenPresence}
-              accessibilityRole="button"
-              accessibilityLabel="מיקום ומצב המשמרת"
-              style={styles.manageHit}
-            >
-              <Text style={styles.manage}>מיקום</Text>
-            </Pressable>
-          ) : null}
-          {onOpenPricing ? (
-            <Pressable
-              onPress={onOpenPricing}
-              accessibilityRole="button"
-              accessibilityLabel="קביעת המחירים שלי"
-              style={styles.manageHit}
-            >
-              <Text style={styles.manage}>מחירים</Text>
-            </Pressable>
-          ) : null}
-          <Text style={styles.servicesTitle}>
-            שירותים במשמרת · {liveServices.length}/{services.length}
+          <View style={styles.live} accessibilityLiveRegion="polite">
+            <Text style={styles.liveLabel}>זמן במשמרת</Text>
+            <ShiftClock baseMinutes={reading.onlineMinutes} sinceMs={shift.onlineSinceMs} style={styles.bigValue} />
+            <Text style={styles.liveSub}>
+              {money0(reading.settledNetMinorUnits)} במשמרת ·{" "}
+              {reading.completedJobs === 0 ? "עוד לא נסגרה עבודה" : reading.completedJobs === 1 ? "עבודה אחת" : `${reading.completedJobs} עבודות`}
+              {reading.inProgressJobs > 0 ? " · יש עבודה פעילה" : ""}
+            </Text>
+          </View>
+        ) : liveServices.length === 0 ? (
+          <Text style={styles.blocked}>
+            {services.some((x) => x.off) ? "כל השירותים כבויים · ״עריכה״ כדי להדליק" : "חסר אימות לשירותים · ״המסמכים שלי״"}
           </Text>
-        </View>
+        ) : null}
 
+        {/* The area, only when the server actually said something. */}
+        {lines.length > 0 ? (
+          <View style={styles.briefing}>
+            {lines.map((l) => (
+              <View key={l.kind} style={styles.briefRow}>
+                <View style={[styles.briefDot, { backgroundColor: l.kind === "DEMAND" ? colors.action : colors.trust }]} />
+                <Text style={styles.briefText}>{l.textHe}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {/* What he offers — the chips open the same place as "עריכה". */}
+        <View style={styles.servicesHead}>
+          <Text style={styles.servicesTitle}>
+            השירותים שלי{services.length > 1 ? ` · ${liveServices.length}/${services.length} פתוחים` : ""}
+          </Text>
+          {onManageServices ? (
+            <Pressable onPress={onManageServices} accessibilityRole="button" accessibilityLabel="עריכת השירותים" style={styles.manageHit}>
+              <Text style={styles.manage}>{manageLabelHe}</Text>
+            </Pressable>
+          ) : null}
+        </View>
         <View style={styles.chips}>
           {services.map((s) => (
-            <View
+            <Pressable
               key={s.id}
-              style={[
-                styles.chip,
-                { borderColor: s.live ? tint.trust(0.4) : colors.border, opacity: s.live ? 1 : 0.55 },
-              ]}
+              onPress={onManageServices}
+              accessibilityRole="button"
+              accessibilityLabel={`${s.nameHe} · ${s.live ? "פתוח לקריאות" : "סגור"}`}
+              style={[styles.chip, { borderColor: s.live ? tint.trust(0.4) : colors.border, opacity: s.live ? 1 : 0.55 }]}
             >
               <Mark name={s.mark} size={16} color={s.live ? colors.trust : colors.textSecondary} />
-              <Text style={[styles.chipText, { color: s.live ? colors.textPrimary : colors.textSecondary }]}>
-                {s.nameHe}
-              </Text>
-            </View>
+              <Text style={[styles.chipText, { color: s.live ? colors.textPrimary : colors.textSecondary }]}>{s.nameHe}</Text>
+            </Pressable>
           ))}
         </View>
 
-        <Pressable onPress={onOpenEarnings} accessibilityRole="button" style={styles.earningsLink}>
-          <Text style={styles.earningsLinkText}>הרווחים שלי — פירוט מלא</Text>
-          <Chip label="שבוע" colors={colors} tone="neutral" />
-        </Pressable>
+        {onOpenPricing ? (
+          <Pressable onPress={onOpenPricing} accessibilityRole="button" style={styles.rowLink}>
+            <Text style={styles.rowLinkText}>המחירים שלי</Text>
+            <Text style={styles.rowLinkChevron}>›</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
 
       {/* The one decision on this screen keeps its own space at the bottom. */}
       <View style={styles.ctaBar}>
         {pendingPriceHe ? (
           <View style={styles.pendingCard} accessibilityLiveRegion="polite">
-            <Text style={styles.pendingTitle}>ההצעה שלך נשלחה · {pendingPriceHe}</Text>
-            <Text style={styles.soonSub}>מחכים לאישור הלקוח. כשהוא מאשר — העבודה שלך ואתה יוצא לדרך.</Text>
+            <Text style={styles.pendingTitle}>ההצעה נשלחה · {pendingPriceHe}</Text>
+            <Text style={styles.soonSub}>מחכים לאישור הלקוח.</Text>
           </View>
         ) : null}
         {!isOnline && availableAtMs !== null ? (
           <View style={styles.soonCard}>
             <Text style={styles.soonTitle}>
-              פנוי בעוד {Math.max(1, Math.round((availableAtMs - (nowMs ?? Date.now())) / 60_000))} דק׳
+              זמינות בעוד {Math.max(1, Math.round((availableAtMs - (nowMs ?? Date.now())) / 60_000))} דק׳
             </Text>
-            <Text style={styles.soonSub}>לקוחות כבר יכולים להזמין אותך — זמן ההמתנה נכלל בזמן ההגעה שהם רואים.</Text>
+            <Text style={styles.soonSub}>ההמתנה כלולה בזמן ההגעה שהלקוח רואה.</Text>
             {onCancelAvailableIn ? (
               <Pressable onPress={onCancelAvailableIn} accessibilityRole="button" style={styles.soonCancel}>
                 <Text style={styles.soonCancelText}>ביטול</Text>
               </Pressable>
             ) : null}
           </View>
-        ) : !isOnline && onAvailableIn && liveServices.length > 0 ? (
+        ) : !isOnline && onAvailableIn && liveServices.length > 0 && soonOpen ? (
           <View style={styles.soonRow}>
-            <Text style={styles.soonLabel}>או: פנוי בעוד</Text>
             {[15, 30, 45, 60].map((m) => (
               <Pressable
                 key={m}
-                onPress={() => onAvailableIn(m)}
+                onPress={() => { setSoonOpen(false); onAvailableIn(m); }}
                 accessibilityRole="button"
-                accessibilityLabel={`אהיה פנוי בעוד ${m} דקות`}
+                accessibilityLabel={`זמינות בעוד ${m} דקות`}
                 style={({ pressed }) => [styles.soonChip, pressed && { opacity: 0.8 }]}
               >
                 <Text style={styles.soonChipText}>{m} דק׳</Text>
               </Pressable>
             ))}
+            {/* A way out without choosing (button audit). */}
+            <Pressable onPress={() => setSoonOpen(false)} accessibilityRole="button" accessibilityLabel="ביטול" style={({ pressed }) => [styles.soonChip, pressed && { opacity: 0.8 }]}>
+              <Text style={styles.soonChipText}>ביטול</Text>
+            </Pressable>
           </View>
         ) : null}
+        {notApproved && !isOnline ? (
+          <View style={styles.locked}>
+            <Text style={styles.lockedTitle}>עוד לא מאושר לעבודה</Text>
+            <Text style={styles.lockedSub}>חסר: {notApproved.missingHe}</Text>
+            <Pressable
+              onPress={notApproved.onFinish}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.cta, styles.ctaStart, pressed && { opacity: 0.85 }]}
+            >
+              <Text style={[styles.ctaText, { color: colors.onAction }]}>השלמת הרישום</Text>
+            </Pressable>
+          </View>
+        ) : (
         <Pressable
           onPress={onToggleOnline}
           disabled={isTransitioning || (!isOnline && liveServices.length === 0)}
@@ -567,34 +436,16 @@ export function ProShiftBody({
           ]}
         >
           <Text style={[styles.ctaText, { color: isOnline ? colors.textPrimary : colors.onAction }]}>
-            {isTransitioning ? "רגע…" : isOnline ? "סיום משמרת" : availableAtMs !== null ? "אני פנוי כבר עכשיו" : "התחלת משמרת"}
+            {isTransitioning ? "רגע…" : isOnline ? "סיום משמרת" : "התחלת משמרת"}
           </Text>
         </Pressable>
+        )}
+        {!notApproved && !isOnline && onAvailableIn && liveServices.length > 0 && availableAtMs === null && !soonOpen ? (
+          <Pressable onPress={() => setSoonOpen(true)} accessibilityRole="button" style={styles.soonToggle}>
+            <Text style={styles.soonToggleText}>או: זמינות בעוד…</Text>
+          </Pressable>
+        ) : null}
       </View>
-    </View>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  tone: "trust" | "muted";
-}) {
-  return (
-    <View style={styles.metric}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text
-        style={[styles.metricValue, { color: tone === "trust" ? colors.trust : colors.textSecondary }]}
-      >
-        {value}
-      </Text>
-      <Text style={styles.metricSub}>{sub}</Text>
     </View>
   );
 }
@@ -622,6 +473,9 @@ function Beacon({ color }: { color: string }) {
 }
 
 const styles = StyleSheet.create({
+  locked: { gap: 6 },
+  lockedTitle: { color: colors.textPrimary, fontSize: scale.body, fontWeight: "900", textAlign: "center", writingDirection: "rtl" },
+  lockedSub: { color: colors.textSecondary, fontSize: scale.meta, textAlign: "center", writingDirection: "rtl", marginBottom: 6 },
   screen: { backgroundColor: colors.bg, overflow: "hidden" },
   mapBand: { height: MAP_BAND_HEIGHT, overflow: "hidden" },
   worldStatus: {
@@ -665,6 +519,16 @@ const styles = StyleSheet.create({
   headLeft: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
   headState: { ...type.overline },
   name: { ...type.h3, color: colors.textPrimary, textAlign: "right", flexShrink: 1 },
+  trade: { ...type.body, color: colors.textSecondary, textAlign: "right", marginTop: 2 },
+  live: { marginTop: spacing.lg, alignItems: "flex-end" },
+  liveLabel: { ...type.overline, color: colors.trust, textAlign: "right" },
+  liveSub: { ...type.body, color: colors.textSecondary, textAlign: "right", marginTop: 4, writingDirection: "rtl" },
+  blocked: { ...type.body, color: colors.textSecondary, textAlign: "right", marginTop: spacing.lg, writingDirection: "rtl" },
+  rowLink: { minHeight: 56, marginTop: spacing.lg, paddingHorizontal: spacing.md, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between" },
+  rowLinkText: { ...type.bodyStrong, color: colors.textPrimary, textAlign: "right" },
+  rowLinkChevron: { ...type.h3, color: colors.textSecondary },
+  soonToggle: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: 4 },
+  soonToggleText: { ...type.body, color: colors.textSecondary, textDecorationLine: "underline" },
   beacon: { width: 8, height: 8, borderRadius: 4 },
 
   bigCard: {
@@ -751,7 +615,7 @@ const styles = StyleSheet.create({
 
   soonRow: { flexDirection: "row-reverse", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 },
   soonLabel: { color: "rgba(247,243,250,0.75)", fontSize: scale.meta, writingDirection: "rtl" },
-  soonChip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: "rgba(247,243,250,0.3)" },
+  soonChip: { minHeight: 48, minWidth: 64, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: "rgba(247,243,250,0.3)" },
   soonChipText: { color: "#F7F3FA", fontSize: scale.meta, fontWeight: "700" },
   soonCard: { padding: 12, borderRadius: 16, backgroundColor: "rgba(47,191,138,0.14)", marginBottom: 10 },
   pendingCard: { padding: 12, borderRadius: 16, backgroundColor: "rgba(255,154,107,0.16)", marginBottom: 10 },

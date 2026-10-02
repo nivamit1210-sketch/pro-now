@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { earningsFor } from "../src/domain/payments/earnings.js";
+import { earningsFor, outsideAppEarningsFor } from "../src/domain/payments/earnings.js";
 
 const NOW = new Date("2026-09-22T15:00:00Z");
 const hoursAgo = (n: number) => new Date(NOW.getTime() - n * 3_600_000);
@@ -154,5 +154,44 @@ describe("earnings — derived from the ledger, never summed from jobs", () => {
     expect(summary.periodNetMinorUnits).toBe(9000);
     expect(summary.periodGrossMinorUnits).toBe(30000);
     expect(summary.awaitingCommissionDecision).toBe(true);
+  });
+});
+
+describe("earnings while customers pay the professional directly (D1)", () => {
+  const settled = (jobId: string, createdAt: Date, amountMinorUnits: number | null) => ({
+    jobId,
+    createdAt,
+    metadata: { paidInApp: false, amountMinorUnits, currency: "ILS", basis: null, reason: amountMinorUnits === null ? "NO_PRICE" : null },
+    job: { service: { code: "HOME_PLUMB_LEAK", nameHe: "נזילה" } },
+  });
+  const eventsPrisma = (events: unknown[]) => ({ jobEvent: { findMany: async () => events } }) as never;
+
+  it("reads what each job came to from its receipt, with no net", async () => {
+    const summary = await outsideAppEarningsFor(
+      eventsPrisma([settled("j1", hoursAgo(2), 25000), settled("j2", hoursAgo(30), 18000)]),
+      "p1",
+      NOW
+    );
+    expect(summary.paidDirectly).toBe(true);
+    expect(summary.periodGrossMinorUnits).toBe(43000);
+    expect(summary.periodNetMinorUnits).toBeNull();
+    expect(summary.jobs.map((j) => [j.jobId, j.grossMinorUnits, j.netMinorUnits])).toEqual([
+      ["j1", 25000, null],
+      ["j2", 18000, null],
+    ]);
+    // Nothing is awaiting a commission decision: nothing passed through the app.
+    expect(summary.awaitingCommissionDecision).toBe(false);
+    expect(summary.days.reduce((s, d) => s + d.grossMinorUnits, 0)).toBe(43000);
+  });
+
+  it("counts a job that closed with no amount, and never shows it as ₪0", async () => {
+    const summary = await outsideAppEarningsFor(
+      eventsPrisma([settled("j1", hoursAgo(2), 25000), settled("j2", hoursAgo(3), null)]),
+      "p1",
+      NOW
+    );
+    expect(summary.jobs.map((j) => j.jobId)).toEqual(["j1"]);
+    expect(summary.unpricedJobCount).toBe(1);
+    expect(summary.periodJobCount).toBe(2);
   });
 });

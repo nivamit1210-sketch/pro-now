@@ -85,6 +85,11 @@ export interface ProEarningsBodyProps {
   /** When the next transfer lands, or null when nothing is pending. */
   nextPayoutHe: string | null;
   nextPayoutMinorUnits: number | null;
+  /**
+   * The customers paid the professional directly (no money moves through the
+   * app): every amount is what the job came to, and there is no net to wait for.
+   */
+  paidDirectly?: boolean;
   onOpenJob?: (id: string) => void;
   onBack?: () => void;
   width?: number;
@@ -100,6 +105,7 @@ export function ProEarningsBody({
   jobs,
   nextPayoutHe,
   nextPayoutMinorUnits,
+  paidDirectly = false,
   onOpenJob,
   onBack,
   width = 390,
@@ -128,7 +134,7 @@ export function ProEarningsBody({
             {formatMoney(money(periodNetMinorUnits ?? periodGrossMinorUnits, "ILS"))}
           </Text>
           <Text style={styles.netLabel}>
-            {periodNetMinorUnits === null ? "סכום העבודות" : "נטו · אחרי כל הניכויים"}
+            {paidDirectly ? "סכום העבודות · שולם לך ישירות" : periodNetMinorUnits === null ? "סכום העבודות" : "נטו · אחרי כל הניכויים"}
           </Text>
 
           {/* Gross beside net. Showing only take-home hides the commission
@@ -227,7 +233,9 @@ export function ProEarningsBody({
                       </Text>
                     </View>
                     <Text style={styles.jobNet}>
-                      {j.netMinorUnits === null
+                      {paidDirectly
+                        ? formatMoney(money(j.grossMinorUnits, "ILS"))
+                        : j.netMinorUnits === null
                         ? PENDING_NET_HE
                         : formatMoney(money(j.netMinorUnits, "ILS"))}
                     </Text>
@@ -237,7 +245,7 @@ export function ProEarningsBody({
                   <View style={styles.breakdown}>
                     <View style={styles.breakRow}>
                       <Text style={styles.breakValue}>{formatMoney(money(j.grossMinorUnits, "ILS"))}</Text>
-                      <Text style={styles.breakLabel}>סכום העבודה</Text>
+                      <Text style={styles.breakLabel}>{paidDirectly ? "שולם לך ישירות" : "סכום העבודה"}</Text>
                     </View>
                     {j.deductions.map((d) => (
                       <View key={d.labelHe} style={styles.breakRow}>

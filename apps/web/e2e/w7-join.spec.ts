@@ -158,8 +158,8 @@ test("a professional joins, is reviewed, and is approved for one service", async
   await expect(page.getByText("אושרת!")).toBeVisible();
   await expect(page.getByText("מעכשיו את מקבלת קריאות", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "להתחיל לקבל עבודות" }).click();
-  await expect(page.getByRole("button", { name: "התחברות לקבלת עבודות" })).toBeVisible();
-  await expect(page.getByText("את לא זמינה")).toBeVisible();
+  await expect(page.getByRole("button", { name: "התחלת משמרת" })).toBeVisible();
+  await expect(page.getByText("מחוץ למשמרת")).toBeVisible();
   // And the review, per service, is still one link away.
   await page.goto("/pro?review=1");
   await expect(page.getByText("אושרתם לעבודה")).toBeVisible();

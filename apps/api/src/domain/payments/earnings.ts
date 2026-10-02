@@ -77,6 +77,14 @@ export interface EarningsSummary {
    * rather than leaving a professional to wonder about a dash.
    */
   awaitingCommissionDecision: boolean;
+  /**
+   * The customers paid the professional directly (docs/21 §5 D1): the
+   * amounts are what the jobs came to, nothing was taken, and there is no
+   * net because none of it passed through PRO NOW.
+   */
+  paidDirectly: boolean;
+  /** Jobs that closed with no amount (no price configured or measured). Counted, never shown as ₪0. */
+  unpricedJobCount: number;
 }
 
 /** Hebrew for each ledger entry type a professional can be charged. */
@@ -148,16 +156,27 @@ export async function earningsFor(
     };
   });
 
-  const byDay = new Map<string, { net: number | null; jobs: number }>();
+  return summarise(jobs, periodFrom, now, days, { paidDirectly: false, unpricedJobCount: 0 });
+}
+
+function summarise(
+  jobs: EarningJobLine[],
+  periodFrom: Date,
+  now: Date,
+  days: number,
+  extra: { paidDirectly: boolean; unpricedJobCount: number }
+): EarningsSummary {
+  const byDay = new Map<string, { net: number | null; gross: number; jobs: number }>();
   for (let i = 0; i < days; i += 1) {
     const day = new Date(periodFrom.getTime() + i * DAY_MS);
-    byDay.set(day.toISOString(), { net: null, jobs: 0 });
+    byDay.set(day.toISOString(), { net: null, gross: 0, jobs: 0 });
   }
   for (const job of jobs) {
     const key = startOfDay(new Date(job.completedAt)).toISOString();
     const bucket = byDay.get(key);
     if (!bucket) continue;
     bucket.jobs += 1;
+    bucket.gross += job.grossMinorUnits;
     if (job.netMinorUnits !== null) bucket.net = (bucket.net ?? 0) + job.netMinorUnits;
   }
 
@@ -171,13 +190,63 @@ export async function earningsFor(
     periodNetMinorUnits: anyNet
       ? jobs.reduce((sum, j) => sum + (j.netMinorUnits ?? 0), 0)
       : null,
-    periodJobCount: jobs.length,
+    periodJobCount: jobs.length + extra.unpricedJobCount,
     days: [...byDay.entries()].map(([dateISO, v]) => ({
       dateISO,
       netMinorUnits: v.net,
+      grossMinorUnits: v.gross,
       jobs: v.jobs,
     })),
     jobs,
-    awaitingCommissionDecision: jobs.some((j) => j.netMinorUnits === null),
+    awaitingCommissionDecision: !extra.paidDirectly && jobs.some((j) => j.netMinorUnits === null),
+    ...extra,
   };
+}
+
+/**
+ * EARNINGS WHEN NO MONEY MOVES THROUGH THE APP (docs/21 §5 D1).
+ *
+ * There are no captured payments, so the ledger is empty and the screen
+ * would say "nothing yet" to somebody who worked all week. What the server
+ * does have is the receipt each job closed with (`SETTLED_OUTSIDE_APP`,
+ * written by `closeWithoutPayment`): the server's own number for what the
+ * work came to. That is the gross; there is no net, because nothing was
+ * taken and nothing passed through us.
+ */
+export async function outsideAppEarningsFor(
+  prisma: PrismaClient,
+  professionalId: string,
+  now: Date = new Date(),
+  days = 7
+): Promise<EarningsSummary> {
+  const periodFrom = new Date(startOfDay(now).getTime() - (days - 1) * DAY_MS);
+  const events = await prisma.jobEvent.findMany({
+    where: {
+      type: "SETTLED_OUTSIDE_APP",
+      createdAt: { gte: periodFrom },
+      job: { assignedProfessionalId: professionalId },
+    },
+    include: { job: { include: { service: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  let unpriced = 0;
+  const jobs: EarningJobLine[] = [];
+  for (const e of events) {
+    const amount = (e.metadata as { amountMinorUnits?: unknown } | null)?.amountMinorUnits;
+    if (typeof amount !== "number") {
+      unpriced += 1;
+      continue;
+    }
+    jobs.push({
+      jobId: e.jobId,
+      serviceCode: e.job.service.code,
+      serviceNameHe: e.job.service.nameHe,
+      completedAt: e.createdAt.toISOString(),
+      grossMinorUnits: amount,
+      deductions: [],
+      netMinorUnits: null,
+    });
+  }
+  return summarise(jobs, periodFrom, now, days, { paidDirectly: true, unpricedJobCount: unpriced });
 }

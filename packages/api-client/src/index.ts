@@ -22,6 +22,8 @@ import type {
   MyJobSummary,
   OnSiteView,
   ProApplicationView,
+  ProEarningsView,
+  ProServiceEligibilityView,
   ProJobDetailView,
   ProStatusView,
   OfferCardView,
@@ -137,6 +139,9 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
     ) => request<unknown>("PATCH", `/pro/services/${encodeURIComponent(serviceId)}/pricing`, input),
     proSubmitApplication: () => request<ProApplicationView>("POST", "/pro/application/submit", {}),
     proStatus: () => request<ProStatusView>("GET", "/pro/status"),
+    proEarnings: () => request<ProEarningsView>("GET", "/pro/earnings"),
+    /** The services they applied for, each with the server's eligibility verdict and their price. */
+    proServices: () => request<{ services: ProServiceEligibilityView[] }>("GET", "/pro/services"),
     proStartShift: (input: { lat: number; lng: number; enabledServiceIds: string[] }) =>
       request<{ sessionId: string; presenceState: string }>("POST", "/pro/shifts", input),
     proEndShift: (shiftId: string) => request<{ ok: true }>("POST", `/pro/shifts/${encodeURIComponent(shiftId)}/end`, {}),

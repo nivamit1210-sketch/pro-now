@@ -668,12 +668,49 @@ export interface OnSiteView {
 }
 
 /** `GET /api/v1/pro/status`: where the professional stands right now (docs/21 W7). */
+/**
+ * The professional's earnings for the last seven days (GET /v1/pro/earnings).
+ * `paidDirectly`: no money moved through the app (D1) — the amounts are what
+ * the jobs came to, and there is no net.
+ */
+export interface ProEarningsView {
+  netMinorUnits: number;
+  grossMinorUnits: number | null;
+  currency: string;
+  jobCount: number;
+  breakdown: {
+    currency: string;
+    periodFromISO: string;
+    periodToISO: string;
+    periodGrossMinorUnits: number;
+    periodNetMinorUnits: number | null;
+    periodJobCount: number;
+    days: Array<{ dateISO: string; netMinorUnits: number | null; grossMinorUnits: number; jobs: number }>;
+    jobs: Array<{
+      jobId: string;
+      serviceCode: string;
+      serviceNameHe: string;
+      completedAt: string;
+      grossMinorUnits: number;
+      deductions: Array<{ code: string; labelHe: string; minorUnits: number }>;
+      netMinorUnits: number | null;
+    }>;
+    awaitingCommissionDecision: boolean;
+    paidDirectly: boolean;
+    unpricedJobCount: number;
+  };
+}
+
 export interface ProStatusView {
   displayName: string;
   addressAs: string | null;
   verificationStatus: string;
   presenceState: ProPresenceState;
   shiftId: string | null;
+  /** When the open shift started (server time), or null when off shift. */
+  shiftStartedAt: string | null;
+  /** Jobs closed since the shift started. */
+  shiftJobs: number;
   activeJobId: string | null;
   approvedServices: Array<{ id: string; code: string; nameHe: string }>;
   jobsToday: number;

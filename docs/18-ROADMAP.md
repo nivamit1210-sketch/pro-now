@@ -42,7 +42,7 @@ and whether they ship at all (`01-PRD.md §Sponsored shops`).
 Every completed job writes a `CUSTOMER_CHARGE` row and stops there. Setting
 `app_config["payments.commission.percent"] = {"percent": N}` completes the
 split (fee rounds down; fee + payable = charge). Until then
-`/v1/pro/earnings` shows what was charged and nothing payable.
+`/v1/pro/earnings` shows what was charged and nothing payable. While no money moves through the app (D1), it reads the receipts jobs closed with instead, marked `paidDirectly`.
 
 ### Data retention
 `DELETE /v1/me` erases identifiers and every way to sign in at once, and

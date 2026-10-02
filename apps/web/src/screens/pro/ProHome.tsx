@@ -99,6 +99,18 @@ export function ProHome() {
     return <ProOnline />;
   }
   if (!working) remember(waitingKey(view.profile.id), true);
+  return <ApplicationStatus view={view} width={width} height={height} />;
+}
+
+/**
+ * Where the application stands, per service, in the server's words — the
+ * page before approval, and the profile tab after it.
+ */
+export function ApplicationStatus({ view, width, height }: { view: ProApplicationView; width: number; height: number }) {
+  const navigate = useNavigate();
+  const accountApproved = view.profile.verificationStatus === "APPROVED";
+  const approved = view.services.filter((s) => s.status === "APPROVED");
+  const working = accountApproved && approved.length > 0;
   const progress = approvalProgress(view);
   return (
     <ScrollView style={{ width, height, backgroundColor: colors.bg }} contentContainerStyle={styles.body}>

@@ -81,6 +81,8 @@ export interface ProPricingBodyProps {
   priceList?: readonly { id: string; nameHe: string; amountMinorUnits: number }[];
   /** False for a professional whose services are priced only by visit-and-diagnosis: no price list to show. */
   showPriceList?: boolean;
+  /** False where the surcharge cannot be saved yet: a field that is not kept would be a promise. */
+  showAfterHours?: boolean;
   onPriceListChange?: (list: { id: string; nameHe: string; amountMinorUnits: number }[]) => void;
   onBack?: () => void;
   width?: number;
@@ -112,6 +114,7 @@ export function ProPricingBody({
   onAfterHoursChange,
   priceList = [],
   showPriceList = true,
+  showAfterHours = true,
   onPriceListChange,
   onBack,
   width = 390,
@@ -275,6 +278,7 @@ export function ProPricingBody({
           );
         })}
 
+        {showAfterHours ? (<>
         {/* ---------------- After hours ---------------- */}
         <SectionHeader title="תוספת לילה ושבת" colors={colors} />
         <Surface kind="raised" colors={colors} style={styles.card}>
@@ -300,6 +304,7 @@ export function ProPricingBody({
             הלקוח רואה את המחיר כולל התוספת, בשעות שהיא חלה, לפני שהוא מזמין. עד 100%.
           </Text>
         </Surface>
+        </>) : null}
 
         {/* ---------------- The price list — only for work priced by the job ---------------- */}
         {showPriceList ? (<>
@@ -369,7 +374,7 @@ export function ProPricingBody({
           */}
         <SectionHeader title="איך זה עובד" colors={colors} />
         <Surface kind="outlined" colors={colors} style={styles.card}>
-          <Text style={styles.step}>1 · תיקון שהמחיר שלו לא ידוע מראש: הלקוח רואה את דמי הביקור והאבחון שלך, וזה מה שנגבה באפליקציה. את התיקון עצמו אתם סוגרים ישירות.</Text>
+          <Text style={styles.step}>1 · תיקון שהמחיר שלו לא ידוע מראש: הלקוח רואה את דמי הביקור והאבחון שלך לפני שהוא מזמין. את התיקון עצמו אתם סוגרים ישירות.</Text>
           {showPriceList ? (
             <Text style={styles.step}>2 · עבודה עם מחיר ידוע: הלקוח בוחר מהמחירון שלך, ומשלם לך ישירות אחרי שסיימת.</Text>
           ) : null}

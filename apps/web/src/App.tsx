@@ -83,6 +83,10 @@ export function App() {
             <Route path="/jobs/:id" element={<SignedIn><WithHeader><Job /></WithHeader></SignedIn>} />
             {/* The professional's side (docs/21 W7). */}
             <Route path="/pro" element={<SignedIn><ProHome /></SignedIn>} />
+            <Route path="/pro/earnings" element={<SignedIn><ProHome /></SignedIn>} />
+            <Route path="/pro/documents" element={<SignedIn><ProHome /></SignedIn>} />
+            <Route path="/pro/profile" element={<SignedIn><ProHome /></SignedIn>} />
+            <Route path="/pro/pricing" element={<SignedIn><ProHome /></SignedIn>} />
             <Route path="/pro/join" element={<SignedIn><ProJoin /></SignedIn>} />
             <Route path="/pro/jobs/:id" element={<SignedIn><ProJob /></SignedIn>} />
             {/* The admin (docs/21 W8); the server enforces ADMIN on every call. */}

@@ -44,7 +44,10 @@ POST /v1/jobs/:id/quotes              (professional creates/sends a quote)
 POST /v1/quotes/:id/approve           (idempotent)
 POST /v1/jobs/:id/complete            (idempotent)
 POST /v1/jobs/:id/reviews
-GET  /v1/pro/earnings
+GET  /v1/pro/status                   (presence, open shift + shiftStartedAt/shiftJobs, active job)
+GET  /v1/pro/services                 (per-service eligibility with the named missing requirement, and price)
+PATCH /v1/pro/services/:id/pricing
+GET  /v1/pro/earnings                 (last 7 days; with IN_APP_PAYMENTS=off, from each job's SETTLED_OUTSIDE_APP receipt: paidDirectly, gross only)
 GET  /v1/pro/verification
 ```
 

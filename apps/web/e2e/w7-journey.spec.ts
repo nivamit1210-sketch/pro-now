@@ -26,9 +26,9 @@ test("the customer and the professional, two browsers, request to review", async
     const p = await proCtx.newPage();
     await signInExisting(p, pro.email, baseURL!);
     await expect(p).toHaveURL(/\/pro$/);
-    await p.getByRole("button", { name: "התחברות לקבלת עבודות" }).click();
+    await p.getByRole("button", { name: "התחלת משמרת" }).click();
     await expect(p.getByRole("button", { name: "סיום משמרת" })).toBeVisible();
-    await expect(p.getByText("את מחוברת — השאירי את האפליקציה פתוחה כדי לקבל קריאות.")).toBeVisible();
+    await expect(p.getByText("את במשמרת — השאירי את האפליקציה פתוחה כדי לקבל קריאות.")).toBeVisible();
 
     // The customer asks.
     const c = await custCtx.newPage();
@@ -74,7 +74,32 @@ test("the customer and the professional, two browsers, request to review", async
     // Back to her online screen, and off shift.
     await p.getByRole("button", { name: "חזרה" }).click();
     await p.getByRole("button", { name: "סיום משמרת" }).click();
-    await expect(p.getByRole("button", { name: "התחברות לקבלת עבודות" })).toBeVisible();
+    await expect(p.getByRole("button", { name: "התחלת משמרת" })).toBeVisible();
+
+    // Her week (demo sync, the pro tabs): the job, paid to her directly — no net, nothing "בחישוב".
+    await p.getByRole("tab", { name: "הרווחים" }).click();
+    await expect(p).toHaveURL(/\/pro\/earnings$/);
+    await expect(p.getByText("סכום העבודות · שולם לך ישירות")).toBeVisible();
+    await expect(p.getByText("שולם לך ישירות", { exact: true }).first()).toBeVisible();
+    await expect(p.getByText("בחישוב")).toHaveCount(0);
+
+    // Her documents and services, in the server's words.
+    await p.getByRole("tab", { name: "המסמכים שלי" }).click();
+    await expect(p).toHaveURL(/\/pro\/documents$/);
+    await expect(p.getByRole("heading", { name: "המסמכים שלי" })).toBeVisible();
+    await expect(p.getByText("תעודת זהות")).toBeVisible();
+
+    // Her prices: kept by the server, and no field it cannot keep.
+    await p.getByRole("tab", { name: "המשמרת" }).click();
+    await p.getByRole("button", { name: /המחירים שלי/ }).click();
+    await expect(p).toHaveURL(/\/pro\/pricing$/);
+    await expect(p.getByText("המחירים שלך")).toBeVisible();
+    await expect(p.getByText("תוספת לילה ושבת")).toHaveCount(0);
+    const price = p.getByRole("textbox").first();
+    await price.fill("235");
+    await expect(p.getByText("נשמר")).toBeVisible({ timeout: 5_000 });
+    await p.reload();
+    await expect(p.getByRole("textbox").first()).toHaveValue("235");
   } finally {
     await proCtx.close();
     await custCtx.close();
