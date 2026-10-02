@@ -21,6 +21,21 @@ export const FRONT_X = KERB_X + PAVEMENT;
 export const WALK_LIMIT = FRONT_X - 0.9;
 export const STREET_LENGTH = 300;
 const BAY = 8.8;
+
+/**
+ * How far to turn a building face (or a window on it) so that it lines the
+ * street. A plane is built facing +z, down the street; standing at
+ * x = side × FRONT_X it has to face across the road instead: the left side
+ * (-1) turns a quarter to face +x, the right side (+1) to face -x.
+ *
+ * Turning it 0 or π (as #62 did) stood every filler wall ACROSS the pavement,
+ * 8.8 m wide and reaching to within a metre of the kerb, so at spawn the
+ * camera looked straight into one: the left two thirds of the phone were a
+ * black slab (Dvir's iPhone, 2026-10-02).
+ */
+export function frontageYaw(side: -1 | 1): number {
+  return side === -1 ? Math.PI / 2 : -Math.PI / 2;
+}
 /**
  * Spawn on the left pavement, a few metres ahead of the home shop.
  * ArrowUp (negative z) reaches `home` first. Kept close (3.2 m gap)

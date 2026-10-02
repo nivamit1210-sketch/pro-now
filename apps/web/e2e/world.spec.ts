@@ -1,3 +1,5 @@
+import { PNG } from "pngjs";
+
 import { expect, test } from "./fixtures";
 
 import { finishFirstRun, signInByEmail, uniqueEmail } from "./helpers";
@@ -43,4 +45,33 @@ test("on a phone, dragging on the street walks to a shop", async ({ page }) => {
   await page.mouse.move(x - 60, y - 60, { steps: 4 });
   await expect(page.getByRole("button", { name: "היכנסו" })).toBeVisible({ timeout: 10_000 });
   await page.mouse.up();
+});
+
+/** Share of the shot that is near-black: every channel under 24 of 255. */
+function nearBlackShare(png: PNG): number {
+  let dark = 0;
+  for (let i = 0; i < png.data.length; i += 4) {
+    if (png.data[i]! < 24 && png.data[i + 1]! < 24 && png.data[i + 2]! < 24) dark++;
+  }
+  return dark / (png.width * png.height);
+}
+
+test("at the start the street is in view, not a wall in front of the camera", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signInByEmail(page, uniqueEmail("e2e-world-view"));
+  await finishFirstRun(page);
+
+  // Midday, so the check reads the daylight street whatever the CI clock says.
+  await page.clock.setFixedTime(new Date("2026-10-02T12:00:00"));
+  await page.goto("/world");
+  const canvas = page.locator(".world-canvas__surface canvas");
+  await expect(canvas).toBeVisible();
+  // Let the camera settle behind the player and the art arrive.
+  await page.waitForTimeout(3000);
+
+  // A filler wall stood across the pavement once (#62) and filled the left
+  // two thirds of the phone with black. The daylight street has almost none.
+  const share = nearBlackShare(PNG.sync.read(await canvas.screenshot()));
+  console.log(`world view near-black share: ${(share * 100).toFixed(1)}%`);
+  expect(share, `${(share * 100).toFixed(1)}% of the street view is black`).toBeLessThan(0.15);
 });

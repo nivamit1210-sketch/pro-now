@@ -10,6 +10,7 @@ import {
   nearestShop,
   WORLD_SHOPS,
   FRONT_X,
+  frontageYaw,
   ROAD_HALF,
   STREET_LENGTH,
   KERB_X,
@@ -146,7 +147,7 @@ function buildStreetGeometry(root: THREE.Group): {
           color: "#3a3040",
         }),
       );
-      wall.rotation.y = side === -1 ? 0 : Math.PI;
+      wall.rotation.y = frontageYaw(side);
       wall.position.set(side * FRONT_X, buildingHeight / 2, z);
       root.add(wall);
 
@@ -165,7 +166,7 @@ function buildStreetGeometry(root: THREE.Group): {
               opacity: 0.7,
             });
             const win = new THREE.Mesh(winGeo, winMat);
-            win.rotation.y = side === -1 ? 0 : Math.PI;
+            win.rotation.y = frontageYaw(side);
             const wx = side * FRONT_X + side * -0.01;
             const wy = 3.2 + (s - 1) * 2.9 + 0.5;
             const wz = z + (Math.random() - 0.5) * 4;
