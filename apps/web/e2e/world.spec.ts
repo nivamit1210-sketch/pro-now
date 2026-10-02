@@ -10,7 +10,9 @@ test("the customer can walk into a catalogue-backed shop and start a request", a
   await finishFirstRun(page);
 
   await page.goto("/world");
-  await expect(page.getByText(/מטיילים בשכונה|העולם של PRO NOW/)).toBeVisible();
+  // The demo's chrome: just the round back button, no title pill, no bottom bar.
+  await expect(page.getByRole("button", { name: "יציאה מהעולם" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "להמשיך בלי העולם" })).toHaveCount(0);
 
   // The first shop stands up the street and to the left of where you start.
   await page.keyboard.down("ArrowUp");

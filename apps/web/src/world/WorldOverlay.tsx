@@ -10,7 +10,6 @@ export interface WorldOverlayProps {
   route?: WorldRouteModel | null;
   professionalNameHe?: string | null;
   onEvent: (event: WorldEvent) => void;
-  onContinueWithoutWorld?: () => void;
 }
 
 export function WorldOverlay({
@@ -20,7 +19,6 @@ export function WorldOverlay({
   route = null,
   professionalNameHe = null,
   onEvent,
-  onContinueWithoutWorld,
 }: WorldOverlayProps) {
   const activeTrade = openTrade ?? nearbyTrade;
   const status = mode === "SEARCH" ? "מחפשים מקצוען" : mode === "ROUTE" ? "המקצוען בדרך" : mode === "EXPLORE" ? "מטיילים בשכונה" : "העולם של PRO NOW";
@@ -28,7 +26,11 @@ export function WorldOverlay({
 
   return (
     <div className="world-overlay" dir="rtl">
+      {/* As in the demo, the street carries no title: the status is for screen readers only. */}
       <div className="world-overlay__status" aria-live="polite">{status}</div>
+      <button type="button" className="world-overlay__back" aria-label="יציאה מהעולם" onClick={() => onEvent({ type: "EXIT" })}>
+        <span aria-hidden="true">‹</span>
+      </button>
       {professionalNameHe ? <div className="world-overlay__professional">{professionalNameHe}{eta === null ? "" : ` · ${eta} דק׳`}</div> : null}
       {activeTrade ? (
         <section className="world-overlay__sheet" aria-label={activeTrade.nameHe}>
@@ -51,10 +53,6 @@ export function WorldOverlay({
           ) : null}
         </section>
       ) : null}
-      <div className="world-overlay__actions">
-        <button type="button" onClick={() => onEvent({ type: "EXIT" })}>יציאה</button>
-        {onContinueWithoutWorld ? <button type="button" onClick={onContinueWithoutWorld}>להמשיך בלי העולם</button> : null}
-      </div>
     </div>
   );
 }

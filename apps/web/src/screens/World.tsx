@@ -84,7 +84,6 @@ export function World() {
         nearbyTrade={nearbyTrade}
         openTrade={openTrade}
         onEvent={onEvent}
-        onContinueWithoutWorld={() => navigate("/")}
       />
     </View>
   );
