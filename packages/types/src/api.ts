@@ -235,6 +235,13 @@ export interface ProfessionalVerificationView {
     /** True for a result from the stub adapter. A sandbox pass is not a pass. */
     isSandbox: boolean;
     verifiedAt?: string | null;
+    /** The current check only, and only what the page shows (no photos, reviewer or vendor reference). */
+    id?: string;
+    vendorName?: string;
+    method?: string | null;
+    createdAt?: string;
+    /** The reviewer's words, sent only for RETAKE_REQUESTED and REJECTED. */
+    decisionReason?: string | null;
   } | null;
   businessProfile?: {
     verificationStatus: string;

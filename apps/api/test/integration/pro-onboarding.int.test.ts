@@ -256,6 +256,14 @@ describe("joining as a professional", () => {
       expect(await db.identityVerification.count({ where: { professionalId: otherId } })).toBe(1);
     });
 
+    it("the verification page reads only what it shows of the current check, never its photos or reviewer", async () => {
+      const res = await app.inject({ method: "GET", url: "/api/v1/pro/verification", headers: as(applicant) });
+      expect(res.statusCode, res.body).toBe(200);
+      const check = res.json().professional.identityVerification;
+      expect(Object.keys(check).sort()).toEqual(["createdAt", "id", "isSandbox", "method", "status", "vendorName"]);
+      expect(check).toMatchObject({ status: "MANUAL_REVIEW", isSandbox: true, vendorName: "sandbox-identity", method: null });
+    });
+
     it("an upload the clean-up already deleted is a 422, not a 500", async () => {
       const payload = await four();
       await db.upload.delete({ where: { id: payload.selfieUploadIds[1]! } });

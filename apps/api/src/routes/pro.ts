@@ -199,8 +199,21 @@ export default async function proRoutes(app: FastifyInstance) {
     });
     if (!professional) return reply.status(404).send({ code: "PROFESSIONAL_NOT_FOUND", message: "No professional profile" });
     const { identityChecks, ...rest } = professional;
-    // The app still reads one `identityVerification`: the current attempt (null when none).
-    return reply.send({ professional: { ...rest, identityVerification: currentCheck(identityChecks) } });
+    // The app still reads one `identityVerification`: the current attempt (null when none),
+    // and only what it shows: never the photos, the reviewer or the vendor's reference.
+    const c = currentCheck(identityChecks);
+    const identityVerification = c
+      ? {
+          id: c.id,
+          status: c.status,
+          vendorName: c.vendorName,
+          isSandbox: c.isSandbox,
+          method: c.method,
+          createdAt: c.createdAt.toISOString(),
+          ...(c.status === "RETAKE_REQUESTED" || c.status === "REJECTED" ? { decisionReason: c.decisionReason } : {}),
+        }
+      : null;
+    return reply.send({ professional: { ...rest, identityVerification } });
   });
 
   /**
