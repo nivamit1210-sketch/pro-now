@@ -24,8 +24,12 @@ export default defineConfig({
      * Installable (docs/21 W2), and the prerequisite for Web Push on iOS.
      * The service worker precaches the app shell only: the built JS, CSS,
      * HTML and icons. It never caches /api (every answer must be the
-     * server's current one) or the art, which the browser's HTTP cache
-     * already holds.
+     * server's current one).
+     *
+     * The art (/clips, /world) is kept as it is seen and refreshed behind
+     * it. The server sends it `no-cache`, so without this every open asked
+     * the server again, and an open during a deploy (the server answering
+     * 502 while it restarts) drew the app with its pictures missing.
      */
     VitePWA({
       registerType: "autoUpdate",
@@ -55,6 +59,17 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         // Web Push: the worker's push and click handlers (docs/21 W9).
         importScripts: ["/push-handler.js"],
+        runtimeCaching: [
+          {
+            urlPattern: /\/(clips|world)\/[^/]+\.(jpe?g|png|webp)$/,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "art",
+              // Room for every file under /world and /clips (about 100), not more.
+              expiration: { maxEntries: 150 },
+            },
+          },
+        ],
       },
     }),
     ...(uploadSourceMaps
