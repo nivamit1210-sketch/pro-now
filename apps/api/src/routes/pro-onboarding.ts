@@ -12,6 +12,7 @@ import {
   proShopSchema,
   proServicesSchema,
 } from "@pro-now/validation";
+import { ageOn, MINIMUM_AGE } from "../domain/identity-check.js";
 import { grantRole } from "../auth/roles.js";
 import { requireRole } from "../auth/access.js";
 import { PILOT_MARKET_CODE } from "../config/market.js";
@@ -62,6 +63,7 @@ export async function applicationView(db: PrismaClient, professionalId: string):
 
   const missing: string[] = [];
   if (!pro.addressAs) missing.push("ADDRESS_AS");
+  if (!pro.dateOfBirth) missing.push("DATE_OF_BIRTH");
   if (pro.services.length === 0) missing.push("SERVICES");
   if (!area) missing.push("AREA");
   if (!pro.businessProfile?.taxStatus) missing.push("TAX_STATUS");
@@ -105,6 +107,7 @@ export async function applicationView(db: PrismaClient, professionalId: string):
       displayName: pro.displayName,
       legalName: pro.legalName,
       addressAs: pro.addressAs,
+      dateOfBirth: pro.dateOfBirth ? pro.dateOfBirth.toISOString().slice(0, 10) : null,
       verificationStatus: pro.verificationStatus,
       shop: pro.shopName && pro.shopBrandColor ? { name: pro.shopName, brandColor: pro.shopBrandColor, logoUploadId: pro.shopLogoUploadId } : null,
       business: pro.businessProfile?.taxStatus
@@ -131,11 +134,18 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
   app.post("/v1/pro/join", { onRequest: signedIn }, async (req, reply) => {
     const body = proJoinSchema.parse(req.body);
     const userId = req.user!.userId;
+    const dateOfBirth = new Date(`${body.dateOfBirth}T00:00:00Z`);
+    if (Number.isNaN(dateOfBirth.getTime()) || dateOfBirth > new Date()) {
+      return reply.status(400).send({ code: "VALIDATION_ERROR", message: "Not a date of birth", fields: [{ path: "dateOfBirth", message: "invalid" }] });
+    }
+    if (ageOn(dateOfBirth, new Date()) < MINIMUM_AGE) {
+      return reply.status(422).send({ code: "UNDER_MINIMUM_AGE", message: `Professionals join from age ${MINIMUM_AGE}` });
+    }
     await grantRole(app.prisma, userId, "PROFESSIONAL");
     const profile = await app.prisma.professionalProfile.upsert({
       where: { userId },
-      update: { displayName: body.displayName, legalName: body.legalName, addressAs: body.addressAs },
-      create: { userId, displayName: body.displayName, legalName: body.legalName, addressAs: body.addressAs },
+      update: { displayName: body.displayName, legalName: body.legalName, addressAs: body.addressAs, dateOfBirth },
+      create: { userId, displayName: body.displayName, legalName: body.legalName, addressAs: body.addressAs, dateOfBirth },
     });
     return reply.send(await applicationView(app.prisma, profile.id));
   });

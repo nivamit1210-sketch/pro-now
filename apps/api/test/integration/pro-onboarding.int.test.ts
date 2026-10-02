@@ -73,14 +73,33 @@ afterAll(async () => {
 
 describe("joining as a professional", () => {
   it("any signed-in person may apply; the application lists what is required", async () => {
-    const res = await app.inject({ method: "POST", url: "/api/v1/pro/join", headers: as(applicant), payload: { displayName: "רוני", legalName: "רוני אברהם", addressAs: "F" } });
+    const res = await app.inject({ method: "POST", url: "/api/v1/pro/join", headers: as(applicant), payload: { displayName: "רוני", legalName: "רוני אברהם", addressAs: "F", dateOfBirth: "1990-05-14" } });
     expect(res.statusCode, res.body).toBe(200);
     proId = res.json().profile.id;
     expect(res.json().profile).toMatchObject({ addressAs: "F", verificationStatus: "DRAFT" });
-    expect(res.json().missing).toEqual(expect.arrayContaining(["SERVICES", "AREA", "DOCUMENT:GOVERNMENT_ID", "DOCUMENT:SELFIE", "DOCUMENT:TAX_FILE", "PORTRAIT", "TAX_STATUS"]));
+    expect(res.json().missing).toEqual(expect.arrayContaining(["SERVICES", "AREA", "DOCUMENT:TAX_FILE", "PORTRAIT", "TAX_STATUS"]));
+    expect(res.json().profile.dateOfBirth).toBe("1990-05-14");
     expect(res.json().profile.business).toBeNull();
     expect(res.json().profile.portrait).toBeNull();
     expect(res.json().missing.join()).not.toMatch(/CRIMINAL/);
+  });
+
+  it("a professional must be at least 18 (Dvir, 2026-10-02)", async () => {
+    const minor = await signInByEmail(app, uniqueEmail("w7-minor"));
+    const today = new Date();
+    const seventeen = `${today.getUTCFullYear() - 17}-01-01`;
+    const res = await app.inject({ method: "POST", url: "/api/v1/pro/join", headers: as(minor), payload: { displayName: "נוי", legalName: "נוי כהן", addressAs: "F", dateOfBirth: seventeen } });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("UNDER_MINIMUM_AGE");
+    const bad = await app.inject({ method: "POST", url: "/api/v1/pro/join", headers: as(minor), payload: { displayName: "נוי", legalName: "נוי כהן", addressAs: "F", dateOfBirth: "14/05/1990" } });
+    expect(bad.statusCode).toBe(400);
+  });
+
+  it("identity photos are their own upload kind, photos only", async () => {
+    const prepare = (mime: string, bytes: number) => app.inject({ method: "POST", url: "/api/v1/uploads", headers: as(applicant), payload: { kind: "IDENTITY", mime, bytes } });
+    expect((await prepare("image/jpeg", 1000)).statusCode).toBe(201);
+    expect((await prepare("application/pdf", 1000)).statusCode).toBe(422);
+    expect((await prepare("image/jpeg", 3_000_001)).statusCode).toBe(422);
   });
 
   it("refuses a service that is not open to professionals", async () => {
@@ -169,10 +188,7 @@ describe("joining as a professional", () => {
       expect(priced.statusCode, priced.body).toBe(200);
     }
     await app.inject({ method: "PUT", url: "/api/v1/pro/application/area", headers: as(applicant), payload: { lat: LAT, lng: LNG, radiusKm: 15 } });
-    for (const kind of ["GOVERNMENT_ID", "TAX_FILE"] as const) {
-      await app.inject({ method: "POST", url: "/api/v1/pro/application/documents", headers: as(applicant), payload: { kind, uploadId: await upload(applicant, "DOCUMENT") } });
-    }
-    await app.inject({ method: "POST", url: "/api/v1/pro/application/documents", headers: as(applicant), payload: { kind: "SELFIE", uploadId: await upload(applicant, "PHOTO") } });
+    await app.inject({ method: "POST", url: "/api/v1/pro/application/documents", headers: as(applicant), payload: { kind: "TAX_FILE", uploadId: await upload(applicant, "DOCUMENT") } });
 
     for (const svc of [approvedSvc, otherSvc]) {
       const reqs = await db.serviceRequirement.findMany({ where: { serviceId: svc.id, mandatory: true } });

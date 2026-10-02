@@ -2,6 +2,7 @@ export const MAX_UPLOAD_BYTES = {
   PHOTO: 1_500_000,
   VOICE_NOTE: 1_500_000,
   DOCUMENT: 5_000_000,
+  IDENTITY: 3_000_000,
 } as const;
 
 export type UploadKind = keyof typeof MAX_UPLOAD_BYTES;
@@ -10,6 +11,7 @@ const ALLOWED_MIMES: Record<UploadKind, readonly string[]> = {
   PHOTO: ["image/jpeg", "image/png", "image/webp"],
   VOICE_NOTE: ["audio/mp4", "audio/webm", "audio/ogg"],
   DOCUMENT: ["application/pdf", "image/jpeg", "image/png"],
+  IDENTITY: ["image/jpeg", "image/png", "image/webp"],
 };
 
 type UploadPolicyFailure = {

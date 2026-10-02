@@ -771,6 +771,8 @@ export interface ProApplicationView {
     displayName: string;
     legalName: string;
     addressAs: string | null;
+    /** YYYY-MM-DD; null for applications from before 2026-10-02. */
+    dateOfBirth: string | null;
     verificationStatus: string;
     /** Trading name (optional) and tax status; null until answered. Entered, not verified. */
     business: { tradingName: string | null; taxStatus: "EXEMPT" | "LICENSED" | "COMPANY" } | null;
