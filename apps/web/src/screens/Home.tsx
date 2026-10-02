@@ -173,7 +173,7 @@ export function Home() {
               {
                 titleHe: "החשבון",
                 items: [
-                  { id: "card", labelHe: "החשבון שלי", detailHe: "פרטים, אמצעי תשלום והיסטוריית חיובים", upcoming: true },
+                  { id: "card", labelHe: "החשבון שלי", detailHe: "פרטים, אמצעי תשלום והיסטוריית חיובים", onPress: () => navigate("/profile") },
                   { id: "address", labelHe: "הכתובות שלי", detailHe: "לאן שולחים את המקצוען", onPress: () => navigate("/addresses") },
                   { id: "avatar", labelHe: "הדמות שלי", detailHe: "מי מטייל ברחוב בזמן ההמתנה", onPress: () => navigate("/avatar") },
                   { id: "sign-out", labelHe: "יציאה", detailHe: "יציאה מהחשבון במכשיר הזה", onPress: signOut },

@@ -17,6 +17,7 @@ import { ProJob } from "./screens/pro/ProJob";
 import { Admin } from "./screens/admin/Admin";
 import { Inbox } from "./screens/Inbox";
 import { Calls } from "./screens/Calls";
+import { Profile } from "./screens/Profile";
 import { useUserChannel } from "./useUserChannel";
 import { Addresses } from "./screens/Addresses";
 import { Avatar, Intro } from "./screens/Onboarding";
@@ -84,6 +85,8 @@ export function App() {
             <Route path="/jobs/:id" element={<SignedIn><WithHeader><Job /></WithHeader></SignedIn>} />
             {/* הקריאות שלי: every job of theirs, under the same header (the demo's calls tab). */}
             <Route path="/calls" element={<SignedIn><WithHeader><Calls /></WithHeader></SignedIn>} />
+            {/* החשבון שלי: who they are, their calls, and deleting the account (the demo's card tab). */}
+            <Route path="/profile" element={<SignedIn><WithHeader><Profile /></WithHeader></SignedIn>} />
             {/* The professional's side (docs/21 W7). */}
             <Route path="/pro" element={<SignedIn><ProHome /></SignedIn>} />
             <Route path="/pro/earnings" element={<SignedIn><ProHome /></SignedIn>} />

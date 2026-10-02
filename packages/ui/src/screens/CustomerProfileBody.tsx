@@ -89,6 +89,7 @@ export interface CustomerProfileBodyProps {
    * last week's answers already filled in.
    */
   onResetReviewSession?: () => void;
+
   /** What is currently remembered, in one line. Null when nothing is. */
   reviewSavedHe?: string | null;
   width?: number;
@@ -108,6 +109,7 @@ export function CustomerProfileBody({
   onEditAddresses,
   onEditPayment,
   onResetReviewSession,
+
   reviewSavedHe,
   width = 390,
   height = 780,
@@ -151,7 +153,7 @@ export function CustomerProfileBody({
                 muted={lifetimeSpendMinorUnits === null}
               />
               <View style={styles.statDivider} />
-              <Stat value={String(rated)} label="ביקורות שכתבת" muted={rated === 0} />
+              <Stat value={String(rated)} label="ביקורות שכתבתם" muted={rated === 0} />
             </View>
           ) : null}
         </View>
@@ -198,9 +200,9 @@ export function CustomerProfileBody({
               <View style={styles.emptyMark}>
                 <Mark name="handyman" size={26} color={colors.action} />
               </View>
-              <Text style={styles.emptyTitle}>עוד לא שלחת קריאה</Text>
+              <Text style={styles.emptyTitle}>עוד לא שלחתם קריאה</Text>
               <Text style={styles.emptyBody}>
-                כשתשלח, המקצוען שמגיע אליך יופיע כאן — עם זמן הגעה, מה אומת עליו, והחיוב המלא.
+                כשתשלחו, המקצוען שמגיע יופיע כאן — עם זמן הגעה ומה אומת עליו.
               </Text>
             </Surface>
           </View>
@@ -251,7 +253,7 @@ export function CustomerProfileBody({
                             ))}
                           </View>
                         ) : (
-                          <Text style={styles.rateLink}>דרג</Text>
+                          <Text style={styles.rateLink}>לדרג</Text>
                         )}
                       </View>
                     ) : null}
@@ -333,13 +335,16 @@ function SettingRow({
   onPress?: () => void;
   divided?: boolean;
 }) {
+  // A row that goes nowhere is information, not a button: no chevron, no press.
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : "text"}
+      accessibilityLabel={`${label}: ${value}`}
       style={({ pressed }) => [styles.settingRow, divided && styles.settingDivided, pressed && { opacity: 0.7 }]}
     >
-      <Text style={styles.settingChevron}>›</Text>
+      {onPress ? <Text style={styles.settingChevron}>›</Text> : null}
       <View style={styles.settingText}>
         <Text style={styles.settingLabel} numberOfLines={1}>
           {label}

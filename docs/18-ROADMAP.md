@@ -37,6 +37,13 @@ and whether they ship at all (`01-PRD.md §Sponsored shops`).
 - **Pricing kind per service** — Amit: *"צריך לחשוב על זה"*.
 - **Several live orders at once** — see the 2026-10-01 entry below.
 - **Services beyond our list** — on hold (D3).
+- **For Amit's demo first** (the product shows no UI the demo lacks —
+  Dvir, 2026-10-02):
+  - *Deleting the account* from "החשבון שלי". The server already does it
+    (`DELETE /v1/me`; refused while a job is in progress) and people need
+    a way to, but no screen offers it.
+  - *The profile shows the character the customer chose* (`/avatar`), not
+    a generated face — today the header and the profile disagree.
 
 ### The commission — the ledger is waiting on it
 Every completed job writes a `CUSTOMER_CHARGE` row and stops there. Setting
