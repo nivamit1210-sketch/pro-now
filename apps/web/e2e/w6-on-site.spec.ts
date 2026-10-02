@@ -57,6 +57,8 @@ test("the person at home gets a page with the professional and the door code", a
     // Spaced for reading aloud; the label carries it whole.
     await expect(phone.getByLabel(`הקוד ${code}`)).toBeVisible();
     await expect(phone.getByText("דנה").first()).toBeVisible();
+    // Spoken of as she asked while joining (audit v2 #3).
+    await expect(phone.getByText("כשהיא בדלת, בקשו ממנה את הקוד:")).toBeVisible();
     // No address, no price, nothing to approve or pay.
     await expect(phone.getByText("ויצמן")).toHaveCount(0);
     await expect(phone.getByText("₪")).toHaveCount(0);
