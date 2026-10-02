@@ -52,6 +52,15 @@ function loadTexture(loader: THREE.TextureLoader, id: WorldAssetId): THREE.Textu
   return loader.load(worldAssetUrl(id));
 }
 
+function tiledPhoto(tex: THREE.Texture | null, repeatX: number, repeatY: number): THREE.Texture | null {
+  if (!tex) return null;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(repeatX, repeatY);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
 function tryLoadTexture(loader: THREE.TextureLoader, id: string): THREE.Texture | null {
   if (id in WORLD_ASSETS) return loadTexture(loader, id as WorldAssetId);
   return null;
@@ -129,8 +138,9 @@ function buildStreetGeometry(
   const day = isDaytime();
   const halfStreet = STREET_LENGTH / 2;
 
-  const pavingTex = paving(26);
-  const asphaltTex = asphalt();
+  // The demo's photographed stone and asphalt; the drawn ones if the art is missing.
+  const pavingTex = tiledPhoto(tryLoadTexture(loader, "mat_paving"), 12, 62) ?? paving(26);
+  const asphaltTex = tiledPhoto(tryLoadTexture(loader, "mat_road"), 2, 34) ?? asphalt();
 
   const groundGeo = new THREE.PlaneGeometry(FRONT_X * 2, STREET_LENGTH);
   const leftPavement = new THREE.Mesh(
@@ -143,7 +153,7 @@ function buildStreetGeometry(
 
   const rightPavement = new THREE.Mesh(
     groundGeo.clone(),
-    new THREE.MeshStandardMaterial({ map: pavingTex.clone(), roughness: 0.85 }),
+    new THREE.MeshStandardMaterial({ map: pavingTex, roughness: 0.85 }),
   );
   rightPavement.rotation.x = -Math.PI / 2;
   rightPavement.position.set(FRONT_X / 2 + ROAD_HALF / 2, -0.02, 0);
@@ -833,7 +843,16 @@ export function createWorldScene({
   onEvent,
 }: WorldSceneFactoryArgs): WorldSceneHandle {
   const day = isDaytime();
-  const loader = new THREE.TextureLoader();
+  // The arrival screen stays up until the street's art is in (WorldCanvas).
+  // Later loads (a shop's room) finish the manager again; only the first counts.
+  let artReady = false;
+  const artListeners: Array<() => void> = [];
+  const manager = new THREE.LoadingManager(() => {
+    if (artReady) return;
+    artReady = true;
+    for (const listener of artListeners.splice(0)) listener();
+  });
+  const loader = new THREE.TextureLoader(manager);
   const root = new THREE.Group();
   scene.add(root);
 
@@ -1096,6 +1115,10 @@ export function createWorldScene({
     },
     resize(width: number, height: number) {
       postProcessing?.resize(width, height);
+    },
+    onArtReady(listener: () => void) {
+      if (artReady) listener();
+      else artListeners.push(listener);
     },
     dispose() {
       disposeObject(root);

@@ -43,8 +43,11 @@ test("on a phone, dragging on the street walks to a shop", async ({ page }) => {
   await page.mouse.move(x, y);
   await page.mouse.down();
   await page.mouse.move(x - 60, y - 60, { steps: 4 });
+  // The thumb stick shows where the finger came down, as in the demo.
+  await expect(page.locator(".world-canvas__stick")).toBeVisible();
   await expect(page.getByRole("button", { name: "היכנסו" })).toBeVisible({ timeout: 10_000 });
   await page.mouse.up();
+  await expect(page.locator(".world-canvas__stick")).toBeHidden();
 });
 
 /** Share of the shot that is near-black: every channel under 24 of 255. */
@@ -66,7 +69,8 @@ test("at the start the street is in view, not a wall in front of the camera", as
   await page.goto("/world");
   const canvas = page.locator(".world-canvas__surface canvas");
   await expect(canvas).toBeVisible();
-  // Let the camera settle behind the player and the art arrive.
+  // The arrival screen lifts once the street's art is in; then let the camera settle.
+  await expect(page.getByText("נכנסים לעיר")).toBeHidden({ timeout: 30_000 });
   await page.waitForTimeout(3000);
 
   // A filler wall stood across the pavement once (#62) and filled the left
@@ -74,4 +78,27 @@ test("at the start the street is in view, not a wall in front of the camera", as
   const share = nearBlackShare(PNG.sync.read(await canvas.screenshot()));
   console.log(`world view near-black share: ${(share * 100).toFixed(1)}%`);
   expect(share, `${(share * 100).toFixed(1)}% of the street view is black`).toBeLessThan(0.15);
+});
+
+test.describe("arriving on a slow network", () => {
+  // page.route cannot see what a service worker answers, so none for this one.
+  test.use({ serviceWorkers: "block" });
+
+  test("the arrival screen holds until the street's art is in, then lifts", async ({ page }) => {
+    test.setTimeout(120_000);
+    await signInByEmail(page, uniqueEmail("e2e-world-arrival"));
+    await finishFirstRun(page);
+
+    // A slow network: every picture of the street takes a moment longer.
+    await page.route(/\/world\/.+\.webp$/, async (route) => {
+      await new Promise((done) => setTimeout(done, 1500));
+      await route.continue();
+    });
+    await page.goto("/world");
+    const arrival = page.getByRole("status").filter({ hasText: "נכנסים לעיר" });
+    await expect(arrival).toBeVisible();
+    await expect(arrival.getByText("PRO NOW")).toBeVisible();
+    await expect(arrival).toBeHidden({ timeout: 30_000 });
+    await expect(page.locator(".world-canvas__surface canvas")).toBeVisible();
+  });
 });

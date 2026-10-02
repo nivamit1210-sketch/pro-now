@@ -24,6 +24,18 @@ export function movementFromPointer(dx: number, dy: number, radius: number): Wor
   return normalized(dx / radius, dy / radius);
 }
 
+/**
+ * Where the on-screen stick's knob sits for a drag of (dx, dy) px: under the
+ * finger, held to the ring once the finger goes past it. The walk itself reads
+ * movementFromPointer; this is only what the thumb sees.
+ */
+export function stickKnobOffset(dx: number, dy: number, radius: number): { x: number; y: number } {
+  const distance = Math.hypot(dx, dy);
+  if (distance === 0 || radius <= 0) return { x: 0, y: 0 };
+  const scale = Math.min(1, radius / distance);
+  return { x: dx * scale, y: dy * scale };
+}
+
 export function worldActionFromKey(key: string): "EXIT" | "ENTER_SHOP" | null {
   if (key === "Escape") return "EXIT";
   if (key === "Enter") return "ENTER_SHOP";

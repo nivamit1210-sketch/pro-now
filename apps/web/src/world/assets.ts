@@ -15,6 +15,9 @@ export const WORLD_ASSETS = {
   world_neighbourhood: "world_neighbourhood.webp",
   splash_city: "splash_city.webp",
   splash_city_day: "splash_city_day.webp",
+  // The demo's ground: photographed stone and asphalt, tiled.
+  mat_paving: "m/mat_paving.webp",
+  mat_road: "m/mat_road.webp",
   avatar_01_portrait: "avatar_01_portrait.webp",
   avatar_02_portrait: "avatar_02_portrait.webp",
   avatar_03_portrait: "avatar_03_portrait.webp",

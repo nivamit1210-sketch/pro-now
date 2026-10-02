@@ -1,13 +1,16 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 
 import type { WorldMode, WorldMoveCommand, WorldRouteModel, WorldSceneModel } from "./types";
 import { detectWorldCapabilities, shouldPauseWorld } from "./worldCapabilities";
-import { movementFromPointer, useWorldInput } from "./worldInput";
+import { worldAssetUrl } from "./assets";
+import { movementFromPointer, stickKnobOffset, useWorldInput } from "./worldInput";
 import "./WorldCanvas.css";
 
 /** How far a drag must travel from its start for full walking speed, in px. */
 const DRAG_RADIUS = 60;
+/** The arrival screen never outstays this, art or no art. */
+const ARRIVAL_MAX_MS = 12_000;
 
 export type WorldEvent =
   | { type: "EXIT" }
@@ -23,6 +26,8 @@ export interface WorldSceneHandle {
   render(nowMs: number): void;
   /** The canvas changed size; anything sized to it (post-processing) follows. */
   resize?(width: number, height: number): void;
+  /** Called once, when the street's art has loaded (the arrival screen lifts). */
+  onArtReady?(listener: () => void): void;
   dispose(): void;
 }
 
@@ -45,6 +50,8 @@ export interface WorldCanvasProps {
   onEvent: (event: WorldEvent) => void;
   fallback: ReactNode;
   sceneFactory?: WorldSceneFactory;
+  /** Show the arrival screen while the street's art loads (the walkable world, not a backdrop). */
+  arrival?: boolean;
 }
 
 function webglAvailable(): boolean {
@@ -63,6 +70,7 @@ export function WorldCanvas({
   onEvent,
   fallback,
   sceneFactory,
+  arrival = false,
 }: WorldCanvasProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const modelRef = useRef(scene);
@@ -70,6 +78,9 @@ export function WorldCanvas({
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
   const sceneHandleRef = useRef<WorldSceneHandle | null>(null);
+  // The demo's arrival: the city's picture, the brand and a filling bar while
+  // the street's art arrives, instead of a street that paints itself in.
+  const [arriving, setArriving] = useState(false);
 
   useWorldInput({
     enabled: scene.mode === "EXPLORE" || scene.mode === "ROUTE",
@@ -126,6 +137,23 @@ export function WorldCanvas({
     } satisfies WorldSceneHandle;
     sceneHandleRef.current = handle;
 
+    setArriving(true);
+    const arrived = () => setArriving(false);
+    const arrivalTimer = window.setTimeout(arrived, ARRIVAL_MAX_MS);
+    if (handle.onArtReady) handle.onArtReady(arrived);
+    else arrived();
+
+    // The thumb stick: a ring where the finger came down, a knob under it.
+    const stick = document.createElement("div");
+    stick.className = "world-canvas__stick";
+    stick.setAttribute("aria-hidden", "true");
+    stick.style.setProperty("--stick-radius", `${DRAG_RADIUS}px`);
+    const knob = document.createElement("div");
+    knob.className = "world-canvas__knob";
+    stick.appendChild(knob);
+    stick.hidden = true;
+    host.appendChild(stick);
+
     let frame = 0;
     let paused = shouldPauseWorld(document.visibilityState);
     const render = (nowMs: number) => {
@@ -160,14 +188,24 @@ export function WorldCanvas({
       if (mode !== "EXPLORE" && mode !== "ROUTE") return;
       drag = { x: event.clientX, y: event.clientY, id: event.pointerId };
       canvas.setPointerCapture?.(event.pointerId);
+      const box = host.getBoundingClientRect();
+      stick.style.left = `${event.clientX - box.left}px`;
+      stick.style.top = `${event.clientY - box.top}px`;
+      knob.style.transform = "translate(-50%, -50%)";
+      stick.hidden = false;
     };
     const onPointerMove = (event: PointerEvent) => {
       if (drag?.id !== event.pointerId) return;
-      handle.move(movementFromPointer(event.clientX - drag.x, event.clientY - drag.y, DRAG_RADIUS));
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      handle.move(movementFromPointer(dx, dy, DRAG_RADIUS));
+      const offset = stickKnobOffset(dx, dy, DRAG_RADIUS);
+      knob.style.transform = `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`;
     };
     const onPointerEnd = (event: PointerEvent) => {
       if (drag?.id !== event.pointerId) return;
       drag = null;
+      stick.hidden = true;
       handle.move({ x: 0, z: 0, sprint: false });
     };
     canvas.addEventListener("pointerdown", onPointerDown);
@@ -179,6 +217,8 @@ export function WorldCanvas({
 
     return () => {
       window.cancelAnimationFrame(frame);
+      window.clearTimeout(arrivalTimer);
+      stick.remove();
       document.removeEventListener("visibilitychange", onVisibility);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
@@ -196,9 +236,30 @@ export function WorldCanvas({
   return (
     <div className="world-canvas" ref={hostRef} role="img" aria-label="העולם של PRO NOW">
       <div className="world-canvas__status" aria-live="polite" />
+      {arrival && arriving ? (
+        <div className="world-canvas__arrival" role="status">
+          <div
+            className="world-canvas__arrival-art"
+            style={{ backgroundImage: `url(${worldAssetUrl(isDaytime() ? "splash_city_day" : "splash_city")})` }}
+          />
+          <div className="world-canvas__arrival-mark">
+            PRO <span>NOW</span>
+          </div>
+          <div className="world-canvas__arrival-word">נכנסים לעיר</div>
+          <div className="world-canvas__arrival-bar">
+            <div />
+          </div>
+        </div>
+      ) : null}
       {fallback}
     </div>
   );
+}
+
+/** As the street decides (WorldScene): day from six to six. */
+function isDaytime(): boolean {
+  const hour = new Date().getHours();
+  return hour >= 6 && hour < 18;
 }
 
 export type { WorldMoveCommand };

@@ -5,6 +5,8 @@
   min-height: 100%;
   overflow: hidden;
   background: #120c18;
+  /* The arrival screen and stick stay under the app's own controls on top. */
+  isolation: isolate;
 }
 
 .world-canvas__surface {
@@ -29,4 +31,114 @@
   height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
+}
+
+/* The arrival: the city's picture, the brand and a bar, until the art is in.
+   It never takes a touch, so the street underneath can already be walked. */
+.world-canvas__arrival {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 30%;
+  gap: 10px;
+  color: #fff;
+}
+
+.world-canvas__arrival-art {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: 50% 40%;
+}
+
+.world-canvas__arrival-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(18, 12, 24, 0.1) 30%, rgba(18, 12, 24, 0.55));
+}
+
+.world-canvas__arrival-mark,
+.world-canvas__arrival-word,
+.world-canvas__arrival-bar {
+  position: relative;
+}
+
+.world-canvas__arrival-mark {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  direction: ltr;
+}
+
+.world-canvas__arrival-mark span {
+  color: #ff6b4a;
+}
+
+.world-canvas__arrival-word {
+  font-size: 15px;
+  opacity: 0.85;
+}
+
+.world-canvas__arrival-bar {
+  width: 196px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+
+.world-canvas__arrival-bar > div {
+  height: 100%;
+  width: 40%;
+  border-radius: 2px;
+  background: #fff;
+  animation: world-arrival-fill 1.6s ease-in-out infinite;
+}
+
+@keyframes world-arrival-fill {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-canvas__arrival-bar > div {
+    animation: none;
+    width: 100%;
+    opacity: 0.6;
+  }
+}
+
+/* The thumb stick, where the finger came down. */
+.world-canvas__stick {
+  position: absolute;
+  z-index: 2;
+  width: calc(var(--stick-radius, 60px) * 2);
+  height: calc(var(--stick-radius, 60px) * 2);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+}
+
+.world-canvas__stick[hidden] {
+  display: none;
+}
+
+.world-canvas__knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transform: translate(-50%, -50%);
 }

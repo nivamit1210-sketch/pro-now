@@ -45,6 +45,23 @@ export function frontageYaw(side: -1 | 1): number {
 export const SPAWN = { x: -6.3, z: 56 } as const;
 
 /**
+ * The first view: from the camera (behind and above the player, pulled back
+ * towards the road when the home shop frames itself) to just past the player.
+ * Nothing that stands still may stand in it, or the arrival is a close-up of
+ * a prop. The demo keeps its scatter 13 m clear of spawn for the same reason.
+ */
+export const SPAWN_VIEW = { minZ: SPAWN.z - 2, maxZ: SPAWN.z + 9, halfWidth: 3.5 } as const;
+
+/** Whether something centred at (x, z), `radius` wide either way, stands in the first view. */
+export function inSpawnView(x: number, z: number, radius = 0): boolean {
+  return (
+    z + radius >= SPAWN_VIEW.minZ &&
+    z - radius <= SPAWN_VIEW.maxZ &&
+    Math.abs(x - SPAWN.x) - radius <= SPAWN_VIEW.halfWidth
+  );
+}
+
+/**
  * The full shop roster matching the demo's 14-shop high street.
  * Alternating sides, 17.6 m apart (every other bay). Each shop sits
  * at FRONT_X on its side of the street.
@@ -81,7 +98,9 @@ export interface PlacePosition {
 
 export const WORLD_PLACES: readonly PlacePosition[] = [
   { id: "roadside", labelHe: "מפרץ עצירה",     departmentCode: "VEHICLE",   x:  KERB_X, z:  BAY },
-  { id: "dogpark",  labelHe: "גינת הכלבים",     departmentCode: "PETS",      x: -FRONT_X + 2, z: 58.4 },
+  // Up the street from spawn, not beside it: at 58.4 its picture stood between
+  // the camera and the player and hid them both on arrival.
+  { id: "dogpark",  labelHe: "גינת הכלבים",     departmentCode: "PETS",      x: -FRONT_X + 2, z: 35.2 },
   { id: "garden",   labelHe: "פינת המשתלה",     departmentCode: "HOME_CARE", x: -FRONT_X + 2, z: -26.4 },
   { id: "pickup",   labelHe: "נקודת שליחויות",  departmentCode: "LOGISTICS", x:  FRONT_X - 2, z: -79.2 },
   { id: "bench",    labelHe: "פינת ישיבה",       departmentCode: null,        x:  FRONT_X - 2, z: -114.4 },

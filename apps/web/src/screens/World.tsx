@@ -76,6 +76,7 @@ export function World() {
         avatarNo={scene.avatarNo}
         scene={scene}
         sceneFactory={createWorldScene}
+        arrival
         onEvent={onEvent}
         fallback={<CityHero />}
       />
