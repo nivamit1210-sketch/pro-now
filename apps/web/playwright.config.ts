@@ -73,6 +73,8 @@ export default defineConfig({
       VAPID_PRIVATE_KEY: "7cg3iFdutlM6s6FiP2XEPgfKiL4SWAThjw001Y0UWGM",
       VAPID_SUBJECT: "mailto:e2e@pronow.test",
       GEOCODING_PROVIDER: "fixture",
+      // The sign-in screen's quick tryout (its own test in w2.spec.ts).
+      DEMO_AUTH_ENABLED: "1",
     },
     stdout: "ignore",
     stderr: "pipe",

@@ -85,7 +85,10 @@ export function SignIn() {
     try {
       const response = await fetch("/api/v1/demo-auth", { method: "POST" });
       if (!response.ok) throw new Error("Demo authentication is disabled");
-      window.location.assign("/");
+      // Everyone shares the one test account, which saw the intro long ago,
+      // so the server would never show it again. A tryout starts with the
+      // intro every time, as the demo does on every load (Dvir, 2026-10-02).
+      window.location.assign("/intro");
     } catch {
       setBusy(false);
       setError("כניסת הניסיון אינה זמינה כרגע.");

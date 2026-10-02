@@ -43,6 +43,22 @@ test("a returning person goes straight home", async ({ page, context }) => {
   await expect(home(page)).toBeVisible();
 });
 
+test("the quick tryout starts with the intro every time", async ({ page, context }) => {
+  // One shared test account: a second tryout must not skip what the first one saw.
+  for (let round = 0; round < 2; round++) {
+    await page.goto("/sign-in");
+    await page.getByText("כניסה מהירה לניסיון").click();
+    await expect(page).toHaveURL(/\/intro$/);
+    await expect(page.getByText("עיר שלמה של בעלי מקצוע")).toBeVisible();
+    for (let i = 0; i < 4; i++) await page.getByText("הבא", { exact: true }).click();
+    await page.getByText("בואו נתחיל").click();
+    await expect(page).toHaveURL(/\/(avatar)?$/);
+    if (page.url().endsWith("/avatar")) await page.getByText("דלג כרגע").click();
+    await expect(home(page)).toBeVisible();
+    await context.clearCookies();
+  }
+});
+
 test("sign in with Google (the local mock issuer)", async ({ page }) => {
   const email = uniqueEmail("e2e-google");
   await page.goto("/sign-in");
