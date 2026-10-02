@@ -123,7 +123,16 @@ export function ApplicationStatus({ view, width, height }: { view: ProApplicatio
       {working ? null : (
         <View style={styles.card} accessibilityLabel="מה נבדק">
           {progress.map((p) => (
-            <Row key={p.labelHe} labelHe={p.labelHe} statusHe={APPROVAL_STATE_HE[p.state]} tone={p.state} />
+            <View key={p.labelHe}>
+              <Row labelHe={p.labelHe} statusHe={APPROVAL_STATE_HE[p.state]} tone={p.state} />
+              {/* A retake or a refusal comes with the reviewer's own words; what is theirs to fix, with the way there. */}
+              {p.noteHe ? <Text style={styles.soft}>{p.noteHe}</Text> : null}
+              {p.action ? (
+                <Text style={styles.link} accessibilityRole="link" onPress={() => navigate(p.action!.to)}>
+                  {p.action.labelHe}
+                </Text>
+              ) : null}
+            </View>
           ))}
         </View>
       )}
@@ -151,7 +160,7 @@ function Row({ labelHe, statusHe, tone }: { labelHe: string; statusHe: string; t
   return (
     <View style={styles.row}>
       <Text style={styles.label}>{labelHe}</Text>
-      <Text style={[styles.status, tone === "done" && styles.good, tone === "attention" && styles.bad, tone === "queued" && styles.active]}>{statusHe}</Text>
+      <Text style={[styles.status, tone === "done" && styles.good, (tone === "attention" || tone === "refused") && styles.bad, tone === "queued" && styles.active]}>{statusHe}</Text>
     </View>
   );
 }

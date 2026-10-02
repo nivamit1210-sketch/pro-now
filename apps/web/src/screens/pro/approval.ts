@@ -12,7 +12,10 @@ export const APPROVAL_STEPS_HE = [
   "אישור PRO NOW — ורק אז מקבלים עבודות",
 ] as const;
 
-export type ApprovalState = "received" | "queued" | "waiting" | "done" | "attention" | "none";
+/** The row before Amit's list: who they are and that they are 18 (docs/10 §Identity check). */
+export const IDENTITY_STEP_HE = "הזהות ותאריך הלידה";
+
+export type ApprovalState = "received" | "queued" | "waiting" | "done" | "attention" | "refused" | "none";
 
 export const APPROVAL_STATE_HE: Record<ApprovalState, string> = {
   received: "התקבלו",
@@ -20,6 +23,7 @@ export const APPROVAL_STATE_HE: Record<ApprovalState, string> = {
   waiting: "ממתין",
   done: "נבדק ✓",
   attention: "צריך תיקון",
+  refused: "לא אושר",
   none: "לא נדרש",
 };
 
@@ -28,7 +32,39 @@ export const APPROVAL_STATE_HE: Record<ApprovalState, string> = {
  * (the demo's design review: checks that "finish" by themselves are fake
  * verification). Nothing here moves without an admin's decision.
  */
-export function approvalProgress(view: ProApplicationView): Array<{ labelHe: string; state: ApprovalState }> {
+export type ApprovalRow = {
+  labelHe: string;
+  state: ApprovalState;
+  /** The reviewer's own words, when they gave some. */
+  noteHe?: string;
+  /** Where to fix it, when it is the applicant's to fix. */
+  action?: { labelHe: string; to: string };
+};
+
+/**
+ * The identity check and the date of birth, from the server's view. A retake
+ * asked for, or an applicant from before the check (no check, no date of
+ * birth), is something to do, with the way to do it; a refusal is final
+ * (docs/10). An account approved before the check existed is not asked for
+ * one: nobody reviews it until re-verification exists.
+ */
+function identityRow(view: ProApplicationView, accountApproved: boolean): ApprovalRow {
+  const labelHe = IDENTITY_STEP_HE;
+  const id = view.identity;
+  const noteHe = id?.reasonHe ?? undefined;
+  if (id?.status === "REJECTED") return { labelHe, state: "refused", ...(noteHe ? { noteHe } : {}) };
+  // The details step (step 0, where /pro/join opens by default) holds the date of birth.
+  if (view.missing.includes("DATE_OF_BIRTH")) return { labelHe, state: "attention", action: { labelHe: "להוסיף תאריך לידה ›", to: "/pro/join?at=details" } };
+  if (id?.status === "RETAKE_REQUESTED") {
+    return { labelHe, state: "attention", ...(noteHe ? { noteHe } : {}), action: { labelHe: "לצלם שוב ›", to: "/pro/join?at=documents" } };
+  }
+  if (id?.status === "VERIFIED") return { labelHe, state: "done" };
+  if (id?.status === "MANUAL_REVIEW" || id?.status === "PENDING") return { labelHe, state: "queued" };
+  if (accountApproved && !id) return { labelHe, state: "none" };
+  return { labelHe, state: "attention", action: { labelHe: "לבדיקת הזהות ›", to: "/pro/join?at=documents" } };
+}
+
+export function approvalProgress(view: ProApplicationView): ApprovalRow[] {
   const accountApproved = view.profile.verificationStatus === "APPROVED";
   const docs = view.documents.map((d) => d.status);
   const creds = view.services.flatMap((s) => s.requirements.map((r) => r.credential?.status ?? null)).filter((x): x is string => x !== null);
@@ -55,7 +91,7 @@ export function approvalProgress(view: ProApplicationView): Array<{ labelHe: str
     : "waiting";
 
   const states = [documents, licences, reputation, working];
-  return APPROVAL_STEPS_HE.map((labelHe, i) => ({ labelHe, state: states[i]! }));
+  return [identityRow(view, accountApproved), ...APPROVAL_STEPS_HE.map((labelHe, i) => ({ labelHe, state: states[i]! }))];
 }
 
 /**

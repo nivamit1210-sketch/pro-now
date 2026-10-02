@@ -107,6 +107,7 @@ export function ProJoin() {
   // Coming back to edit a sent application opens at the summary, as in the demo.
   const [params] = useSearchParams();
   const at = params.get("at");
+  // at=details (or nothing) opens the details step, where the date of birth is.
   const [step, setStep] = useState(at === "summary" ? STEPS.length - 1 : at === "shop" ? SHOP_STEP : at === "documents" ? DOCUMENTS_STEP : 0);
   /*
    * The four explanation slides, then the welcome — once, for someone who has
@@ -389,6 +390,7 @@ function Area({ view, busy, onSave }: { view: ProApplicationView; busy: boolean;
 }
 
 function Documents({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<void>; onNext: () => void }) {
+  const queryClient = useQueryClient();
   const [numbers, setNumbers] = useState<Record<string, string>>({});
   const has = (kind: string) => view.documents.some((d) => d.kind === kind && d.status !== "REJECTED");
   const credentialRows = view.services.flatMap((s) => s.requirements.map((r) => ({ service: s, r })));
@@ -397,7 +399,7 @@ function Documents({ view, busy, save, onNext }: { view: ProApplicationView; bus
     <View style={styles.section}>
       <Text style={styles.title}>מסמכים</Text>
       <Text style={styles.soft}>מה שהחוק דורש לכל מקצוע, ומה ש־PRO NOW מבקשת מכולם. לא נבקש תעודת יושר — אסור לדרוש אותה.</Text>
-      <IdentityCheck legalNameHe={view.profile.legalName} current={view.identity} onSubmitted={(v) => void save(async () => v)} />
+      <IdentityCheck legalNameHe={view.profile.legalName} current={view.identity} onSubmitted={(v) => queryClient.setQueryData(applicationKey, v)} />
       {ACCOUNT_DOCS.map((d) => (
         <View key={d.kind} style={styles.docRow}>
           <View style={{ flex: 1 }}>
