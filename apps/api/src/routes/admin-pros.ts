@@ -1,8 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { adminDecisionSchema } from "@pro-now/validation";
+import { adminDecisionSchema, adminIdentityDecisionSchema } from "@pro-now/validation";
 import { requireRole } from "../auth/access.js";
 import { evaluateServiceCredentials } from "../domain/dispatch/credential-eligibility.js";
-import { applicationView } from "./pro-onboarding.js";
+import { accountApprovalBlocker, currentCheck } from "../domain/identity-check.js";
+import { applicationView, deleteIdentityPhotos } from "./pro-onboarding.js";
 
 /**
  * APPROVING PROFESSIONALS (docs/21 W7; the screens are W8).
@@ -11,6 +12,7 @@ import { applicationView } from "./pro-onboarding.js";
  * made it and why:
  *
  * - the ACCOUNT: the details and the documents everyone gives;
+ * - IDENTITY: a person's decision on the current check; the account needs it, and 18 (docs/10).
  * - each CREDENTIAL: a licence or certificate, with its expiry;
  * - each SERVICE: allowed only when the account is approved and the
  *   service's credentials satisfy the very rule dispatch applies
@@ -54,6 +56,11 @@ export default async function adminProsRoutes(app: FastifyInstance) {
     const body = adminDecisionSchema.parse(req.body);
     const pro = await app.prisma.professionalProfile.findUnique({ where: { id } });
     if (!pro) return reply.status(404).send({ code: "PROFESSIONAL_NOT_FOUND", message: "No such professional" });
+    if (body.approve) {
+      const checks = await app.prisma.identityVerification.findMany({ where: { professionalId: id } });
+      const blocker = accountApprovalBlocker({ dateOfBirth: pro.dateOfBirth, current: currentCheck(checks) }, new Date());
+      if (blocker) return reply.status(409).send({ code: blocker, message: "The account cannot be approved yet" });
+    }
     const status = body.approve ? "APPROVED" : "DRAFT";
     await app.prisma.professionalProfile.update({ where: { id }, data: { verificationStatus: status } });
     await app.prisma.professionalDocument.updateMany({
@@ -62,6 +69,24 @@ export default async function adminProsRoutes(app: FastifyInstance) {
     });
     await audit(req.user!.userId, body.approve ? "PRO_ACCOUNT_APPROVED" : "PRO_ACCOUNT_REJECTED", "professional", id, { verificationStatus: pro.verificationStatus }, { verificationStatus: status }, body.reason, req.id);
     return reply.send(await applicationView(app.prisma, id));
+  });
+
+  app.post("/v1/admin/identity/:id/decision", admin, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = adminIdentityDecisionSchema.parse(req.body);
+    const check = await app.prisma.identityVerification.findUnique({ where: { id } });
+    if (!check) return reply.status(404).send({ code: "IDENTITY_NOT_FOUND", message: "No such identity check" });
+    const current = currentCheck(await app.prisma.identityVerification.findMany({ where: { professionalId: check.professionalId } }));
+    if (current?.id !== check.id) return reply.status(409).send({ code: "IDENTITY_NOT_CURRENT", message: "A newer check replaced this one" });
+    if (!["MANUAL_REVIEW", "PENDING"].includes(check.status)) return reply.status(409).send({ code: "IDENTITY_ALREADY_DECIDED", message: "Already decided" });
+
+    const status = body.action === "APPROVE" ? "VERIFIED" : body.action === "RETAKE" ? "RETAKE_REQUESTED" : "REJECTED";
+    const after = { status, method: body.action === "APPROVE" ? "MANUAL" : null, decidedById: req.user!.userId, decidedAt: new Date(), decisionReason: body.reason ?? null, uploadIds: [] as string[], photosDeletedAt: new Date() };
+    await app.prisma.identityVerification.update({ where: { id }, data: after });
+    await audit(req.user!.userId, `IDENTITY_${body.action === "APPROVE" ? "APPROVED" : body.action === "RETAKE" ? "RETAKE_REQUESTED" : "REJECTED"}`, "professional", check.professionalId, { status: check.status }, { status, method: after.method }, body.reason, req.id);
+    // Kept only until this decision (Dvir, 2026-10-02).
+    await deleteIdentityPhotos(app, check.uploadIds);
+    return reply.send(await applicationView(app.prisma, check.professionalId));
   });
 
   app.post("/v1/admin/credentials/:id/decision", admin, async (req, reply) => {

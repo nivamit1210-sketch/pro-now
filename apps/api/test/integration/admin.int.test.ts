@@ -69,9 +69,17 @@ describe("every admin mutation writes an audit row", () => {
     const ps = await db.professionalService.findFirstOrThrow({ where: { professionalId: pro.id } });
     const credential = await db.professionalCredential.findFirst({ where: { professionalId: pro.id } });
     const activation = await db.marketActivation.findFirstOrThrow({ where: { serviceId: svc.id } });
+    // The account decision needs a verified identity and an adult date of birth (docs/10).
+    await db.professionalProfile.update({ where: { id: pro.id }, data: { dateOfBirth: new Date("1985-01-01") } });
+    await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "VERIFIED", method: "MANUAL" } });
+    const idPro = await db.professionalProfile.create({
+      data: { userId: (await db.user.create({ data: { email: uniqueEmail("w8-idpro"), emailVerified: true, name: "Id Pro" } })).id, legalName: "Id Pro", displayName: "Id", dateOfBirth: new Date("1985-01-01") },
+    });
+    const pendingId = await db.identityVerification.create({ data: { professionalId: idPro.id, vendorName: "sandbox-identity", status: "MANUAL_REVIEW" } });
 
     const cases: Record<string, { url: string; payload: object }> = {
       "POST /api/v1/admin/professionals/:id/decision": { url: `/api/v1/admin/professionals/${pro.id}/decision`, payload: { approve: true } },
+      "POST /api/v1/admin/identity/:id/decision": { url: `/api/v1/admin/identity/${pendingId.id}/decision`, payload: { action: "APPROVE" } },
       "POST /api/v1/admin/credentials/:id/decision": credential
         ? { url: `/api/v1/admin/credentials/${credential.id}/decision`, payload: { approve: true } }
         : { url: "", payload: {} },
@@ -91,6 +99,33 @@ describe("every admin mutation writes an audit row", () => {
       expect(res.statusCode, `${key}: ${res.body}`).toBe(200);
       expect(await db.auditLog.count(), key).toBe(before + 1);
     }
+  });
+});
+
+describe("identity decisions", () => {
+  it("identity: a retake shows the reason to the professional; a stale tab cannot decide a replaced check", async () => {
+    const user = await db.user.create({ data: { email: uniqueEmail("id-retake"), emailVerified: true, name: "Id Retake" } });
+    const pro = await db.professionalProfile.create({ data: { userId: user.id, legalName: "דנה לוי", displayName: "דנה", dateOfBirth: new Date("1992-03-01") } });
+    const old = await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "SUPERSEDED", createdAt: new Date(Date.now() - 60_000) } });
+    const cur = await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "MANUAL_REVIEW" } });
+    const decideId = (id: string, payload: object) => app.inject({ method: "POST", url: `/api/v1/admin/identity/${id}/decision`, headers: as(admin), payload });
+
+    expect((await decideId(old.id, { action: "APPROVE" })).json().code).toBe("IDENTITY_NOT_CURRENT");
+    const retake = await decideId(cur.id, { action: "RETAKE", reason: "התמונה מטושטשת, אפשר לצלם שוב באור טוב?" });
+    expect(retake.statusCode, retake.body).toBe(200);
+    expect(retake.json().identity).toMatchObject({ status: "RETAKE_REQUESTED", reasonHe: "התמונה מטושטשת, אפשר לצלם שוב באור טוב?" });
+    expect(retake.json().missing).toContain("IDENTITY");
+  });
+
+  it("an under-18 date of birth blocks account approval even with a verified identity", async () => {
+    const user = await db.user.create({ data: { email: uniqueEmail("id-minor"), emailVerified: true, name: "Minor" } });
+    const dob = new Date();
+    dob.setUTCFullYear(dob.getUTCFullYear() - 17);
+    const pro = await db.professionalProfile.create({ data: { userId: user.id, legalName: "קטין", displayName: "קטין", dateOfBirth: dob, verificationStatus: "SERVICE_REVIEW" } });
+    await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "VERIFIED", method: "MANUAL" } });
+    const res = await app.inject({ method: "POST", url: `/api/v1/admin/professionals/${pro.id}/decision`, headers: as(admin), payload: { approve: true } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("UNDER_MINIMUM_AGE");
   });
 });
 

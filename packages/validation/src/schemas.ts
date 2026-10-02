@@ -396,6 +396,12 @@ export const adminDecisionSchema = z
   .strict()
   .refine((d) => d.approve || Boolean(d.reason), { message: "A refusal needs a reason", path: ["reason"] });
 
+/** `POST /api/v1/admin/identity/:id/decision` (docs/10): a retake or a refusal says why, to the professional. */
+export const adminIdentityDecisionSchema = z
+  .object({ action: z.enum(["APPROVE", "RETAKE", "REJECT"]), reason: z.string().trim().min(3).max(500).optional() })
+  .strict()
+  .refine((d) => d.action === "APPROVE" || Boolean(d.reason), { message: "A retake or a refusal needs a reason", path: ["reason"] });
+
 /** `POST /api/v1/admin/users/:id/roles`. ADMIN is not grantable here: only the ADMIN_EMAILS allowlist (docs/21 W1). */
 export const adminRoleChangeSchema = z
   .object({ role: z.enum(["CUSTOMER", "PROFESSIONAL"]), grant: z.boolean(), reason: z.string().trim().min(3).max(500) })

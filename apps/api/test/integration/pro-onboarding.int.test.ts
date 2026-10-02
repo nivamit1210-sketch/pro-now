@@ -292,6 +292,41 @@ describe("the admin approves, in order, on the record", () => {
     expect((await decide(`/api/v1/admin/pro-services/${ps.id}/decision`, { approve: true })).json().code).toBe("ACCOUNT_NOT_APPROVED");
   });
 
+  it("the account cannot be approved before identity; a person approves identity on the record", async () => {
+    const early = await decide(`/api/v1/admin/professionals/${proId}/decision`, { approve: true });
+    expect(early.statusCode).toBe(409);
+    expect(early.json().code).toBe("IDENTITY_NOT_VERIFIED");
+
+    const detail = (await app.inject({ method: "GET", url: `/api/v1/admin/professionals/${proId}`, headers: as(admin) })).json();
+    expect(detail.identity).toMatchObject({ status: "MANUAL_REVIEW", isSandbox: true, declared: { legalName: "רוני אברהם", dateOfBirth: "1990-05-14" } });
+    for (const url of Object.values(detail.identity.photos)) expect(url).toMatch(/^https?:\/\//);
+    expect(await db.auditLog.count({ where: { action: "IDENTITY_PHOTOS_VIEWED", targetId: proId } })).toBeGreaterThan(0);
+
+    const check = await db.identityVerification.findFirstOrThrow({ where: { professionalId: proId, status: "MANUAL_REVIEW" } });
+    expect((await decide(`/api/v1/admin/identity/${check.id}/decision`, { action: "RETAKE" })).statusCode).toBe(400);
+    const ok = await decide(`/api/v1/admin/identity/${check.id}/decision`, { action: "APPROVE" });
+    expect(ok.statusCode, ok.body).toBe(200);
+    const row = await db.identityVerification.findUniqueOrThrow({ where: { id: check.id } });
+    expect(row).toMatchObject({ status: "VERIFIED", method: "MANUAL", uploadIds: [] });
+    expect(row.decidedById).not.toBeNull();
+    expect(row.photosDeletedAt).not.toBeNull();
+    expect(await db.upload.count({ where: { id: { in: check.uploadIds } } })).toBe(0);
+    expect((await decide(`/api/v1/admin/identity/${check.id}/decision`, { action: "APPROVE" })).json().code).toBe("IDENTITY_ALREADY_DECIDED");
+    expect(await db.auditLog.count({ where: { action: "IDENTITY_APPROVED", targetId: proId } })).toBe(1);
+
+    const again = await app.inject({
+      method: "POST",
+      url: "/api/v1/pro/application/identity",
+      headers: as(applicant),
+      payload: {
+        documentUploadId: await upload(applicant, "IDENTITY"),
+        selfieUploadIds: [await upload(applicant, "IDENTITY"), await upload(applicant, "IDENTITY"), await upload(applicant, "IDENTITY")],
+      },
+    });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().code).toBe("IDENTITY_ALREADY_VERIFIED");
+  });
+
   it("refuses a service whose licence is not verified, then approves it once it is", async () => {
     expect((await decide(`/api/v1/admin/professionals/${proId}/decision`, { approve: true })).statusCode).toBe(200);
     const ps = await db.professionalService.findFirstOrThrow({ where: { professionalId: proId, serviceId: approvedSvc.id } });

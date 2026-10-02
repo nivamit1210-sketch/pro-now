@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { adminMarketChangeSchema, adminRoleChangeSchema } from "@pro-now/validation";
 import { JOB_STATES } from "@pro-now/types";
 import { requireRole } from "../auth/access.js";
+import { currentCheck } from "../domain/identity-check.js";
 import { applicationView } from "./pro-onboarding.js";
 
 /**
@@ -32,6 +33,7 @@ export default async function adminRoutes(app: FastifyInstance) {
         documents: { include: { upload: true } },
         portraitUpload: true,
         credentials: { include: { service: { select: { nameHe: true } } } },
+        identityChecks: true,
       },
     });
     if (!pro) return reply.status(404).send({ code: "PROFESSIONAL_NOT_FOUND", message: "No such professional" });
@@ -39,7 +41,40 @@ export default async function adminRoutes(app: FastifyInstance) {
       where: { id: { in: pro.credentials.map((c) => c.documentRef).filter((x): x is string => Boolean(x)) } },
     });
     const byId = new Map(uploads.map((u) => [u.id, u]));
+    const check = currentCheck(pro.identityChecks);
+    const photoRows = check ? await app.prisma.upload.findMany({ where: { id: { in: check.uploadIds } } }) : [];
+    const urlFor = async (uploadId: string | undefined) => {
+      const u = photoRows.find((r) => r.id === uploadId);
+      return u ? signed(u.storageKey) : null;
+    };
+    const photos = check
+      ? { idCard: await urlFor(check.uploadIds[0]), straight: await urlFor(check.uploadIds[1]), right: await urlFor(check.uploadIds[2]), left: await urlFor(check.uploadIds[3]) }
+      : null;
+    if (photos && Object.values(photos).some(Boolean)) {
+      await app.prisma.auditLog.create({ data: { actorId: req.user!.userId, action: "IDENTITY_PHOTOS_VIEWED", targetType: "professional", targetId: id, requestId: req.id } });
+    }
     return reply.send({
+      identity:
+        check && photos
+          ? {
+              id: check.id,
+              status: check.status,
+              vendorName: check.vendorName,
+              isSandbox: check.isSandbox,
+              method: check.method,
+              submittedAt: check.createdAt.toISOString(),
+              decidedAt: check.decidedAt?.toISOString() ?? null,
+              decisionReason: check.decisionReason,
+              photos,
+              declared: { legalName: pro.legalName, dateOfBirth: pro.dateOfBirth?.toISOString().slice(0, 10) ?? null },
+              provider: {
+                nameMatch: check.nameMatch,
+                livenessPassed: check.livenessPassed,
+                documentValid: check.documentValid,
+                reasonCodes: check.reasonCodes,
+              },
+            }
+          : null,
       application: await applicationView(app.prisma, id),
       email: pro.user.email,
       joinedAt: pro.user.createdAt.toISOString(),
