@@ -83,7 +83,8 @@ test("the home capsule: the server's minutes while the professional is on the wa
     // Arrived: nobody is on the way, so no minutes.
     await pro.step(jobId, "arrive");
     await page.goto("/");
-    await expect(page.getByRole("button", { name: /^.* · הגיע$/ })).toBeVisible({ timeout: 15_000 });
+    // In her words: she asked to be addressed in the feminine while joining (audit v2 #3).
+    await expect(page.getByRole("button", { name: /^.* · הגיעה$/ })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/^\d+ דק׳$/)).toHaveCount(0);
   } finally {
     await pro.dispose();
