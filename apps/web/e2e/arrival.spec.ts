@@ -42,9 +42,11 @@ test("at the door: the professional, the server's code, and back to the live job
     await pro.step(jobId, "arrive");
     await expect(page.getByText("קוד האימות שלכם")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByLabel(`קוד האימות ${code!.split("").join(" ")}`)).toBeVisible();
-    await expect(page.getByText(/^.+ הגיע$/)).toBeVisible();
+    // Audit v2 #3: she asked to be addressed in the feminine while joining (addressAs "F").
+    await expect(page.getByText("דנה הגיעה", { exact: true })).toBeVisible();
     // Only the count PRO NOW really has: this professional's first job.
-    await expect(page.getByText("נזילה/פיצוץ בצנרת · עבודה ראשונה דרך PRO NOW")).toBeVisible();
+    // The name the customer picked, not the dispatch catalogue's "נזילה/פיצוץ בצנרת" (audit v2 #1).
+    await expect(page.getByText("נזילה או דליפת מים · עבודה ראשונה דרך PRO NOW")).toBeVisible();
     await expect(page.getByText("אל תכניסו אדם שאינו תואם לשם, לתמונה ולקוד שמופיעים כאן.")).toBeVisible();
     // No calling or messaging without a masking vendor, no vehicle the server never recorded.
     await expect(page.getByRole("button", { name: "שיחה" })).toHaveCount(0);
@@ -56,6 +58,7 @@ test("at the door: the professional, the server's code, and back to the live job
     await page.getByRole("button", { name: "חזרה" }).click();
     await expect(page.getByText("קוד האימות שלכם")).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(`/jobs/${jobId}$`));
+    await expect(page.getByText(/דנה הגיעה אליכם/).first()).toBeVisible();
 
     // The diagnosis starts: the visit moves on.
     await pro.step(jobId, "start");
@@ -71,7 +74,8 @@ test("the arrival screen gives way by itself when the diagnosis starts", async (
   await finishFirstRun(page);
   const address = await page.request.post("/api/v1/me/addresses", { data: { kind: "location", lat: LAT, lng: LNG, details: "שינקין 14" }, headers: { origin: baseURL! } });
   expect(address.ok(), await address.text()).toBe(true);
-  const pro = await dispatchableProfessional({ serviceCode: "HOME_PLUMB_LEAK", lat: LAT, lng: LNG, baseURL: baseURL! });
+  // A professional who asked for the masculine: the same screen says הגיע.
+  const pro = await dispatchableProfessional({ serviceCode: "HOME_PLUMB_LEAK", lat: LAT, lng: LNG, baseURL: baseURL!, addressAs: "M" });
   try {
     await page.getByRole("textbox", { name: "ספרו מה צריך" }).fill("נזילה במטבח");
     await page.getByRole("button", { name: /המשך עם נזילה/ }).click();
@@ -83,6 +87,7 @@ test("the arrival screen gives way by itself when the diagnosis starts", async (
     await page.getByRole("button", { name: /^שליחת .* אליי$/ }).click({ timeout: 15_000 });
     for (const step of ["en-route", "arrive"] as const) await pro.step(jobId, step);
     await expect(page.getByText("קוד האימות שלכם")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("דנה הגיע", { exact: true })).toBeVisible();
     await pro.step(jobId, "start");
     await expect(page.getByText("קוד האימות שלכם")).toHaveCount(0, { timeout: 15_000 });
     await expect(page.getByText(/על הביקור והאבחון/).first()).toBeVisible();

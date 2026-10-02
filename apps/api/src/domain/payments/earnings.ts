@@ -36,6 +36,7 @@
  * type costs to carry.
  */
 import type { PrismaClient } from "@prisma/client";
+import { jobServiceNameHe } from "../job/service-name.js";
 
 export interface EarningDeduction {
   code: string;
@@ -145,7 +146,7 @@ export async function earningsFor(
     return {
       jobId: payment.jobId,
       serviceCode: payment.job.service.code,
-      serviceNameHe: payment.job.service.nameHe,
+      serviceNameHe: jobServiceNameHe(payment.job),
       completedAt: payment.createdAt.toISOString(),
       grossMinorUnits: charge,
       deductions,
@@ -241,7 +242,7 @@ export async function outsideAppEarningsFor(
     jobs.push({
       jobId: e.jobId,
       serviceCode: e.job.service.code,
-      serviceNameHe: e.job.service.nameHe,
+      serviceNameHe: jobServiceNameHe(e.job),
       completedAt: e.createdAt.toISOString(),
       grossMinorUnits: amount,
       deductions: [],

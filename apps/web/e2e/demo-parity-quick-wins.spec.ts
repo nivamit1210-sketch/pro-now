@@ -83,7 +83,8 @@ test("the home capsule: the server's minutes while the professional is on the wa
     // Arrived: nobody is on the way, so no minutes.
     await pro.step(jobId, "arrive");
     await page.goto("/");
-    await expect(page.getByRole("button", { name: /^.* · הגיע$/ })).toBeVisible({ timeout: 15_000 });
+    // In her words: she asked to be addressed in the feminine while joining (audit v2 #3).
+    await expect(page.getByRole("button", { name: /^.* · הגיעה$/ })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/^\d+ דק׳$/)).toHaveCount(0);
   } finally {
     await pro.dispose();
@@ -153,4 +154,23 @@ test("the professional sees the job settled when the customer confirms, then is 
     await custCtx.close();
     await pro.dispose();
   }
+});
+
+test("a trade's page stands in front of its own shop, over the evening city even at noon", async ({ page }) => {
+  await signInByEmail(page, uniqueEmail("e2e-trade-backdrop"));
+  await finishFirstRun(page);
+  await page.clock.setFixedTime(new Date("2026-10-02T12:00:00"));
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "ניקיון", exact: true }).click();
+  await expect(page.getByText("מה צריך?")).toBeVisible();
+  // The demo's evening city in both modes; the foggy daytime render is gone from here.
+  await expect(page.locator('img[src="/world/splash_city.webp"]')).toHaveCount(1);
+  await expect(page.locator('img[src*="splash_city_day"]')).toHaveCount(0);
+  await expect(page.locator('img[src="/world/m/shop_care.webp"]')).toBeVisible();
+
+  // Home repairs: the workshop drawn open, with its professional in the door.
+  await page.getByRole("button", { name: "חזרה", exact: true }).click();
+  await page.getByRole("button", { name: "תיקונים בבית", exact: true }).click();
+  await expect(page.locator('img[src="/world/venue_home.webp"]')).toBeVisible();
 });

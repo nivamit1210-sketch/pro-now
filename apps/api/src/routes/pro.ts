@@ -7,6 +7,7 @@ import { assertPresenceTransition, canEndShift } from "../domain/job/pro-presenc
 import type { OfferCardView, ProPresenceState, ProPublicProfileView } from "@pro-now/types";
 import { currentCheck } from "../domain/identity-check.js";
 import { coarseAreaLabel } from "../domain/privacy/area-label.js";
+import { jobServiceNameHe } from "../domain/job/service-name.js";
 
 /**
  * See /docs/06-API-SPEC.md, /docs/07-JOB-STATE-MACHINE.md §Professional
@@ -169,7 +170,7 @@ export default async function proRoutes(app: FastifyInstance) {
         where: { professionalId: pro.id, moderationStatus: "PUBLISHED" },
         orderBy: { createdAt: "desc" },
         take: 10,
-        select: { id: true, overallRating: true, text: true, createdAt: true, reviewer: { select: { fullName: true } }, job: { select: { service: { select: { nameHe: true } } } } },
+        select: { id: true, overallRating: true, text: true, createdAt: true, reviewer: { select: { fullName: true } }, job: { select: { catalogServiceNameHe: true, service: { select: { nameHe: true } } } } },
       }),
       professionalSummary(app, pro, approved.map((s) => s.serviceId)),
     ]);
@@ -185,7 +186,7 @@ export default async function proRoutes(app: FastifyInstance) {
         rating: r.overallRating,
         text: r.text,
         createdAt: r.createdAt.toISOString(),
-        serviceNameHe: r.job.service.nameHe,
+        serviceNameHe: jobServiceNameHe(r.job),
         reviewerLabelHe: reviewerLabelHe(r.reviewer.fullName),
       })),
     };
@@ -291,7 +292,7 @@ export default async function proRoutes(app: FastifyInstance) {
     const result: OfferCardView = {
       offerId: offer.id,
       jobId: offer.jobId,
-      serviceNameHe: offer.job.service.nameHe,
+      serviceNameHe: jobServiceNameHe(offer.job),
       serviceCode: offer.job.service.code,
       priceModel: offer.job.service.priceModel,
       currency: "ILS",

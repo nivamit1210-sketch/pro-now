@@ -5,6 +5,7 @@ import {
   type JobMatchView,
   type PriceQuoteView,
 } from "@pro-now/types";
+import { jobServiceNameHe } from "../domain/job/service-name.js";
 
 /**
  * GET /v1/jobs/:id/match — the payload behind the customer's match card.
@@ -103,7 +104,7 @@ export default async function matchRoutes(app: FastifyInstance) {
     const result: JobMatchView = {
       jobId: job.id,
       status: job.status,
-      serviceNameHe: job.service.nameHe,
+      serviceNameHe: jobServiceNameHe(job),
       professional,
       eta:
         etaSeconds === null

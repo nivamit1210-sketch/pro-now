@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-import { SPAWN, type WorldShopPosition } from "./street";
+import { KERB_X, SPAWN, type WorldShopPosition } from "./street";
 
 /** Where the camera wants to be and what it wants to look at. */
 export interface CameraPose {
@@ -8,12 +8,66 @@ export interface CameraPose {
   look: THREE.Vector3;
 }
 
-/** Third-person follow: behind and above the player, looking ahead of them. */
+/**
+ * The demo's third-person camera (City.tsx), walking down the street:
+ * 6.98 m straight behind the walker, height and aim proportional to that
+ * distance (1.2 + 0.33·d up, 1.55·d ahead at 1.1 + 0.16·d), so the figure
+ * sits low in the frame with the street opening out ahead of it.
+ */
+export const FOLLOW_DISTANCE = 6.2 + 0.26 * 3.0;
+
+/**
+ * The line the following camera rides. The walker is on the pavement, and
+ * straight behind them the camera would fly through the lamps and the
+ * trees (billboards that turn to face it and fill the screen). So it stays
+ * just off the kerb, clear of every pavement prop, still aimed at the walker.
+ */
+export const CAMERA_LINE_X = KERB_X + 0.6;
+
+export function cameraLineX(x: number): number {
+  return Math.sign(x) * Math.min(Math.abs(x), CAMERA_LINE_X);
+}
+
 export function followPose(target: THREE.Vector3): CameraPose {
+  const d = FOLLOW_DISTANCE;
   return {
-    position: new THREE.Vector3(target.x * 0.85, target.y + 3.6, target.z + 6.8),
-    look: new THREE.Vector3(target.x, target.y + 0.8, target.z - 3.5),
+    position: new THREE.Vector3(cameraLineX(target.x), 1.2 + d * 0.33, target.z + d),
+    look: new THREE.Vector3(target.x, 1.1 + d * 0.16, target.z - d * 1.55),
   };
+}
+
+/**
+ * THE ENTRY: high over the street, then down behind the walker.
+ *
+ * As in the demo, the world opens 38 m back and 26 m up, looking down the
+ * lit street, and the first move flies the camera down into the walking
+ * view over 1.9 s. `k` is the eased progress, 0 up there and 1 down here.
+ */
+export const ENTRY_WIDE = { dist: 38, hgt: 26 } as const;
+export const DESCENT_SECONDS = 1.9;
+
+/** Ease in and out, so the drop neither starts nor stops with a jolt. */
+export function smoothstep01(t: number): number {
+  const x = Math.min(1, Math.max(0, t));
+  return x * x * (3 - 2 * x);
+}
+
+export function entryPose(target: THREE.Vector3, k: number, ground: CameraPose): CameraPose {
+  const wide: CameraPose = {
+    position: new THREE.Vector3(target.x, ENTRY_WIDE.hgt, target.z + ENTRY_WIDE.dist),
+    look: new THREE.Vector3(target.x, 2.6, target.z - ENTRY_WIDE.dist * 1.55 * 0.45),
+  };
+  if (k <= 0) return wide;
+  if (k >= 1) return ground;
+  return {
+    position: wide.position.lerp(ground.position, k),
+    look: wide.look.lerp(ground.look, k),
+  };
+}
+
+/** The demo's easing towards the pose, by time rather than by frame. */
+export function followFactor(dtSeconds: number): number {
+  return 1 - Math.pow(0.002, Math.max(0, dtSeconds));
 }
 
 /**

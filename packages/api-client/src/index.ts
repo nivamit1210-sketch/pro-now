@@ -212,6 +212,8 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
     createJob: (
       input: {
         serviceId: string;
+        /** The catalogue service picked ("svc-clean"): its name is the one shown after ordering. */
+        catalogServiceId?: string;
         addressId: string;
         description?: string;
         structuredAnswers?: Record<string, unknown>;

@@ -185,7 +185,7 @@ describe("ככה הלקוחות רואים אותך", () => {
   const NOW = new Date("2026-10-02T12:00:00Z");
   const view = (portraitKind: "PHOTO" | "CHARACTER" | null): ProPublicProfileView => ({
     professional: {
-      id: "p", displayName: "דנה", profilePhotoUrl: portraitKind === "PHOTO" ? "https://example.test/face.jpg" : null, portraitKind,
+      id: "p", displayName: "דנה", profilePhotoUrl: portraitKind === "PHOTO" ? "https://example.test/face.jpg" : null, portraitKind, addressAs: "F",
       verifications: [], proNowCompletedJobs: 3, proNowRatingAverage: null, proNowRatingCount: 1, externalReputation: null,
     },
     services: [

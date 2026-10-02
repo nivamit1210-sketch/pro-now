@@ -4,6 +4,7 @@ import { MIN_REVIEWS_FOR_RATING, type ProfessionalSummaryView, type Verification
 
 import { externalReputationDisplay } from "./reputation/external-display.js";
 import { portraitForViewer } from "./portrait.js";
+import { addressAsView } from "./address-as.js";
 import { currentCheck, identityBadge } from "./identity-check.js";
 
 /** What `professionalSummary` reads from a professional's row. */
@@ -107,6 +108,7 @@ export async function professionalSummary(
     displayName: pro.displayName,
     profilePhotoUrl: face.photoUrl,
     portraitKind: face.portraitKind,
+    addressAs: addressAsView(pro.addressAs),
     verifications,
     proNowCompletedJobs: completedJobs,
     proNowRatingAverage: ratingAverage,

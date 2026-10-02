@@ -10,7 +10,7 @@ const job = (id: string, status: JobState, createdAt: string, amount: number | n
   createdAt,
   serviceNameHe: "נזילה",
   serviceCode: "HOME_PLUMB_LEAK",
-  professional: status === "SEARCHING" ? null : { id: "pro-1", displayName: "דנה" },
+  professional: status === "SEARCHING" ? null : { id: "pro-1", displayName: "דנה", addressAs: "F" },
   ratingGiven: rating,
   amountMinorUnits: amount,
 });

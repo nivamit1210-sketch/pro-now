@@ -47,6 +47,9 @@ test.describe("the pro's diagnosis", () => {
       await p.goto(`/pro/jobs/${jobId}`);
       const finish = p.getByRole("button", { name: /^סיימתי את האבחון/ });
       await expect(finish).toBeVisible({ timeout: 15_000 });
+      // The professional reads the name the customer picked (audit v2 #1).
+      await expect(p.getByText("נזילה או דליפת מים").first()).toBeVisible();
+      await expect(p.getByText("נזילה/פיצוץ בצנרת")).toHaveCount(0);
       await expect(p.getByRole("button", { name: /שליחת הצעת מחיר/ })).toHaveCount(0);
       await expect(p.getByText(/הקריאה הוזמנה על ידי/)).toHaveCount(0);
       await testInfo.attach("pro-diagnosis", { body: await p.screenshot(), contentType: "image/png" });

@@ -127,6 +127,8 @@ export const api = {
   createJob: (
     input: {
       serviceId: string;
+      /** The catalogue service picked ("svc-leak"): its name is the one shown after ordering. */
+      catalogServiceId?: string;
       addressId: string;
       description?: string;
       /** The intake answers, keyed by question id. See AddressScreen. */

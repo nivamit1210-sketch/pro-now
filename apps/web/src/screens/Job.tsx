@@ -97,8 +97,9 @@ export function Job() {
   }
 
   const { job: data, receipt, cancellationReason } = job.data;
-  const serviceNameHe = data.service.nameHe;
-  const pilotId = pilotServiceIdForDatabaseCode(data.service.code);
+  // The name, mark and street the customer picked (audit v2 #1); older jobs go by the service.
+  const serviceNameHe = job.data.serviceNameHe;
+  const pilotId = data.catalogServiceId ?? pilotServiceIdForDatabaseCode(data.service.code);
   const mark = ((pilotId && catalogServicePages[pilotId]?.mark) || "wrench") as MarkName;
   const departmentCode = pilotId ? (departmentCodeByServiceId[pilotId] ?? null) : null;
 
@@ -124,7 +125,8 @@ export function Job() {
   const shareOnSite = onSite
     ? act(async () => {
         const { url } = await api.mintOnSiteLink(id);
-        const text = `${onSite.name}, הזמנתי בשבילך ${serviceNameHe}. בקישור: מי מגיע, מתי, והקוד שהוא יגיד בדלת.`;
+        const female = match.data?.professional.addressAs === "F";
+        const text = `${onSite.name}, הזמנתי בשבילך ${serviceNameHe}. בקישור: מי ${female ? "מגיעה" : "מגיע"}, מתי, והקוד ${female ? "שהיא תגיד" : "שהוא יגיד"} בדלת.`;
         if (typeof navigator.share === "function") {
           try {
             await navigator.share({ title: "PRO NOW", text, url });
@@ -209,6 +211,8 @@ export function Job() {
     ...m.professional,
     profilePhotoUrl: m.professional.portraitKind === "CHARACTER" ? tradeCharacterFor(data.service.code) : m.professional.profilePhotoUrl,
   };
+  // How they asked to be addressed while joining: הגיעה, מגיעה (addressAs "F").
+  const professionalFemale = m.professional.addressAs === "F";
   const approvedQuote = data.quotes?.find((q) => q.id === data.approvedQuoteId) ?? null;
 
   if (data.status === "REVIEW_PENDING") {
@@ -257,6 +261,7 @@ export function Job() {
       <MatchConfirmBody
         serviceNameHe={serviceNameHe}
         displayNameHe={professional.displayName}
+        professionalFemale={professionalFemale}
         headlineHe={`אימות לשירות: ${serviceNameHe}`}
         photoUri={professional.profilePhotoUrl}
         portfolio={[]}
@@ -287,6 +292,7 @@ export function Job() {
     return withError(
       <ArrivalVerifyBody
         displayNameHe={professional.displayName}
+        professionalFemale={professionalFemale}
         photoUri={professional.profilePhotoUrl}
         headlineHe={arrivalHeadlineHe(serviceNameHe, professional.proNowCompletedJobs)}
         codeHe={job.data.doorCode}
@@ -306,6 +312,7 @@ export function Job() {
       status={data.status}
       serviceNameHe={serviceNameHe}
       professional={professional}
+      professionalFemale={professionalFemale}
       eta={m.eta}
       arrivalClockHe={m.eta && (data.status === "PRO_ASSIGNED" || data.status === "PRO_EN_ROUTE") ? clockIn(m.eta.etaSeconds) : null}
       money={{

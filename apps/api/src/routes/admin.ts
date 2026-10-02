@@ -4,6 +4,7 @@ import { JOB_STATES } from "@pro-now/types";
 import { requireRole } from "../auth/access.js";
 import { currentCheck } from "../domain/identity-check.js";
 import { applicationView } from "./pro-onboarding.js";
+import { jobServiceNameHe } from "../domain/job/service-name.js";
 
 /**
  * THE ADMIN (docs/21 W8; the approvals themselves are admin-pros.ts).
@@ -133,7 +134,7 @@ export default async function adminRoutes(app: FastifyInstance) {
       jobs: jobs.map((j) => ({
         id: j.id,
         status: j.status,
-        serviceNameHe: j.service.nameHe,
+        serviceNameHe: jobServiceNameHe(j),
         professional: j.assignedProfessional?.displayName ?? null,
         createdAt: j.createdAt.toISOString(),
         updatedAt: j.updatedAt.toISOString(),
@@ -161,7 +162,8 @@ export default async function adminRoutes(app: FastifyInstance) {
     return reply.send({
       id: job.id,
       status: job.status,
-      service: job.service,
+      // The name the customer picked (audit v2 #1); the code says which service was dispatched.
+      service: { ...job.service, nameHe: jobServiceNameHe(job) },
       address: job.address?.formatted ?? null,
       description: job.description,
       customer: { name: job.customer.fullName ?? job.customer.user.name ?? null, email: job.customer.user.email },

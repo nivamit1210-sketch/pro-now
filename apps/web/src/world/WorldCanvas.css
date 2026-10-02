@@ -142,3 +142,17 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   transform: translate(-50%, -50%);
 }
+
+/* Over the high opening view, until the first step (as in the demo). */
+.world-canvas__hint {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 24%;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 15px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}

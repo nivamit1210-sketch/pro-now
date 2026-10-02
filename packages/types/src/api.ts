@@ -116,6 +116,8 @@ export interface JobView {
   assignedProfessionalId: string | null;
   status: JobState;
   description: string | null;
+  /** The catalogue service the customer picked ("svc-clean"); null on older jobs (audit v2 #1). */
+  catalogServiceId?: string | null;
   structuredAnswers: Record<string, unknown> | null;
   approvedQuoteId: string | null;
   createdAt: string;
@@ -413,6 +415,9 @@ export interface ExternalReputationView {
   profileUrl: string | null;
 }
 
+/** How a professional asked to be addressed: masculine or feminine Hebrew. */
+export type ProAddressAs = "M" | "F";
+
 export interface ProfessionalSummaryView {
   id: string;
   displayName: string;
@@ -420,6 +425,11 @@ export interface ProfessionalSummaryView {
   profilePhotoUrl: string | null;
   /** What they chose while joining: "CHARACTER" means draw the job's trade character. */
   portraitKind: "PHOTO" | "CHARACTER" | null;
+  /**
+   * How they asked to be addressed while joining ("M" / "F"), so the customer's
+   * screens say הגיע / הגיעה about them. null: not chosen — screens use the masculine.
+   */
+  addressAs: ProAddressAs | null;
   verifications: VerificationBadgeKind[];
   /** Jobs completed through PRO NOW. Never an imported or invented count. */
   proNowCompletedJobs: number;
@@ -651,7 +661,7 @@ export interface MyJobSummary {
   /** The catalogue code (`Service.code`), for the service's mark. */
   serviceCode: string;
   /** The assigned professional; null until someone accepts. */
-  professional: { id: string; displayName: string } | null;
+  professional: { id: string; displayName: string; addressAs: ProAddressAs | null } | null;
   /** The customer's own stars for this job, once given. */
   ratingGiven: number | null;
   /** What the work came to, once it closed outside the app (D1); else null. */
@@ -670,6 +680,11 @@ export interface OutsideAppReceiptView {
 /** `GET /api/v1/jobs/:id`, for the customer. */
 export interface CustomerJobResponse {
   job: JobView & { service: { nameHe: string; code: string; priceModel: PriceModel } };
+  /**
+   * The service's name on every screen: the one the customer picked in the
+   * catalogue ("ניקיון דחוף"), or the service's own on older jobs (audit v2 #1).
+   */
+  serviceNameHe: string;
   priceContext: unknown;
   receipt: OutsideAppReceiptView | null;
   paymentsInApp: boolean;
@@ -702,6 +717,8 @@ export interface OnSiteView {
     /** Their photo, through a short-lived link (D1). */
     photoUrl: string | null;
     portraitKind: "PHOTO" | "CHARACTER" | null;
+    /** See ProfessionalSummaryView.addressAs. */
+    addressAs: ProAddressAs | null;
     verifications: VerificationBadgeKind[];
   } | null;
   etaSeconds: number | null;

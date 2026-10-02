@@ -35,6 +35,7 @@ import { inboxKey } from "../useUserChannel";
 import { RequestComposer } from "./RequestComposer";
 import { Addresses } from "./Addresses";
 import { jobKey } from "./Job";
+import { activeLabelHe } from "./activeLabel";
 
 
 /**
@@ -329,7 +330,7 @@ export function Home() {
       </View>
       {active && showCapsule ? (
         <ActiveJobCapsule
-          textHe={`${active.serviceNameHe} · ${ACTIVE_LABEL_HE[active.status] ?? "בטיפול"}`}
+          textHe={`${active.serviceNameHe} · ${activeLabelHe(active.status, active.professional?.addressAs === "F")}`}
           etaMinutes={trip?.etaMinutes ?? null}
           progress={trip?.progress ?? null}
           figureUri={figureUri}
@@ -347,17 +348,3 @@ export function Home() {
   );
 }
 
-/** What the capsule says for each stage, in the demo's words. */
-const ACTIVE_LABEL_HE: Partial<Record<string, string>> = {
-  DRAFT: "מחפשים מקצוען",
-  SEARCHING: "מחפשים מקצוען",
-  OFFERING: "מחפשים מקצוען",
-  PRO_ASSIGNED: "נמצא מקצוען",
-  PRO_EN_ROUTE: "בדרך אליך",
-  PRO_ARRIVED: "הגיע",
-  DIAGNOSIS: "בודק את הבעיה",
-  WAITING_QUOTE_APPROVAL: "הצעת מחיר",
-  IN_PROGRESS: "בעבודה",
-  COMPLETION_PENDING: "סיים — מחכה לאישורך",
-  REVIEW_PENDING: "איך היה?",
-};

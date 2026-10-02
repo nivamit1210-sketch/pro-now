@@ -106,6 +106,7 @@ export function TrackingScreen({ route, navigation }: Props) {
         status={status}
         serviceNameHe={match.serviceNameHe}
         professional={match.professional}
+        professionalFemale={match.professional.addressAs === "F"}
         eta={match.eta}
         arrival={arrival}
         worldSources={worldSources}
