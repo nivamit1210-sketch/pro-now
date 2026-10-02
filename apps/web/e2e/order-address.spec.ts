@@ -58,7 +58,7 @@ test("no address yet: the line asks, sending asks where to, and the order goes t
 test("a saved address: the service page says where, and 'שינוי' comes back to it", async ({ page, baseURL }) => {
   await signInByEmail(page, uniqueEmail("e2e-order-address-2"));
   await finishFirstRun(page);
-  const saved = await page.request.post("/api/v1/me/addresses", { data: { kind: "location", lat: 32.056, lng: 34.77, label: "בית", details: "קומה 2" }, headers: { origin: baseURL! } });
+  const saved = await page.request.post("/api/v1/me/addresses", { data: { kind: "location", lat: 32.056, lng: 34.77, label: "בית", details: "קומה 4, דירה 12, כניסה ב׳ ליד הגינה" }, headers: { origin: baseURL! } });
   expect(saved.ok(), await saved.text()).toBe(true);
   const formatted = (await saved.json()).address.formatted as string;
   await page.reload();
@@ -67,7 +67,8 @@ test("a saved address: the service page says where, and 'שינוי' comes back 
   await page.getByRole("button", { name: /המשך עם נזילה/ }).click();
   const line = page.getByRole("button", { name: `ההזמנה לכתובת: ${formatted}. שינוי כתובת` });
   await expect(line).toBeVisible();
-  await expect(line.getByText("שינוי", { exact: true })).toBeVisible();
+  // A long address is cut short on the line; "שינוי" stays on the screen.
+  await expect(line.getByText("שינוי", { exact: true })).toBeInViewport({ ratio: 1 });
   await line.click();
   await expect(page.getByText("לאן לשלוח את המקצוען?")).toBeVisible();
   await page.getByRole("button", { name: "חזרה" }).click();

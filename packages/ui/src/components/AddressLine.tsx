@@ -51,7 +51,9 @@ export function AddressLine({
 }
 
 const styles = StyleSheet.create({
+  // The full width of the screen, so a long address is cut short and "שינוי" stays in reach.
   row: {
+    alignSelf: "stretch",
     flexDirection: "row-reverse",
     alignItems: "center",
     gap: spacing.sm,
