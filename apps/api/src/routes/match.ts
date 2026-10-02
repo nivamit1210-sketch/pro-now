@@ -6,6 +6,7 @@ import {
   type PriceQuoteView,
 } from "@pro-now/types";
 import { jobServiceNameHe } from "../domain/job/service-name.js";
+import { vehicleForCustomer } from "../domain/vehicle.js";
 
 /**
  * GET /v1/jobs/:id/match — the payload behind the customer's match card.
@@ -122,6 +123,8 @@ export default async function matchRoutes(app: FastifyInstance) {
       // along it is (the home capsule) without inventing the denominator.
       etaSecondsAtAssignment: acceptedOffer?.etaSecondsSnapshot ?? null,
       price,
+      // What to look for at the door, only while this visit is on (audit v2 #8a).
+      vehicle: vehicleForCustomer(job.status, pro),
     };
 
     return reply.send(result);

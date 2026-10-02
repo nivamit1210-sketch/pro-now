@@ -26,6 +26,8 @@ import { IdentityCheck } from "../../identity/IdentityCheck";
 import { ErrorScreen, LoadingScreen } from "../../states";
 import { APPROVAL_STEPS_HE, formatDateOfBirthHe, parseDateOfBirthHe } from "./approval";
 import { ProSignOut } from "./ProSignOut";
+import { VehicleFields } from "./ProVehicle";
+import { vehicleInput, vehicleLineHe, vehicleProblemsHe, type VehicleDraft } from "./vehicle";
 import { ACCOUNT_DOCS } from "./proPages";
 
 /**
@@ -194,9 +196,10 @@ export function ProJoin() {
             view={view}
             busy={busy}
             underAge={underAge}
-            onSave={({ business, ...details }) => save(async () => {
+            onSave={({ business, vehicle, ...details }) => save(async () => {
               await api.proJoin(details);
-              return api.proSetBusiness(business);
+              await api.proSetBusiness(business);
+              return api.proSetVehicle(vehicle);
             }, 1)}
           />
         );
@@ -260,7 +263,14 @@ function Details({
   view: ProApplicationView | null;
   busy: boolean;
   underAge: boolean;
-  onSave: (d: { displayName: string; legalName: string; addressAs: "M" | "F"; dateOfBirth: string; business: { tradingName: string | null; taxStatus: TaxStatus } }) => void;
+  onSave: (d: {
+    displayName: string;
+    legalName: string;
+    addressAs: "M" | "F";
+    dateOfBirth: string;
+    business: { tradingName: string | null; taxStatus: TaxStatus };
+    vehicle: { vehicleHe: string | null; plateTail: string | null };
+  }) => void;
 }) {
   const [displayName, setDisplayName] = useState(view?.profile.displayName ?? "");
   const [legalName, setLegalName] = useState(view?.profile.legalName ?? "");
@@ -271,7 +281,14 @@ function Details({
   // Asked here because the identity check needs it; the reviewer compares it with the ID card (docs/10).
   const [birthText, setBirthText] = useState(formatDateOfBirthHe(view?.profile.dateOfBirth));
   const dateOfBirth = parseDateOfBirthHe(birthText);
-  const ok = displayName.trim().length > 0 && legalName.trim().length > 1 && addressAs && taxStatus && dateOfBirth;
+  // Their car (audit v2 #8a): optional, but a full plate keeps "המשך" closed until it is only the last digits.
+  const [vehicle, setVehicle] = useState<VehicleDraft>({
+    vehicleHe: view?.profile.vehicle?.vehicleHe ?? "",
+    plateTail: view?.profile.vehicle?.plateTail ?? "",
+  });
+  const vehicleProblems = vehicleProblemsHe(vehicle);
+  const vehicleOk = !vehicleProblems.vehicleHe && !vehicleProblems.plateTail;
+  const ok = displayName.trim().length > 0 && legalName.trim().length > 1 && addressAs && taxStatus && dateOfBirth && vehicleOk;
   return (
     <View style={styles.section}>
       <Text style={styles.title}>ברוכים הבאים ל־PRO NOW</Text>
@@ -309,6 +326,7 @@ function Details({
           <Chip key={k} labelHe={he} on={taxStatus === k} onPress={() => setTaxStatus(k)} />
         ))}
       </View>
+      <VehicleFields draft={vehicle} onChange={setVehicle} />
       <PrimaryAction
         labelHe="המשך"
         disabled={!ok || busy}
@@ -320,6 +338,7 @@ function Details({
             addressAs,
             dateOfBirth,
             business: { tradingName: tradingName.trim() || null, taxStatus },
+            vehicle: vehicleInput(vehicle),
           })
         }
       />
@@ -669,6 +688,7 @@ function Send({ view, busy, onSubmit, onGoTo }: { view: ProApplicationView; busy
   const docsIn = view.documents.filter((d) => d.status !== "REJECTED").length + view.services.reduce((n, s) => n + s.requirements.filter((r) => r.mandatory && r.credential && r.credential.status !== "REJECTED").length, 0);
   const rows: Array<{ t: string; v: string; to: number }> = [
     { t: "פרטים", v: [p.displayName, p.business ? TAX_HE[p.business.taxStatus] : null].filter(Boolean).join(" · ") || "—", to: 0 },
+    { t: "רכב", v: vehicleLineHe(p.vehicle) ?? "לא חובה, אפשר אחר כך", to: 0 },
     { t: "שירותים", v: view.services.length ? view.services.map((s) => s.nameHe).join(" · ") : "—", to: 1 },
     { t: "אזור", v: view.area ? `עד ${view.area.radiusKm} ק״מ מהבית` : "—", to: 2 },
     { t: "מסמכים", v: `${identityHe(view.identity)} · ${docsIn}/${docsTotal} חובה`, to: 3 },

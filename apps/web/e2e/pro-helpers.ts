@@ -11,7 +11,16 @@ import { linkFor, uniqueEmail } from "./helpers";
  * documents current, available, and a fresh location. The professional's
  * own screens are W7, so here they act through the API.
  */
-export async function dispatchableProfessional(opts: { serviceCode: string; lat: number; lng: number; baseURL: string; offline?: boolean; addressAs?: "M" | "F" }) {
+export async function dispatchableProfessional(opts: {
+  serviceCode: string;
+  lat: number;
+  lng: number;
+  baseURL: string;
+  offline?: boolean;
+  addressAs?: "M" | "F";
+  /** Their car, as joining saves it (audit v2 #8a): free text and the plate's last digits. */
+  vehicle?: { vehicleHe: string | null; plateTail: string | null };
+}) {
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
   const email = uniqueEmail("e2e-pro");
   let professionalId = "";
@@ -25,6 +34,8 @@ export async function dispatchableProfessional(opts: { serviceCode: string; lat:
         legalName: "דנה לוי",
         displayName: "דנה",
         addressAs: opts.addressAs ?? "F",
+        vehicleHe: opts.vehicle?.vehicleHe ?? null,
+        vehiclePlateTail: opts.vehicle?.plateTail ?? null,
         verificationStatus: "APPROVED",
         // Offline: the professional goes online from their own screen (W7).
         presenceState: opts.offline ? "OFFLINE" : "AVAILABLE",

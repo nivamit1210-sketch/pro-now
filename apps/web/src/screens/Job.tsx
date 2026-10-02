@@ -283,10 +283,12 @@ export function Job() {
   }
 
   /*
-   * AT THE DOOR: who to expect and the server's code to ask for. No
-   * vehicle (the server records none) and no call or message (no masking
-   * vendor yet) — the screen shows only what is real. Sharing exists only
-   * for an order for someone else: the link with the code, for them.
+   * AT THE DOOR: who to expect, the server's code to ask for, and the car
+   * when the professional gave one (audit v2 #8a: the server sends it only
+   * from assignment, and of the plate only its last digits). No call or
+   * message (no masking vendor yet) — the screen shows only what is real.
+   * Sharing exists only for an order for someone else: the link with the
+   * code, for them.
    */
   if (showsArrival(data.status, arrivalSeen)) {
     return withError(
@@ -297,6 +299,8 @@ export function Job() {
         headlineHe={arrivalHeadlineHe(serviceNameHe, professional.proNowCompletedJobs)}
         codeHe={job.data.doorCode}
         onSiteNameHe={onSite?.name ?? null}
+        vehicleHe={m.vehicle?.vehicleHe ?? null}
+        plateTailHe={m.vehicle?.plateTailHe ?? null}
         etaMinutes={null}
         onShare={shareOnSite}
         onBack={() => setArrivalSeen(true)}
