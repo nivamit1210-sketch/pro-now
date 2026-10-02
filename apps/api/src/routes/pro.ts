@@ -5,6 +5,7 @@ import { SUMMARY_INCLUDE, professionalSummary } from "../domain/professional-sum
 import { startShiftSchema, locationPingSchema } from "@pro-now/validation";
 import { assertPresenceTransition, canEndShift } from "../domain/job/pro-presence-transitions.js";
 import type { OfferCardView, ProPresenceState, ProPublicProfileView } from "@pro-now/types";
+import { currentCheck } from "../domain/identity-check.js";
 import { coarseAreaLabel } from "../domain/privacy/area-label.js";
 
 /**
@@ -194,10 +195,12 @@ export default async function proRoutes(app: FastifyInstance) {
   app.get("/v1/pro/verification", { onRequest: requireRole("PROFESSIONAL") }, async (req, reply) => {
     const professional = await app.prisma.professionalProfile.findUnique({
       where: { userId: req.user!.userId },
-      include: { identityVerification: true, businessProfile: true, credentials: true, externalProfiles: true },
+      include: { identityChecks: { orderBy: { createdAt: "desc" }, take: 5 }, businessProfile: true, credentials: true, externalProfiles: true },
     });
     if (!professional) return reply.status(404).send({ code: "PROFESSIONAL_NOT_FOUND", message: "No professional profile" });
-    return reply.send({ professional });
+    const { identityChecks, ...rest } = professional;
+    // The app still reads one `identityVerification`: the current attempt (null when none).
+    return reply.send({ professional: { ...rest, identityVerification: currentCheck(identityChecks) } });
   });
 
   /**

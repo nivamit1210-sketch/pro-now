@@ -49,6 +49,7 @@ export function OnSite() {
   const verifiedHe = [
     `אימות לשירות: ${v.serviceNameHe}`,
     ...(v.professional.verifications.includes("IDENTITY_VERIFIED") ? ["זהות מאומתת"] : []),
+    ...(v.professional.verifications.includes("IDENTITY_CHECKED") ? ["הזהות נבדקה על ידי PRO NOW"] : []),
   ];
   return (
     <OnSiteBody

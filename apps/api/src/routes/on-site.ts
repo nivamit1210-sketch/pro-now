@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { JobState, OnSiteView } from "@pro-now/types";
 import { customerJob, notFound, requireRole } from "../auth/access.js";
 import { portraitForViewer } from "../domain/portrait.js";
+import { currentCheck, identityBadge } from "../domain/identity-check.js";
 
 /**
  * ORDERING FOR SOMEONE ELSE (docs/21 W6; Amit, 2026-09-28): a plumber for
@@ -62,7 +63,7 @@ export default async function onSiteRoutes(app: FastifyInstance) {
       include: {
         service: { select: { nameHe: true, code: true } },
         customer: { include: { user: { select: { name: true } } } },
-        assignedProfessional: { include: { identityVerification: true, portraitUpload: true } },
+        assignedProfessional: { include: { identityChecks: { orderBy: { createdAt: "desc" }, take: 5 }, portraitUpload: true } },
         offers: { where: { status: "ACCEPTED" }, orderBy: { offeredAt: "desc" }, take: 1 },
       },
     });
@@ -84,10 +85,7 @@ export default async function onSiteRoutes(app: FastifyInstance) {
             photoUrl: face?.photoUrl ?? null,
             portraitKind: face?.portraitKind ?? null,
             // A sandbox check is not a verification (see routes/match.ts).
-            verifications:
-              pro.identityVerification?.status === "VERIFIED" && pro.identityVerification.isSandbox === false
-                ? ["IDENTITY_VERIFIED"]
-                : [],
+            verifications: [identityBadge(currentCheck(pro.identityChecks))].filter((b): b is NonNullable<typeof b> => b !== null),
           }
         : null,
       etaSeconds: pro ? (job.offers[0]?.etaSecondsSnapshot ?? null) : null,

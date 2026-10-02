@@ -388,6 +388,7 @@ export type { JobActor };
  */
 export type VerificationBadgeKind =
   | "IDENTITY_VERIFIED"
+  | "IDENTITY_CHECKED"
   | "BUSINESS_VERIFIED"
   | "LICENSE_VERIFIED"
   | "CREDENTIALS_CHECKED"

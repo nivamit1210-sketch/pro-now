@@ -10,6 +10,7 @@ import { palette, scale } from "../theme";
  */
 export type VerificationKind =
   | "IDENTITY_VERIFIED"
+  | "IDENTITY_CHECKED"
   | "BUSINESS_VERIFIED"
   | "LICENSE_VERIFIED"
   | "CREDENTIALS_CHECKED"
@@ -17,6 +18,7 @@ export type VerificationKind =
 
 const LABELS_HE: Record<VerificationKind, string> = {
   IDENTITY_VERIFIED: "זהות אומתה",
+  IDENTITY_CHECKED: "הזהות נבדקה על ידי PRO NOW",
   BUSINESS_VERIFIED: "עסק אומת",
   LICENSE_VERIFIED: "רישיון מקצועי אומת",
   CREDENTIALS_CHECKED: "תעודות נבדקו",

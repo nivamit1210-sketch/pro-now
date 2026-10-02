@@ -168,6 +168,7 @@ model ProfessionalProfile {
   userId             String             @unique
   user               User               @relation(fields: [userId], references: [id])
   legalName          String
+  dateOfBirth        DateTime? @db.Date
   displayName        String
   /// How the professional asked to be addressed in Hebrew ("M" or "F"), so
   /// the screens never guess from a name (docs/21 W7). Null: not asked yet.
@@ -193,7 +194,7 @@ model ProfessionalProfile {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  identityVerification IdentityVerification?
+  identityChecks IdentityVerification[]
   businessProfile      BusinessProfile?
   documents            ProfessionalDocument[]
   credentials          ProfessionalCredential[]
@@ -226,18 +227,29 @@ enum ProPresenceState {
 
 model IdentityVerification {
   id             String              @id @default(cuid())
-  professionalId String              @unique
+  professionalId String
   professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
   vendorName     String
   isSandbox      Boolean             @default(true)
+  /// MANUAL_REVIEW | VERIFIED | REJECTED | RETAKE_REQUESTED | SUPERSEDED | PENDING
   status         String
+  /// VENDOR (a real vendor's answer) | MANUAL (a PRO NOW reviewer). Null until decided.
+  method         String?
+  verificationId String?
+  /// [idCard, faceStraight, faceRight, faceLeft]; emptied when the photos are deleted (Dvir, 2026-10-02).
+  uploadIds      String[]            @default([])
+  photosDeletedAt DateTime?
   nameMatch      Boolean?
   livenessPassed Boolean?
   documentValid  Boolean?
   reasonCodes    String[]            @default([])
+  decidedById    String?
+  decidedAt      DateTime?
+  decisionReason String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
+  @@index([professionalId, createdAt])
   @@map("identity_verifications")
 }
 

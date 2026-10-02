@@ -4,10 +4,11 @@ import { MIN_REVIEWS_FOR_RATING, type ProfessionalSummaryView, type Verification
 
 import { externalReputationDisplay } from "./reputation/external-display.js";
 import { portraitForViewer } from "./portrait.js";
+import { currentCheck, identityBadge } from "./identity-check.js";
 
 /** What `professionalSummary` reads from a professional's row. */
 export const SUMMARY_INCLUDE = {
-  identityVerification: true,
+  identityChecks: { orderBy: { createdAt: "desc" as const }, take: 5 },
   businessProfile: true,
   portraitUpload: true,
   credentials: true,
@@ -56,10 +57,10 @@ export async function professionalSummary(
    * would be presenting mocked data as production — explicitly banned by
    * /CLAUDE.md §3 ("No fake integrations, no mocked data presented as
    * production, ever."). So the badge requires a real vendor result.
+   * A PRO NOW reviewer's approval is IDENTITY_CHECKED (docs/10).
    */
-  if (pro.identityVerification?.status === "VERIFIED" && pro.identityVerification.isSandbox === false) {
-    verifications.push("IDENTITY_VERIFIED");
-  }
+  const identity = identityBadge(currentCheck(pro.identityChecks));
+  if (identity) verifications.push(identity);
 
   /*
    * The badge follows the explicit `verificationStatus`, never the mere
