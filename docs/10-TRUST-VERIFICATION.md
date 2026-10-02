@@ -73,7 +73,12 @@ ID, then face, then submitted. One action per screen, about 20 seconds.
 
 Also part of the flow:
 - Date of birth is asked in the details step, because the provider
-  interface requires it.
+  interface requires it. **A professional must be at least 18** (Dvir,
+  2026-10-02, for now). The server refuses a date of birth under 18
+  (`UNDER_MINIMUM_AGE`), and so does the account approval, counted on the
+  day of the decision. The screen says why in plain words ("ההצטרפות
+  לבעלי מקצוע מגיל 18"), not a generic error. The reviewer compares the
+  date with the ID card.
 - "אחר כך" stays: the professional can look around, but cannot be
   approved, and the summary says so.
 - A retake becomes the current check. Earlier attempts are kept.
@@ -158,6 +163,8 @@ The reviewer's three actions:
 **Tests ("done" is a passing test).**
 - Unit:
   - an account cannot be approved without a `VERIFIED` current check;
+  - the age rule: under 18 is refused, the 18th birthday itself is
+    accepted, and approval counts the age on the day of the decision;
   - the missing items;
   - "current check = latest";
   - the customer wording for vendor, manual and none.
@@ -179,7 +186,7 @@ The reviewer's three actions:
 
 **Not in this piece.** The vendor itself (TBD). The fix-request loop for
 documents, services and the photo (piece 2). Expiry warnings and re-approval
-rules (piece 3). A minimum age (TBD, legal).
+rules (piece 3).
 
 ## Customer-facing trust badges (factual only)
 `זהות אומתה` · `עסק אומת` · `רישיון מקצועי אומת` (where applicable) ·

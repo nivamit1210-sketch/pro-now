@@ -20,9 +20,7 @@ keeps Sentry, Telegram and UptimeRobot.
 
 **Business and legal:** legal entity, tax and invoice model · commission
 or registration fee (below) · cancellation fees and policy · provider
-insurance · minimum age for a professional (the identity check stores
-the date of birth and enforces nothing until this is answered) ·
-background-check policy where lawful (a criminal-record
+insurance · background-check policy where lawful (a criminal-record
 certificate is never requested — demanding one is an offence in Israel) ·
 the lawyer's 17 questions in the research report, notably police approval
 for tutors of minors · pilot geography · which `PILOT` services to open,
@@ -62,6 +60,11 @@ setting). Error data: follows Sentry's plan. Identity-check photos (ID card,
 face): **decided, kept until the admin's decision on that check, then
 deleted**; the decision record stays (Dvir, 2026-10-02,
 `10-TRUST-VERIFICATION.md §Identity check`).
+
+### Minimum age for a professional
+**18, for now** (Dvir, 2026-10-02). The server enforces it on the date of
+birth and again at account approval (`10-TRUST-VERIFICATION.md §Identity
+check`). A legal review may change it per category.
 
 ### How long a customer waits before being told nobody is coming
 `DISPATCH_SEARCH_DEADLINE_SECONDS`, default **300**. After it, SYSTEM
