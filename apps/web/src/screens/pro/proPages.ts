@@ -1,5 +1,7 @@
-import { documentInfoFor, formatMoney, money, pilotServiceIdForDatabaseCode, type PricingModel, type ProApplicationView, type ProEarningsView, type ProServiceEligibilityView } from "@pro-now/types";
-import { catalogServicePages, type EarningDay, type EarningJob, type MarkName, type ProPricingRow, type ProServiceEligibility, type ShiftServiceChip, type VerificationStep } from "@pro-now/ui";
+import { documentInfoFor, formatMoney, money, pilotServiceIdForDatabaseCode, type PricingModel, type ProApplicationView, type ProEarningsView, type ProfessionalSummaryView, type ProPublicProfileView, type ProServiceEligibilityView } from "@pro-now/types";
+import { catalogServicePages, type EarningDay, type EarningJob, type MarkName, type ProPricingRow, type ProProfileReviewItem, type ProProfileServiceItem, type ProServiceEligibility, type ShiftServiceChip, type VerificationStep } from "@pro-now/ui";
+
+import { tradeCharacterFor } from "../../tradeCharacter";
 
 /**
  * THE PROFESSIONAL'S FOUR TABS (the demo's, 2026-10-01), as routes.
@@ -190,3 +192,53 @@ export function earningsPropsFor(view: ProEarningsView, now: Date = new Date()):
 }
 
 export const ils = (minor: number) => formatMoney(money(minor, "ILS"));
+
+/** "לפני שבועיים": relative, so no exact date says who wrote a review. */
+export function agoHe(iso: string, now: Date): string {
+  const days = Math.floor((now.getTime() - new Date(iso).getTime()) / 86_400_000);
+  if (days < 1) return "היום";
+  if (days < 2) return "אתמול";
+  if (days < 7) return `לפני ${days} ימים`;
+  if (days < 14) return "לפני שבוע";
+  if (days < 30) return `לפני ${Math.floor(days / 7)} שבועות`;
+  if (days < 60) return "לפני חודש";
+  if (days < 365) return `לפני ${Math.floor(days / 30)} חודשים`;
+  return days < 730 ? "לפני שנה" : `לפני ${Math.floor(days / 365)} שנים`;
+}
+
+/**
+ * "ככה הלקוחות רואים אותך", from the server's own summary. A professional
+ * who chose a drawn character is shown with it, as the customer's match
+ * card does (D1); nothing is invented — no work photos, no "בתחום משנת",
+ * no area name, none of which the product records.
+ */
+export function publicProfilePropsFor(view: ProPublicProfileView, now: Date = new Date()): {
+  professional: ProfessionalSummaryView;
+  services: ProProfileServiceItem[];
+  reviews: ProProfileReviewItem[];
+  fromPriceMinorUnits: number | null;
+} {
+  const prices = view.services.map((s) => s.basePriceMinorUnits).filter((p): p is number => p !== null && p > 0);
+  return {
+    professional: {
+      ...view.professional,
+      profilePhotoUrl:
+        view.professional.portraitKind === "CHARACTER" ? tradeCharacterFor(view.services[0]?.serviceCode) : view.professional.profilePhotoUrl,
+    },
+    services: view.services.map((s) => ({
+      id: s.serviceId,
+      nameHe: s.nameHe,
+      mark: markFor(s.serviceCode),
+      priceHintHe: s.basePriceMinorUnits ? `מ־${ils(s.basePriceMinorUnits)}` : null,
+    })),
+    reviews: view.reviews.map((r) => ({
+      id: r.id,
+      rating: r.rating,
+      textHe: r.text,
+      whenHe: agoHe(r.createdAt, now),
+      reviewerLabelHe: r.reviewerLabelHe ?? "לקוח/ה",
+      serviceNameHe: r.serviceNameHe,
+    })),
+    fromPriceMinorUnits: prices.length > 0 ? Math.min(...prices) : null,
+  };
+}

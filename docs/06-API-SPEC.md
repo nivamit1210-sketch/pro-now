@@ -49,6 +49,7 @@ GET  /v1/pro/services                 (per-service eligibility with the named mi
 PATCH /v1/pro/services/:id/pricing
 GET  /v1/pro/earnings                 (last 7 days; with IN_APP_PAYMENTS=off, from each job's SETTLED_OUTSIDE_APP receipt: paidDirectly, gross only)
 GET  /v1/pro/verification
+GET  /v1/pro/public-profile           (their profile as customers see it: the match card's summary, approved services, published reviews)
 ```
 
 ## Idempotency

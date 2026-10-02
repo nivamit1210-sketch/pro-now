@@ -23,6 +23,7 @@ import type {
   OnSiteView,
   ProApplicationView,
   ProEarningsView,
+  ProPublicProfileView,
   ProServiceEligibilityView,
   ProJobDetailView,
   ProStatusView,
@@ -141,6 +142,8 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
     proSubmitApplication: () => request<ProApplicationView>("POST", "/pro/application/submit", {}),
     proStatus: () => request<ProStatusView>("GET", "/pro/status"),
     proEarnings: () => request<ProEarningsView>("GET", "/pro/earnings"),
+    /** Their profile as customers see it (the profile tab). */
+    proPublicProfile: () => request<ProPublicProfileView>("GET", "/pro/public-profile"),
     /** The services they applied for, each with the server's eligibility verdict and their price. */
     proServices: () => request<{ services: ProServiceEligibilityView[] }>("GET", "/pro/services"),
     proStartShift: (input: { lat: number; lng: number; enabledServiceIds: string[] }) =>

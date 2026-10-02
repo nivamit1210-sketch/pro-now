@@ -89,6 +89,14 @@ test("the customer and the professional, two browsers, request to review", async
     await expect(p.getByRole("heading", { name: "המסמכים שלי" })).toBeVisible();
     await expect(p.getByText("תעודת זהות")).toBeVisible();
 
+    // Her profile as customers see it (the demo's profile tab): the job she just did counts, and "עריכה" leads to her details.
+    await p.getByRole("tab", { name: "הפרופיל" }).click();
+    await expect(p).toHaveURL(/\/pro\/profile$/);
+    await expect(p.getByRole("heading", { name: "ככה הלקוחות רואים אותך" })).toBeVisible();
+    await expect(p.getByText("דנה").first()).toBeVisible();
+    await expect(p.getByRole("button", { name: "עריכת החנות והפרטים" })).toBeVisible();
+    await expect(p.getByRole("button", { name: "יציאה מהחשבון" })).toBeVisible();
+
     // Her prices: kept by the server, and no field it cannot keep.
     await p.getByRole("tab", { name: "המשמרת" }).click();
     await p.getByRole("button", { name: /המחירים שלי/ }).click();

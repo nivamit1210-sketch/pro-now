@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@pro-now/api-client";
-import { ProEarningsBody, ProPricingBody, ProVerificationBody, ProVerificationStepBody, customerDarkTheme, spacing, type as t } from "@pro-now/ui";
+import { ProEarningsBody, ProPricingBody, ProProfileBody, ProVerificationBody, ProVerificationStepBody, customerDarkTheme, spacing, type as t } from "@pro-now/ui";
 
 import { api } from "../../api";
 import { ErrorScreen, LoadingScreen } from "../../states";
 import { applicationKey } from "./ProJoin";
-import { ApplicationStatus } from "./ProHome";
-import { earningsPropsFor, eligibilityFor, pricingRowsFor, verificationStepsFor } from "./proPages";
+import { ProSignOut } from "./ProSignOut";
+import { earningsPropsFor, eligibilityFor, pricingRowsFor, publicProfilePropsFor, verificationStepsFor } from "./proPages";
 
 type Size = { width: number; height: number };
 
@@ -79,12 +79,53 @@ export function ProDocumentsTab({ width, height }: Size) {
   );
 }
 
+/**
+ * הפרופיל — the demo's profile tab: "ככה הלקוחות רואים אותך", their profile
+ * framed as a customer is shown it (the same summary as the match card),
+ * with "עריכה" back to the join's summary. Signing out stays under it
+ * (sync item H); the application's status is on "המסמכים שלי".
+ */
 export function ProProfileTab({ width, height }: Size) {
-  const application = useQuery({ queryKey: applicationKey, queryFn: api.proApplication });
-  if (application.isPending) return <LoadingScreen />;
-  if (application.isError) return <ErrorScreen offline={!navigator.onLine} onRetry={() => void application.refetch()} />;
-  return <ApplicationStatus view={application.data} width={width} height={height} />;
+  const navigate = useNavigate();
+  const profile = useQuery({ queryKey: ["pro-public-profile"], queryFn: api.proPublicProfile });
+  if (profile.isPending) return <LoadingScreen />;
+  if (profile.isError) return <ErrorScreen offline={!navigator.onLine} onRetry={() => void profile.refetch()} />;
+  const props = publicProfilePropsFor(profile.data);
+  const frameH = height - PROFILE_HEAD_H - PROFILE_FOOT_H;
+  return (
+    <View style={[styles.profileScreen, { width, height }]}>
+      <View style={styles.profileHead}>
+        <Text accessibilityRole="header" style={styles.profileTitle}>
+          ככה הלקוחות רואים אותך
+        </Text>
+        <Pressable
+          onPress={() => navigate("/pro/join?at=summary")}
+          accessibilityRole="button"
+          accessibilityLabel="עריכת החנות והפרטים"
+          style={styles.editButton}
+        >
+          <Text style={styles.editText}>עריכה</Text>
+        </Pressable>
+      </View>
+      <View style={[styles.frame, { height: frameH }]}>
+        <ProProfileBody
+          {...props}
+          workPhotoSubjects={[]}
+          activeSinceYear={null}
+          areaLabelHe={null}
+          width={width - spacing.lg * 2}
+          height={frameH}
+        />
+      </View>
+      <View style={{ height: PROFILE_FOOT_H, justifyContent: "center" }}>
+        <ProSignOut />
+      </View>
+    </View>
+  );
 }
+
+const PROFILE_HEAD_H = 76;
+const PROFILE_FOOT_H = 52;
 
 const SAVE_AFTER_MS = 800;
 
@@ -155,4 +196,10 @@ const colors = customerDarkTheme.colors;
 const styles = StyleSheet.create({
   note: { ...t.metaStrong, position: "absolute", bottom: spacing.lg, left: spacing.lg, right: spacing.lg, color: colors.trust, textAlign: "center", writingDirection: "rtl" },
   problem: { color: colors.statusDanger },
+  profileScreen: { backgroundColor: colors.bg },
+  profileHead: { height: PROFILE_HEAD_H, flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg },
+  profileTitle: { ...t.h3, color: colors.textPrimary, textAlign: "right", writingDirection: "rtl", flexShrink: 1 },
+  editButton: { minHeight: 44, justifyContent: "center", paddingHorizontal: 14, borderRadius: 999, backgroundColor: colors.action },
+  editText: { ...t.metaStrong, color: colors.onAction },
+  frame: { marginHorizontal: spacing.lg, borderRadius: 24, overflow: "hidden", borderWidth: 1, borderColor: "rgba(247,243,250,0.18)" },
 });

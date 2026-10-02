@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { ProApplicationView, ProEarningsView, ProServiceEligibilityView } from "@pro-now/types";
+import type { ProApplicationView, ProEarningsView, ProPublicProfileView, ProServiceEligibilityView } from "@pro-now/types";
 
-import { blockedReasonHe, earningsPropsFor, eligibilityFor, pricingRowsFor, proPageFromPath, verificationStepsFor } from "./proPages";
+import { agoHe, blockedReasonHe, earningsPropsFor, eligibilityFor, pricingRowsFor, proPageFromPath, publicProfilePropsFor, verificationStepsFor } from "./proPages";
 
 function application(over: Partial<ProApplicationView> = {}): ProApplicationView {
   return {
@@ -138,5 +138,38 @@ describe("earnings when customers pay the professional directly (D1)", () => {
 
   it("shows no chart for an empty week", () => {
     expect(earningsPropsFor(view(0), NOW).days).toEqual([]);
+  });
+});
+
+describe("ככה הלקוחות רואים אותך", () => {
+  const NOW = new Date("2026-10-02T12:00:00Z");
+  const view = (portraitKind: "PHOTO" | "CHARACTER" | null): ProPublicProfileView => ({
+    professional: {
+      id: "p", displayName: "דנה", profilePhotoUrl: portraitKind === "PHOTO" ? "https://example.test/face.jpg" : null, portraitKind,
+      verifications: [], proNowCompletedJobs: 3, proNowRatingAverage: null, proNowRatingCount: 1, externalReputation: null,
+    },
+    services: [
+      { serviceId: "s1", serviceCode: "HOME_PLUMB_LEAK", nameHe: "נזילה", basePriceMinorUnits: 25000 },
+      { serviceId: "s2", serviceCode: "HOME_ELECT_FAULT", nameHe: "תקלה חשמלית", basePriceMinorUnits: null },
+    ],
+    reviews: [{ id: "r1", rating: 5, text: "מעולה", createdAt: "2026-09-18T12:00:00Z", serviceNameHe: "נזילה", reviewerLabelHe: null }],
+  });
+
+  it("shows the price a customer sees, and the lowest as the 'from' price", () => {
+    const p = publicProfilePropsFor(view("PHOTO"), NOW);
+    expect(p.services.map((s) => s.priceHintHe)).toEqual([expect.stringContaining("250"), null]);
+    expect(p.fromPriceMinorUnits).toBe(25000);
+    expect(p.professional.profilePhotoUrl).toBe("https://example.test/face.jpg");
+  });
+
+  it("draws the trade's character for someone who chose one, as the match card does", () => {
+    expect(publicProfilePropsFor(view("CHARACTER"), NOW).professional.profilePhotoUrl).toMatch(/\.(webp|png|jpe?g)/);
+  });
+
+  it("dates a review only roughly, and names an unnamed reviewer neutrally", () => {
+    const [r] = publicProfilePropsFor(view(null), NOW).reviews;
+    expect(r).toMatchObject({ whenHe: "לפני 2 שבועות", reviewerLabelHe: "לקוח/ה", serviceNameHe: "נזילה" });
+    expect(agoHe("2026-10-02T08:00:00Z", NOW)).toBe("היום");
+    expect(agoHe("2025-09-01T08:00:00Z", NOW)).toBe("לפני שנה");
   });
 });

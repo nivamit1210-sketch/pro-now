@@ -735,6 +735,19 @@ export interface ProEarningsView {
   };
 }
 
+/**
+ * The professional's profile as customers see it (GET /v1/pro/public-profile,
+ * the demo's "ככה הלקוחות רואים אותך"): the same summary a customer's match
+ * card gets, the services a customer can be sent them for, and their
+ * published reviews — the reviewer named by an initial only.
+ */
+export interface ProPublicProfileView {
+  professional: ProfessionalSummaryView;
+  services: Array<{ serviceId: string; serviceCode: string; nameHe: string; basePriceMinorUnits: number | null }>;
+  /** The reviewer as "דנה ל׳" — first name and an initial, never the full name (built on the server). */
+  reviews: Array<{ id: string; rating: number; text: string | null; createdAt: string; serviceNameHe: string; reviewerLabelHe: string | null }>;
+}
+
 export interface ProStatusView {
   displayName: string;
   addressAs: string | null;

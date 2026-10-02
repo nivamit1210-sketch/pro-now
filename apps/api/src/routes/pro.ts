@@ -1,15 +1,23 @@
 import type { FastifyInstance } from "fastify";
 import { notFound, ownShift, requireRole } from "../auth/access.js";
 import { earningsFor, outsideAppEarningsFor } from "../domain/payments/earnings.js";
+import { SUMMARY_INCLUDE, professionalSummary } from "../domain/professional-summary.js";
 import { startShiftSchema, locationPingSchema } from "@pro-now/validation";
 import { assertPresenceTransition, canEndShift } from "../domain/job/pro-presence-transitions.js";
-import type { OfferCardView, ProPresenceState } from "@pro-now/types";
+import type { OfferCardView, ProPresenceState, ProPublicProfileView } from "@pro-now/types";
 import { coarseAreaLabel } from "../domain/privacy/area-label.js";
 
 /**
  * See /docs/06-API-SPEC.md, /docs/07-JOB-STATE-MACHINE.md §Professional
  * presence, /docs/05-DATABASE.md §Availability session.
  */
+/** "דנה לוי" → "דנה ל׳": a first name and an initial, never a full name (docs/12 privacy). */
+export function reviewerLabelHe(fullName: string | null): string | null {
+  const [first, last] = (fullName ?? "").trim().split(/\s+/);
+  if (!first) return null;
+  return last ? `${first} ${last.charAt(0)}׳` : first;
+}
+
 export default async function proRoutes(app: FastifyInstance) {
   app.post("/v1/pro/shifts", { onRequest: requireRole("PROFESSIONAL") }, async (req, reply) => {
     const body = startShiftSchema.parse(req.body);
@@ -142,6 +150,45 @@ export default async function proRoutes(app: FastifyInstance) {
       jobCount: payable.length,
       breakdown,
     });
+  });
+
+  /**
+   * Their profile as customers see it — built by the function the match
+   * card uses, so what they see here is what a customer is shown. Only
+   * approved services: those are the ones a customer can be sent them for.
+   */
+  app.get("/v1/pro/public-profile", { onRequest: requireRole("PROFESSIONAL") }, async (req, reply) => {
+    const pro = await app.prisma.professionalProfile.findUnique({ where: { userId: req.user!.userId }, include: SUMMARY_INCLUDE });
+    if (!pro) return reply.status(404).send({ code: "PROFESSIONAL_NOT_FOUND", message: "No professional profile" });
+
+    const approved = pro.services.filter((s) => s.status.trim().toUpperCase() === "APPROVED");
+    const [catalogue, reviews, professional] = await Promise.all([
+      app.prisma.service.findMany({ where: { id: { in: approved.map((s) => s.serviceId) } }, select: { id: true, code: true, nameHe: true } }),
+      app.prisma.review.findMany({
+        where: { professionalId: pro.id, moderationStatus: "PUBLISHED" },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        select: { id: true, overallRating: true, text: true, createdAt: true, reviewer: { select: { fullName: true } }, job: { select: { service: { select: { nameHe: true } } } } },
+      }),
+      professionalSummary(app, pro, approved.map((s) => s.serviceId)),
+    ]);
+
+    const body: ProPublicProfileView = {
+      professional,
+      services: approved.flatMap((s) => {
+        const service = catalogue.find((c) => c.id === s.serviceId);
+        return service ? [{ serviceId: s.serviceId, serviceCode: service.code, nameHe: service.nameHe, basePriceMinorUnits: s.basePriceMinorUnits ?? null }] : [];
+      }),
+      reviews: reviews.map((r) => ({
+        id: r.id,
+        rating: r.overallRating,
+        text: r.text,
+        createdAt: r.createdAt.toISOString(),
+        serviceNameHe: r.job.service.nameHe,
+        reviewerLabelHe: reviewerLabelHe(r.reviewer.fullName),
+      })),
+    };
+    return reply.send(body);
   });
 
   app.get("/v1/pro/verification", { onRequest: requireRole("PROFESSIONAL") }, async (req, reply) => {

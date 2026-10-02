@@ -146,6 +146,22 @@ describe("a job from request to review, no money in the app (D1)", () => {
     expect((await db.job.findUniqueOrThrow({ where: { id: jobId } })).status).toBe("CLOSED");
   });
 
+  it("the professional sees their profile as customers do: the review, an initial for the reviewer, no full name", async () => {
+    await db.customerProfile.updateMany({ where: { jobs: { some: { id: jobId } } }, data: { fullName: "נועה כהן" } });
+    const res = await app.inject({ method: "GET", url: "/api/v1/pro/public-profile", headers: as(pro) });
+    expect(res.statusCode, res.body).toBe(200);
+    const view = res.json();
+    expect(view.professional).toMatchObject({ proNowRatingCount: expect.any(Number), verifications: expect.any(Array) });
+    expect(view.services.length).toBeGreaterThan(0);
+    const review = view.reviews.find((r: { text: string | null }) => r.text === "מעולה");
+    expect(review).toMatchObject({ rating: 5, reviewerLabelHe: "נועה כ׳", serviceNameHe: expect.any(String) });
+    expect(res.body).not.toContain("נועה כהן");
+  });
+
+  it("only a professional has a public profile", async () => {
+    expect((await app.inject({ method: "GET", url: "/api/v1/pro/public-profile", headers: as(customer) })).statusCode).toBe(403);
+  });
+
   it("the calls list then says who came, the stars given and the receipt's amount", async () => {
     const list = await app.inject({ method: "GET", url: "/api/v1/jobs", headers: as(customer) });
     const row = list.json().jobs.find((j: { id: string }) => j.id === jobId);
