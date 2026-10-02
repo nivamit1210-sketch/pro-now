@@ -50,11 +50,11 @@ PATCH /v1/pro/services/:id/pricing
 GET  /v1/pro/earnings                 (last 7 days; with IN_APP_PAYMENTS=off, from each job's SETTLED_OUTSIDE_APP receipt: paidDirectly, gross only)
 GET  /v1/pro/verification
 POST /v1/pro/join                     (now requires dateOfBirth YYYY-MM-DD; under 18 → 422 UNDER_MINIMUM_AGE and the role is not granted)
-POST /api/v1/pro/application/identity { documentUploadId, selfieUploadIds: [straight, right, left] }
+POST /v1/pro/application/identity { documentUploadId, selfieUploadIds: [straight, right, left] }
                                       (422 UPLOAD_NOT_READY, 409 IDENTITY_ALREADY_VERIFIED; a retake supersedes an undecided check and deletes its photos except any the new check reuses; serialized by a row lock on the profile)
-POST /api/v1/admin/identity/:id/decision { action: APPROVE|RETAKE|REJECT, reason? }
+POST /v1/admin/identity/:id/decision { action: APPROVE|RETAKE|REJECT, reason? }
                                       (reason required for RETAKE/REJECT; 404 IDENTITY_NOT_FOUND, 409 IDENTITY_NOT_CURRENT | IDENTITY_ALREADY_DECIDED; same row lock; photos deleted after commit)
-GET  /api/v1/admin/professionals/:id  (gains `identity`: 2-minute signed photo links, each opening audited as IDENTITY_PHOTOS_VIEWED)
+GET  /v1/admin/professionals/:id  (gains `identity`: 2-minute signed photo links, each opening audited as IDENTITY_PHOTOS_VIEWED)
 GET  /v1/pro/public-profile           (their profile as customers see it: the match card's summary, approved services, published reviews)
 ```
 
