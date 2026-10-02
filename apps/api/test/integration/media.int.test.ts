@@ -76,6 +76,22 @@ describe("media ownership and job attachment", () => {
     expect(response.json()).toMatchObject({ code: "UPLOADS_NOT_READY" });
   });
 
+  it("refuses an identity or document upload of their own as a job attachment: only photos and voice notes", async () => {
+    for (const [kind, mime] of [["IDENTITY", "image/jpeg"], ["DOCUMENT", "application/pdf"]] as const) {
+      const own = await db.upload.create({
+        data: { ownerId: alice.userId, kind, mime, bytes: 100, status: "READY", storageKey: `integration/${crypto.randomUUID()}` },
+      });
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/v1/jobs",
+        headers: { ...as(alice), "idempotency-key": `media-kind-${own.id}` },
+        payload: { serviceId, addressId: alice.addressId, mediaRefs: [own.id] },
+      });
+      expect(response.statusCode, `${kind}: ${response.body}`).toBe(422);
+      expect(response.json()).toMatchObject({ code: "UPLOADS_NOT_READY" });
+    }
+  });
+
   it("exposes media to the assigned professional and refuses another professional", async () => {
     const upload = await db.upload.create({
       data: {

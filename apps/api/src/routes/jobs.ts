@@ -55,7 +55,8 @@ export default async function jobsRoutes(app: FastifyInstance) {
     const mediaIds = [...new Set(body.mediaRefs)];
     const uploads = mediaIds.length
       ? await app.prisma.upload.findMany({
-          where: { id: { in: mediaIds }, ownerId: req.user!.userId, status: "READY" },
+          // A job carries the customer's photos and voice notes only — never an identity photo or a document.
+          where: { id: { in: mediaIds }, ownerId: req.user!.userId, status: "READY", kind: { in: ["PHOTO", "VOICE_NOTE"] } },
         })
       : [];
     if (uploads.length !== mediaIds.length) {
