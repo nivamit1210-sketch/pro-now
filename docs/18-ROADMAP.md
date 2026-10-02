@@ -20,7 +20,9 @@ keeps Sentry, Telegram and UptimeRobot.
 
 **Business and legal:** legal entity, tax and invoice model · commission
 or registration fee (below) · cancellation fees and policy · provider
-insurance · background-check policy where lawful (a criminal-record
+insurance · minimum age for a professional (the identity check stores
+the date of birth and enforces nothing until this is answered) ·
+background-check policy where lawful (a criminal-record
 certificate is never requested — demanding one is an offence in Israel) ·
 the lawyer's 17 questions in the research report, notably police approval
 for tutors of minors · pilot geography · which `PILOT` services to open,
@@ -56,7 +58,9 @@ split (fee rounds down; fee + payable = charge). Until then
 keeps jobs, payments and reviews pointing at the anonymised user. Open: how
 long those are kept and whether a review's text is erased (needs a legal
 and tax answer). Photos, voice and text: **decided 4 days** (D3, a
-setting). Error data: follows Sentry's plan.
+setting). Error data: follows Sentry's plan. **Open: how long identity-check
+photos (ID card, face) are kept.** Until decided they are kept as evidence
+and never purged with job media (`10-TRUST-VERIFICATION.md §Identity check`).
 
 ### How long a customer waits before being told nobody is coming
 `DISPATCH_SEARCH_DEADLINE_SECONDS`, default **300**. After it, SYSTEM

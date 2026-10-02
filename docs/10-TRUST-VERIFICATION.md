@@ -40,6 +40,135 @@ eligibility, not the whole account, where possible.
    displayed **separately** from PRO NOW reputation — never merge into one
    misleading score.
 
+## Identity check in the app (pilot design, 2026-10-02)
+
+Approved by Dvir on 2026-10-02 for a pilot with real professionals. This is
+the first of three pieces: (1) this identity check; (2) the review loop
+(admin asks for a fix on any one item, with a reason the professional sees);
+(3) life after approval (expiry warnings, which edits need re-approval).
+Each piece gets its own plan and PR.
+
+**Why.** Before this, the ID and the face were two plain uploads
+(`GOVERNMENT_ID`, `SELFIE`), nothing called `IdentityVerificationProvider`,
+and admin approved the account without a record of an identity decision.
+The demo (`tools/design-preview/src/IdentityCheck.tsx`) plays the reading
+of the card and the face match. The product must not.
+
+**The professional's flow.** It is the first part of the documents step:
+ID, then face, then submitted. One action per screen, about 20 seconds.
+1. **ID card.** The phone's rear camera (`capture="environment"`) or the
+   gallery, then a preview with "נראה טוב" or "צילום מחדש". Quality is
+   judged by the reviewer, not guessed on the phone.
+2. **Face, three positions.** A live front camera inside a face frame:
+   straight, then right, then left, one photo each, with a tick per position.
+   MediaPipe face detection on the phone (the demo's `faceSense`, loaded only
+   on this screen) takes each photo by itself when the head is in position.
+   There is always a manual shutter. With no live camera, the phone's selfie
+   camera takes one photo per position.
+   **The detection only guides the person. It is not verification.** The
+   server never trusts it, and a reviewer looks at the photos ("do not build
+   proprietary biometric verification", above).
+3. **Submitted.** The screen says "הזהות נשלחה לבדיקה". It never shows a
+   "matched" tick that nothing computed.
+
+Also part of the flow:
+- Date of birth is asked in the details step, because the provider
+  interface requires it.
+- "אחר כך" stays: the professional can look around, but cannot be
+  approved, and the summary says so.
+- A retake becomes the current check. Earlier attempts are kept.
+
+**Data** (one migration):
+- `identity_verifications` has one row per attempt (the unique on
+  `professionalId` is dropped). The current check is the latest row, and
+  `professional-summary.ts` and `on-site.ts` read the latest.
+- New fields: the ID upload, the three face uploads (straight, right, left),
+  the vendor's `verificationId`, `method` (`VENDOR` | `MANUAL`), and who
+  decided, when and why.
+- `professional_profiles.dateOfBirth`.
+- Identity photos are uploaded with their own kind, `IDENTITY`, in the same
+  private storage. The media clean-up (`domain/storage/media-cleanup.ts`,
+  which deletes uploads older than 4 days) counts them as evidence, like
+  documents and credentials, so a photo is never deleted before or after
+  review. How long they are kept is open (`18-ROADMAP.md §Data retention`).
+
+**API.**
+- `POST /v1/pro/application/identity { documentUploadId, selfieUploadIds:
+  [straight, right, left] }`. The server checks that all four uploads belong
+  to the caller, are `READY` and are of kind `IDENTITY`. It sends them to
+  `IdentityVerificationProvider.submit()` and stores the result.
+- The provider's answer moves the account:
+  - `MANUAL_REVIEW` → account `IDENTITY_REVIEW`.
+  - `VERIFIED` (only a real vendor can answer this) → `IDENTITY_VERIFIED`.
+  - `REJECTED` → the professional is asked to retake.
+- A repeated submit with the same four uploads creates one attempt.
+- In the application's missing items, one `IDENTITY` item replaces the
+  `GOVERNMENT_ID` and `SELFIE` documents.
+- **The server refuses to approve an account** unless the current check is
+  `VERIFIED`. No screen can bypass this.
+- Every submit and decision is written to the event timeline and
+  `audit_logs`.
+
+**Admin review.** The application card opens with a "זהות" block:
+- The four photos side by side, through short-lived private links. Each
+  opening is audited.
+- The declared legal name and date of birth.
+- The provider's answer. The sandbox is labelled "ספק בדיקה: סביבת ניסיון —
+  אין בדיקה אוטומטית". A real vendor's findings (name match, liveness,
+  document valid) show in the same place.
+
+The reviewer's three actions:
+- **"הזהות אושרה"**: `VERIFIED`, method `MANUAL`.
+- **"צילום מחדש"**, with a reason: the professional sees the reason and
+  retakes. This is the only fix-request in piece 1; piece 2 extends the
+  loop to every item.
+- **"סירוב"**, reason required: final.
+
+**What customers see.**
+- A vendor-verified, non-sandbox check: `זהות אומתה`.
+- A manual check: **`הזהות נבדקה על ידי PRO NOW`**. It is a real check, but
+  weaker than a vendor's liveness and document reading, so it never shows as
+  the stronger badge.
+- No identity line otherwise.
+
+**Edge cases.**
+- Camera denied or missing: the phone's camera through the file picker.
+  If that fails too, the screen explains how to allow the camera; the check
+  is never skipped silently.
+- Detection fails to load: the manual shutter.
+- Each photo uploads as it is taken and has its own retry. Nothing is
+  submitted until all four are uploaded.
+- Leaving halfway: finished uploads are kept, and the check resumes at the
+  first missing photo on any device.
+- Retaking while a check is under review: the new attempt is current, and
+  the reviewer sees the latest.
+- An approved identity later found false: admin suspends the account (an
+  existing action) with a reason on the timeline.
+- A vendor that answers later uses `getStatus`. The sandbox never needs it.
+
+**Tests ("done" is a passing test).**
+- Unit:
+  - an account cannot be approved without a `VERIFIED` current check;
+  - the missing items;
+  - "current check = latest";
+  - the customer wording for vendor, manual and none.
+- Integration (real Postgres):
+  - another user's upload is refused;
+  - a double submit makes one attempt;
+  - a sandbox submit lands in `IDENTITY_REVIEW`;
+  - a manual approval writes the audit and the timeline;
+  - approving an account without identity is refused;
+  - the media clean-up keeps identity uploads.
+- E2E (Playwright, Chromium's fake camera): a professional joins through the
+  check, admin sees the four photos and approves identity, and the account
+  can then be approved.
+- Manual: a walk at phone size, then Dvir on a phone once sign-in works in
+  production.
+
+**Not in this piece.** The vendor itself (TBD). The fix-request loop for
+documents, services and the photo (piece 2). Expiry warnings and re-approval
+rules (piece 3). A minimum age (TBD, legal).
+
 ## Customer-facing trust badges (factual only)
 `זהות אומתה` · `עסק אומת` · `רישיון מקצועי אומת` (where applicable) ·
 `תעודות נבדקו` · `מוניטין חיצוני מקושר` (when verified) · `X עבודות הושלמו
