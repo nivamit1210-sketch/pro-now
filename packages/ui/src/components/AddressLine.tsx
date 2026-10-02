@@ -1,9 +1,14 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { customerTheme, radii, scale, spacing, tint } from "../theme";
+import { customerDarkTheme, radii, scale, spacing, tint } from "../theme";
 import { PinMark } from "./marks";
 
-const colors = customerTheme.colors;
+/*
+ * Both screens that carry this line are dark: the demo's light-theme ink
+ * (ink900 on night) left a saved address unreadable, so the night theme's
+ * text colours here, with the demo's layout unchanged.
+ */
+const colors = customerDarkTheme.colors;
 
 /*
  * WHERE THIS ORDER GOES, SAID WHILE ORDERING (Dvir, 2026-10-02: "מהרגע
