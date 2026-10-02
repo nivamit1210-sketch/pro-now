@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -7,6 +7,7 @@ import { formatMoney, money, pilotServiceIdForDatabaseCode, type JobState } from
 import {
   PrimaryAction,
   ProJobBody,
+  ProJobSettledBody,
   ProQuoteBuilderBody,
   catalogServicePages,
   customerDarkTheme,
@@ -20,6 +21,8 @@ import { useFrame } from "../../frame";
 import { ErrorScreen, LoadingScreen } from "../../states";
 import { useJobSocket } from "../../useJobSocket";
 import { proStatusKey } from "./ProOnline";
+import { PRO_TAB_BAR_H, ProTabBar } from "./ProTabBar";
+import { SETTLED_STATES, settledView } from "./settled";
 
 /**
  * The professional's job (docs/21 W7): the address (released only now),
@@ -49,8 +52,39 @@ export function ProJob() {
 
   const key = ["pro-job", id] as const;
   const job = useQuery({ queryKey: key, queryFn: () => api.proJob(id), refetchInterval: 20_000 });
-  useJobSocket(id, () => void queryClient.invalidateQueries({ queryKey: key }), Boolean(job.data) && !DONE.has(job.data!.status));
+  // Still listening while the customer is asked to confirm: their answer is what closes the job here.
+  const listening = Boolean(job.data) && (!DONE.has(job.data!.status) || job.data!.status === "COMPLETION_PENDING");
+  useJobSocket(id, () => void queryClient.invalidateQueries({ queryKey: key }), listening);
   const status = useQuery({ queryKey: proStatusKey, queryFn: api.proStatus });
+
+  /*
+   * THE JOB SETTLED (the demo's ProJobSettledBody): shown when this screen
+   * watched the job close — the customer confirmed while it was open — not
+   * when an old, closed job is opened again. Read fresh, after the close,
+   * so the shift's count and amounts include this job.
+   */
+  const watchedOpen = useRef(false);
+  const [settledDone, setSettledDone] = useState(false);
+  const jobStatus = job.data?.status;
+  if (jobStatus && !SETTLED_STATES.has(jobStatus) && jobStatus !== "CANCELLED") watchedOpen.current = true;
+  const showSettled = Boolean(jobStatus && SETTLED_STATES.has(jobStatus) && watchedOpen.current && !settledDone);
+  const settled = useQuery({
+    queryKey: ["pro-job-settled", id],
+    queryFn: async () => {
+      const [s, earnings] = await Promise.all([api.proStatus(), api.proEarnings().catch(() => null)]);
+      // The fresh status no longer names this job as active, so a tab tapped meanwhile does not bounce back here.
+      queryClient.setQueryData(proStatusKey, s);
+      return { status: s, earnings };
+    },
+    enabled: showSettled,
+    staleTime: Infinity,
+  });
+  const leave = () => {
+    // Drop the cached status: it still names this job as active, and
+    // /pro would send the professional straight back here.
+    queryClient.removeQueries({ queryKey: proStatusKey });
+    navigate("/pro");
+  };
 
   if (job.isPending) return <LoadingScreen />;
   if (job.isError) {
@@ -75,17 +109,30 @@ export function ProJob() {
   };
 
   if (j.status === "CANCELLED") return <Ended titleHe="הלקוח ביטל את הקריאה" onBack={() => navigate("/pro")} />;
+  if (showSettled && settled.isPending) return <LoadingScreen />;
+  if (showSettled && settled.data) {
+    // Above the professional's tabs, as in the demo: the job is over, the shift is not.
+    return (
+      <View style={{ width, height }}>
+        <ProJobSettledBody
+          {...settledView({ job: j, status: settled.data.status, earnings: settled.data.earnings, nowMs: Date.now() })}
+          onDone={() => {
+            setSettledDone(true);
+            leave();
+          }}
+          width={width}
+          height={height - PRO_TAB_BAR_H}
+        />
+        <ProTabBar page="shift" width={width} />
+      </View>
+    );
+  }
   if (DONE.has(j.status)) {
     return (
       <Ended
         titleHe={j.status === "COMPLETION_PENDING" ? "סיימת — מחכים לאישור הלקוח" : "העבודה הסתיימה"}
         bodyHe="באפליקציה לא עובר כסף: את הסכום הלקוח משלם לך ישירות."
-        onBack={() => {
-          // Drop the cached status: it still names this job as active, and
-          // /pro would send the professional straight back here.
-          queryClient.removeQueries({ queryKey: proStatusKey });
-          navigate("/pro");
-        }}
+        onBack={leave}
       />
     );
   }

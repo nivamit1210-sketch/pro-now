@@ -67,12 +67,14 @@ test("the customer and the professional, two browsers, request to review", async
     await p.getByRole("button", { name: /סיימתי|סיום העבודה/ }).first().click();
     await expect(p.getByText("סיימת — מחכים לאישור הלקוח")).toBeVisible();
     await c.getByRole("button", { name: "אישור שהעבודה הושלמה" }).click({ timeout: 15_000 });
+    // The job settled on her screen (the demo's ProJobSettledBody); it dismisses itself.
+    await expect(p.getByText("סכום העבודה")).toBeVisible({ timeout: 25_000 });
     await c.getByRole("button", { name: "5 כוכבים" }).click();
     await c.getByRole("button", { name: "שליחת דירוג" }).click();
     await expect(c.getByText("הקריאה נסגרה")).toBeVisible();
 
-    // Back to her online screen, and off shift.
-    await p.getByRole("button", { name: "חזרה" }).click();
+    // Back to her shift, and off it.
+    await expect(p).toHaveURL(/\/pro$/, { timeout: 10_000 });
     await p.getByRole("button", { name: "סיום משמרת" }).click();
     await expect(p.getByRole("button", { name: "התחלת משמרת" })).toBeVisible();
 

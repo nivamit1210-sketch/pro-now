@@ -21,6 +21,7 @@ import {
 import { categoryAsksForPerson, customerCategoryById, greetingAt, type CatalogServiceDef } from "@pro-now/types";
 
 import { api, useMe } from "../api";
+import { capsuleFigureUri, capsuleTrip } from "../activeCapsule";
 import { servicesForCategory } from "../categories";
 import { shortAddressHe } from "../addressLabel";
 import { resolveAddress, useOrderTarget } from "../orderTarget";
@@ -32,6 +33,7 @@ import { useFrame } from "../frame";
 import { useWebMediaCapture } from "../useWebMediaCapture";
 import { inboxKey } from "../useUserChannel";
 import { RequestComposer } from "./RequestComposer";
+import { jobKey } from "./Job";
 
 
 /**
@@ -45,8 +47,9 @@ import { RequestComposer } from "./RequestComposer";
  *   invented (CLAUDE.md §3): they arrive with real supply and real jobs
  *   (W6/W7).
  * - Controls whose screens belong to later epics are visible and disabled
- *   (docs/21 W2, option a): the stroll (the city epic), the business link,
- *   the account card.
+ *   (docs/21 W2, option a): the business link, the account card. The
+ *   stroll opens the street (/world), choosing a figure first when there
+ *   is none, as in the demo.
  * - Text search matches against the catalogue on the device, and so does a
  *   recording: the browser's speech-to-text writes it into the same box
  *   (docs/21 W5), so it finds its service without a search button.
@@ -95,6 +98,29 @@ export function Home() {
   // The inbox's unread count, kept fresh by the live channel (W9).
   const inbox = useQuery({ queryKey: inboxKey, queryFn: api.inbox });
   const active = myJobs.data?.jobs.find((j) => j.status !== "CLOSED" && j.status !== "CANCELLED") ?? null;
+  /*
+   * The capsule's walker, minutes and road (the demo's ActiveJobCapsule):
+   * the same job and match reads as the job screen, sharing its cache. The
+   * minutes and the place on the road only exist while somebody is on the
+   * way and the server has an ETA; see activeCapsule.ts.
+   */
+  const onTheWay = active?.status === "PRO_ASSIGNED" || active?.status === "PRO_EN_ROUTE";
+  const activeJob = useQuery({ queryKey: jobKey(active?.id ?? ""), queryFn: () => api.getJob(active!.id), enabled: Boolean(active) });
+  const activeMatch = useQuery({
+    queryKey: [...jobKey(active?.id ?? ""), "match"],
+    queryFn: () => api.getJobMatch(active!.id),
+    enabled: Boolean(active) && onTheWay,
+    refetchInterval: 30_000,
+  });
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!onTheWay) return;
+    const t = setInterval(() => setNowMs(Date.now()), 5_000);
+    return () => clearInterval(t);
+  }, [onTheWay]);
+  const trip = active ? capsuleTrip(active.status, onTheWay ? activeMatch.data : null, nowMs) : null;
+  const figureUri = capsuleFigureUri(activeJob.data?.job.service.code, worldSources);
+  const hasAvatar = Boolean(me.data?.customer?.avatarId);
   const category = categoryId ? customerCategoryById(categoryId) : null;
   // The address the professional would be sent to: the form's own default.
   const addresses = useQuery({ queryKey: ["addresses"], queryFn: api.getAddresses });
@@ -268,6 +294,9 @@ export function Home() {
               // customer and the service they chose.
               void api.sendMatchFeedback(choice).catch(() => {});
             }}
+            // The door into the street; without a figure it picks one on the way (demo: strollDoor).
+            onStroll={() => navigate(hasAvatar ? "/world" : "/avatar?then=world")}
+            strollNeedsAvatar={!hasAvatar}
             advertiseUpcoming
             width={width}
             height={bodyH}
@@ -277,6 +306,9 @@ export function Home() {
       {active ? (
         <ActiveJobCapsule
           textHe={`${active.serviceNameHe} · ${ACTIVE_LABEL_HE[active.status] ?? "בטיפול"}`}
+          etaMinutes={trip?.etaMinutes ?? null}
+          progress={trip?.progress ?? null}
+          figureUri={figureUri}
           live
           onPress={() => navigate(`/jobs/${active.id}`)}
           width={width}

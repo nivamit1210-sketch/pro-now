@@ -465,6 +465,12 @@ export interface JobMatchView {
   professional: ProfessionalSummaryView;
   /** null when no ETA has been computed yet — never substitute a guess. */
   eta: EtaView | null;
+  /**
+   * The ETA the accepted offer was made with, in seconds: the start of the
+   * trip that `eta` counts down. With both, `routeProgress` can say how far
+   * through it the professional is; null when the offer recorded none.
+   */
+  etaSecondsAtAssignment?: number | null;
   price: PriceQuoteView;
 }
 

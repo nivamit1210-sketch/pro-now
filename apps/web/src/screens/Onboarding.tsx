@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AvatarPickerBody, IntroBody } from "@pro-now/ui";
 import type { CustomerOnboardingInput } from "@pro-now/validation";
@@ -50,9 +50,12 @@ export function Avatar() {
   const navigate = useNavigate();
   const me = useMe();
   const answer = useAnswer();
+  // From home's stroll card: a figure chosen goes on into the street (the demo's strollDoor).
+  const [params] = useSearchParams();
+  const toStreet = params.get("then") === "world";
   const done = async (avatarId: string | null) => {
     await answer.mutateAsync({ avatarId });
-    navigate("/", { replace: true });
+    navigate(toStreet && avatarId ? "/world" : "/", { replace: true });
   };
   return (
     <AvatarPickerBody

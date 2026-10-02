@@ -228,6 +228,9 @@ export default async function matchRoutes(app: FastifyInstance) {
               isRouteBased: routeBased,
               computedAt: etaAt.toISOString(),
             },
+      // The snapshot the trip started from, so a client can draw how far
+      // along it is (the home capsule) without inventing the denominator.
+      etaSecondsAtAssignment: acceptedOffer?.etaSecondsSnapshot ?? null,
       price,
     };
 

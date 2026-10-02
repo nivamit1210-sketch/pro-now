@@ -106,6 +106,12 @@ describe("notifications", () => {
     const after = (await app.inject({ method: "GET", url: `/api/v1/jobs/${jobId}/match`, headers: as(customer) })).json().eta;
     expect(new Date(after.computedAt).getTime()).toBeGreaterThan(new Date(before.computedAt).getTime());
     expect(after.etaSeconds).toBeLessThan(before.etaSeconds);
+    // Where the trip started stays put while the ETA counts down: the offer's snapshot.
+    const match = (await app.inject({ method: "GET", url: `/api/v1/jobs/${jobId}/match`, headers: as(customer) })).json();
+    const snapshot = (await db.dispatchOffer.findFirstOrThrow({ where: { jobId, status: "ACCEPTED" }, orderBy: { offeredAt: "desc" } })).etaSecondsSnapshot;
+    expect(snapshot).not.toBeNull();
+    expect(match.etaSecondsAtAssignment).toBe(snapshot);
+    expect(match.etaSecondsAtAssignment).toBeGreaterThanOrEqual(after.etaSeconds);
     ws.terminate();
   });
 
