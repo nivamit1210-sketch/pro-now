@@ -116,6 +116,8 @@ export interface JobView {
   assignedProfessionalId: string | null;
   status: JobState;
   description: string | null;
+  /** The catalogue service the customer picked ("svc-clean"); null on older jobs (audit v2 #1). */
+  catalogServiceId?: string | null;
   structuredAnswers: Record<string, unknown> | null;
   approvedQuoteId: string | null;
   createdAt: string;
@@ -670,6 +672,11 @@ export interface OutsideAppReceiptView {
 /** `GET /api/v1/jobs/:id`, for the customer. */
 export interface CustomerJobResponse {
   job: JobView & { service: { nameHe: string; code: string; priceModel: PriceModel } };
+  /**
+   * The service's name on every screen: the one the customer picked in the
+   * catalogue ("ניקיון דחוף"), or the service's own on older jobs (audit v2 #1).
+   */
+  serviceNameHe: string;
   priceContext: unknown;
   receipt: OutsideAppReceiptView | null;
   paymentsInApp: boolean;

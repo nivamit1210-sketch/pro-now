@@ -12,6 +12,7 @@ import {
 import { assertTransition, nextAfterArrival } from "../domain/job/transitions.js";
 import { loadPaidTotals, priceContextFor } from "../domain/pricing/price-context.js";
 import { toMyJobSummary } from "../domain/job/my-jobs.js";
+import { catalogPick, jobServiceNameHe } from "../domain/job/service-name.js";
 import { assignedJob, customerJob, notFound, requireRole } from "../auth/access.js";
 
 /**
@@ -51,6 +52,11 @@ export default async function jobsRoutes(app: FastifyInstance) {
     if (!service) {
       return reply.status(404).send({ code: "SERVICE_NOT_FOUND", message: "Service not found" });
     }
+    // The name the customer picked, from the catalogue (audit v2 #1); it must be this service.
+    const pick = body.catalogServiceId ? catalogPick(body.catalogServiceId, service.code) : null;
+    if (pick && !pick.ok) {
+      return reply.status(400).send({ code: "CATALOG_SERVICE_MISMATCH", message: "catalogServiceId is not this service in the catalogue" });
+    }
 
     const mediaIds = [...new Set(body.mediaRefs)];
     const uploads = mediaIds.length
@@ -72,6 +78,8 @@ export default async function jobsRoutes(app: FastifyInstance) {
         serviceId: service.id,
         addressId: address.id,
         description: body.description,
+        catalogServiceId: pick?.ok ? pick.catalogServiceId : null,
+        catalogServiceNameHe: pick?.ok ? pick.catalogServiceNameHe : null,
         // Validated as `Record<string, unknown>`; the column is `Json?`.
         structuredAnswers: body.structuredAnswers as Prisma.InputJsonValue,
         onSiteName: body.onSite?.name ?? null,
@@ -120,6 +128,7 @@ export default async function jobsRoutes(app: FastifyInstance) {
         id: true,
         status: true,
         createdAt: true,
+        catalogServiceNameHe: true,
         service: { select: { nameHe: true, code: true } },
         assignedProfessional: { select: { id: true, displayName: true } },
         review: { select: { overallRating: true } },
@@ -167,6 +176,8 @@ export default async function jobsRoutes(app: FastifyInstance) {
 
     return reply.send({
       job,
+      // The name the customer picked (audit v2 #1); the service's own name on older jobs.
+      serviceNameHe: jobServiceNameHe(job),
       priceContext,
       // What the work came to, when the job closed without money in the app (D1).
       receipt: receiptFromEvents(job.events),

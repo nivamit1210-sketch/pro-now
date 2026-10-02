@@ -44,7 +44,8 @@ test("at the door: the professional, the server's code, and back to the live job
     await expect(page.getByLabel(`קוד האימות ${code!.split("").join(" ")}`)).toBeVisible();
     await expect(page.getByText(/^.+ הגיע$/)).toBeVisible();
     // Only the count PRO NOW really has: this professional's first job.
-    await expect(page.getByText("נזילה/פיצוץ בצנרת · עבודה ראשונה דרך PRO NOW")).toBeVisible();
+    // The name the customer picked, not the dispatch catalogue's "נזילה/פיצוץ בצנרת" (audit v2 #1).
+    await expect(page.getByText("נזילה או דליפת מים · עבודה ראשונה דרך PRO NOW")).toBeVisible();
     await expect(page.getByText("אל תכניסו אדם שאינו תואם לשם, לתמונה ולקוד שמופיעים כאן.")).toBeVisible();
     // No calling or messaging without a masking vendor, no vehicle the server never recorded.
     await expect(page.getByRole("button", { name: "שיחה" })).toHaveCount(0);

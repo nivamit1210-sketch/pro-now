@@ -182,6 +182,8 @@ export function AddressScreen({ route, navigation }: Props) {
           const { job } = await api.createJob(
             {
               serviceId: dispatchServiceId,
+              // The catalogue name the customer picked is the one shown after ordering (audit v2 #1).
+              catalogServiceId: serviceId,
               addressId,
               description: describedHe?.trim() || undefined,
               mediaRefs: (await Promise.all(media.map((item) => api.uploadMedia(item)))).map(
