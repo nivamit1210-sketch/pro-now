@@ -56,16 +56,14 @@ test("the customer and the professional, two browsers, request to review", async
     await p.getByRole("button", { name: "הגעתי" }).click();
     await p.getByRole("button", { name: "התחלת בדיקה" }).click();
 
-    // The quote, from the builder; approved on sending while no money moves (D1).
-    await p.getByRole("button", { name: "שליחת הצעת מחיר" }).click();
-    await p.getByRole("textbox", { name: "תיאור שורה 1" }).fill("החלפת סיפון");
-    await p.getByRole("textbox", { name: "מחיר ליחידה בשורה 1" }).fill("320");
-    await p.getByRole("button", { name: "שליחת הצעת המחיר ללקוח" }).click();
-    await expect(c.getByText("הצעת המחיר: ‏320 ‏₪ · משלמים ישירות למקצוען")).toBeVisible({ timeout: 15_000 });
-
-    // Done; the customer confirms and rates.
-    await p.getByRole("button", { name: /סיימתי|סיום העבודה/ }).first().click();
+    // An ordinary visit ends at the diagnosis (docs/18, 2026-09-29): the app
+    // carries the visit fee, the repair is agreed at the door — no quote here.
+    await expect(p.getByRole("button", { name: /שליחת הצעת מחיר/ })).toHaveCount(0);
+    await p.getByRole("button", { name: /^סיימתי את האבחון/ }).click();
     await expect(p.getByText("סיימת — מחכים לאישור הלקוח")).toBeVisible();
+
+    // The customer confirms the visit fee, owed to her directly, and rates.
+    await expect(c.getByText("‏180 ‏₪ · לתשלום ישירות למקצוען")).toBeVisible({ timeout: 15_000 });
     await c.getByRole("button", { name: "אישור שהעבודה הושלמה" }).click({ timeout: 15_000 });
     // The job settled on her screen (the demo's ProJobSettledBody); it dismisses itself.
     await expect(p.getByText("סכום העבודה")).toBeVisible({ timeout: 25_000 });

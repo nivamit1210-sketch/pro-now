@@ -46,14 +46,16 @@ test("from a typed sentence to a review, with no money in the app", async ({ pag
   await shot("match");
   await page.getByRole("button", { name: /^שליחת .* אליי$/ }).click();
 
+  // An ordinary visit ends at the diagnosis (docs/18, 2026-09-29): the visit
+  // fee is all the app carries; the repair is settled at the door.
   for (const step of ["en-route", "arrive", "start"] as const) await pro.step(jobId, step);
-  await pro.quote(jobId, 32000);
-  await expect(page.getByText("הצעת המחיר: ‏320 ‏₪ · משלמים ישירות למקצוען")).toBeVisible({ timeout: 15_000 });
-  await shot("in-progress");
+  await expect(page.getByText("‏180 ‏₪ על הביקור והאבחון · את התיקון עצמו סוגרים ישירות מול המקצוען")).toBeVisible({ timeout: 15_000 });
+  await shot("diagnosis");
 
   await pro.step(jobId, "complete");
   const confirm = page.getByRole("button", { name: "אישור שהעבודה הושלמה" });
   await expect(confirm).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("‏180 ‏₪ · לתשלום ישירות למקצוען")).toBeVisible();
   await expect(page.getByText("באפליקציה לא עובר כסף — את הסכום משלמים ישירות לבעל המקצוע.")).toBeVisible();
   await expect(page.getByText(/אישור תשלום|משחרר את התשלום|אישרתם/)).toHaveCount(0);
   await shot("completion-pending");

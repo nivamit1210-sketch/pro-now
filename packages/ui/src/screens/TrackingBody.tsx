@@ -231,7 +231,7 @@ export interface TrackingBodyProps {
  * step it is at, a running clock, and the steps still to come.
  */
 const ON_SITE: readonly JobState[] = ["PRO_ARRIVED", "DIAGNOSIS", "WAITING_QUOTE_APPROVAL", "IN_PROGRESS", "COMPLETION_PENDING"];
-function workHeadlineHe(status: JobState, first: string, kind: PricingKind = "VISIT", terms: VisitTermsHe = DEFAULT_VISIT_TERMS, female = false): { title: string; sub: string } {
+function workHeadlineHe(status: JobState, first: string, kind: PricingKind = "VISIT", terms: VisitTermsHe = DEFAULT_VISIT_TERMS, female = false, forSomeoneElse = false): { title: string; sub: string } {
   const g = (m: string, f: string) => (female ? f : m);
   const agreed = kind === "QUOTE_FIRST" ? "לפי ההצעה שאישרתם" : "לפי מה שהזמנתם";
   switch (status) {
@@ -242,7 +242,7 @@ function workHeadlineHe(status: JobState, first: string, kind: PricingKind = "VI
       };
     case "DIAGNOSIS":
       if (kind === "VISIT")
-        return { title: terms.workHe === "התיקון" ? `${first} ${g("מאבחן", "מאבחנת")} את התקלה` : `${first} ${g("בודק", "בודקת")} מה צריך`, sub: `את המחיר של ${terms.workHe} סוגרים ישירות ${g("איתו", "איתה")}` };
+        return { title: terms.workHe === "התיקון" ? `${first} ${g("מאבחן", "מאבחנת")} את התקלה` : `${first} ${g("בודק", "בודקת")} מה צריך`, sub: forSomeoneElse ? "הצעת המחיר תגיע אליך באפליקציה" : `את המחיר של ${terms.workHe} סוגרים ישירות ${g("איתו", "איתה")}` };
       if (kind === "HOURLY") return { title: `${first} ${g("התחיל", "התחילה")}`, sub: "השעון רץ לפי זמן עבודה בפועל" };
       if (kind === "DISTANCE") return { title: `${first} ${g("אסף", "אספה")}`, sub: "בדרך למסירה" };
       return { title: `${first} ${g("מתחיל", "מתחילה")}`, sub: agreed };
@@ -257,7 +257,7 @@ function workHeadlineHe(status: JobState, first: string, kind: PricingKind = "VI
 /* When the professional came in — kept across the visit's screens, so the
    clock counts the whole time in the home and not each step afresh. */
 const visitStart = { at: 0 };
-function WorkScene({ status, firstName, figureUri, kind = "VISIT", terms = DEFAULT_VISIT_TERMS, female = false, width, height }: { status: JobState; firstName: string; figureUri: string | null; kind?: PricingKind; terms?: VisitTermsHe; female?: boolean; width: number; height: number }) {
+function WorkScene({ status, firstName, figureUri, kind = "VISIT", terms = DEFAULT_VISIT_TERMS, female = false, forSomeoneElse = false, width, height }: { status: JobState; firstName: string; figureUri: string | null; kind?: PricingKind; terms?: VisitTermsHe; female?: boolean; forSomeoneElse?: boolean; width: number; height: number }) {
   const [since] = useState(() => {
     if (!visitStart.at) visitStart.at = Date.now();
     return visitStart.at;
@@ -278,7 +278,7 @@ function WorkScene({ status, firstName, figureUri, kind = "VISIT", terms = DEFAU
   }, [pulse]);
   const sec = Math.max(0, Math.floor((now - since) / 1000));
   const clock = `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
-  const { title, sub } = workHeadlineHe(status, firstName, kind, terms, female);
+  const { title, sub } = workHeadlineHe(status, firstName, kind, terms, female, forSomeoneElse);
   const done = status === "COMPLETION_PENDING";
   /* The trade's waist-up portrait: it reads at this size, and a full
      figure's feet would sit under the sheet anyway. */
@@ -458,7 +458,7 @@ export function TrackingBody({
   // The first word of the name, the way somebody in your kitchen is
   // referred to once they are in it.
   const jobKind: PricingKind = money?.kind ?? (money?.fixedTotalHe ? "LIST" : "VISIT");
-  const progressHe = jobProgressHe(status, professional.displayName.split(/\s+/)[0] ?? null, { kind: jobKind, terms: money?.terms, female: professionalFemale });
+  const progressHe = jobProgressHe(status, professional.displayName.split(/\s+/)[0] ?? null, { kind: jobKind, terms: money?.terms, female: professionalFemale, forSomeoneElse: Boolean(money?.forSomeoneElse) });
   /*
    * WORK IS A STATE, SO IT DRIVES THE PICTURE.
    *
@@ -603,6 +603,7 @@ export function TrackingBody({
             kind={jobKind}
             terms={money?.terms}
             female={professionalFemale}
+            forSomeoneElse={Boolean(money?.forSomeoneElse)}
             width={width}
             height={mapH}
           />

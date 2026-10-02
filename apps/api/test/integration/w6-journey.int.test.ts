@@ -10,6 +10,13 @@ import { dispatchablePro, takeOffline } from "./pro-helpers.js";
 /**
  * W6 (docs/21): a customer's job from request to review, with no money in
  * the app (D1), and the job's socket announcing every step.
+ *
+ * A repair priced only once somebody looks (VISIT_QUOTE): the app carries
+ * the visit and its fee, and the repair is agreed directly — the
+ * professional finishes the diagnosis and the job goes to the customer's
+ * confirmation with no quote (docs/18-ROADMAP, Amit 2026-09-29; Dvir
+ * 2026-10-02). A quote in the app is for a job ordered for someone else;
+ * that path is the second describe.
  */
 let app: FastifyInstance;
 let db: PrismaClient;
@@ -97,32 +104,32 @@ describe("a job from request to review, no money in the app (D1)", () => {
     ws.terminate();
   });
 
-  it("a quote is approved on sending while no money moves (D1)", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/v1/jobs/${jobId}/quotes`,
-      headers: as(pro),
-      payload: { lineItems: [{ description: "החלפת סיפון", quantity: 1, unitPriceMinorUnits: 22000, kind: "MATERIALS" }] },
-    });
-    expect(res.statusCode, res.body).toBe(200);
-    expect(res.json()).toMatchObject({ autoApproved: true, quote: { status: "APPROVED" } });
+  it("starting the visit is the diagnosis", async () => {
     const job = (await app.inject({ method: "GET", url: `/api/v1/jobs/${jobId}`, headers: as(customer) })).json().job;
-    expect(job.status).toBe("IN_PROGRESS");
-    expect(job.events.map((e: { type: string; actor: string }) => `${e.type}:${e.actor}`)).toContain("QUOTE_APPROVED:SYSTEM");
+    expect(job.status).toBe("DIAGNOSIS");
   });
 
-  it("completion opens the review with a receipt, and moves no money", async () => {
+  it("finishing the diagnosis goes to the customer's confirmation, with no quote", async () => {
     const done = await app.inject({ method: "POST", url: `/api/v1/jobs/${jobId}/complete`, headers: as(pro), payload: {} });
     expect(done.statusCode, done.body).toBe(200);
+    expect(done.json()).toMatchObject({ ok: true, status: "COMPLETION_PENDING" });
+    const job = (await app.inject({ method: "GET", url: `/api/v1/jobs/${jobId}`, headers: as(customer) })).json().job;
+    expect(job.status).toBe("COMPLETION_PENDING");
+    expect(await db.quote.count({ where: { jobId } })).toBe(0);
+    expect(job.events.map((e: { type: string; actor: string }) => `${e.type}:${e.actor}`)).toContain("SERVICE_COMPLETION_REQUESTED:PROFESSIONAL");
+  });
+
+  it("the customer's confirmation closes it at the visit fee, and moves no money", async () => {
     const confirm = await app.inject({ method: "POST", url: `/api/v1/jobs/${jobId}/confirm-completion`, headers: as(customer), payload: {} });
     expect(confirm.statusCode, confirm.body).toBe(200);
-    expect(confirm.json()).toMatchObject({ status: "REVIEW_PENDING", receipt: { paidInApp: false, amountMinorUnits: 22000 } });
+    // The professional's own visit fee (pro-helpers: 25000) — the visit was the job.
+    expect(confirm.json()).toMatchObject({ status: "REVIEW_PENDING", receipt: { paidInApp: false, amountMinorUnits: 25000, basis: "VISIT_FEE_ONLY" } });
 
     expect(await db.payment.count({ where: { jobId } })).toBe(0);
     expect(await db.ledgerEntry.count({ where: { payment: { jobId } } })).toBe(0);
 
     const view = (await app.inject({ method: "GET", url: `/api/v1/jobs/${jobId}`, headers: as(customer) })).json();
-    expect(view).toMatchObject({ paymentsInApp: false, receipt: { amountMinorUnits: 22000, paidInApp: false } });
+    expect(view).toMatchObject({ paymentsInApp: false, receipt: { amountMinorUnits: 25000, paidInApp: false } });
   });
 
   it("the professional's earnings show the job, paid directly, with no net", async () => {
@@ -130,7 +137,7 @@ describe("a job from request to review, no money in the app (D1)", () => {
     expect(res.statusCode, res.body).toBe(200);
     const { breakdown } = res.json();
     expect(breakdown).toMatchObject({ paidDirectly: true, periodNetMinorUnits: null, awaitingCommissionDecision: false });
-    expect(breakdown.jobs).toContainEqual(expect.objectContaining({ jobId, grossMinorUnits: 22000, netMinorUnits: null }));
+    expect(breakdown.jobs).toContainEqual(expect.objectContaining({ jobId, grossMinorUnits: 25000, netMinorUnits: null }));
   });
 
   it("the review closes the job", async () => {
@@ -147,7 +154,7 @@ describe("a job from request to review, no money in the app (D1)", () => {
       status: "CLOSED",
       professional: { id: assigned.id, displayName: assigned.displayName },
       ratingGiven: 5,
-      amountMinorUnits: 22000,
+      amountMinorUnits: 25000,
     });
   });
 
@@ -163,5 +170,53 @@ describe("a job from request to review, no money in the app (D1)", () => {
     const ws = await app.injectWS(`/api/v1/ws/jobs/${jobId}`, { headers: as(stranger) });
     const code = await new Promise<number>((resolve) => ws.on("close", (c: number) => resolve(c)));
     expect(code).toBe(4404);
+  });
+});
+
+describe("ordered for someone else: the repair is quoted in the app", () => {
+  let jobId: string;
+
+  it("the professional sees whose door it is", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/v1/jobs",
+      headers: as(customer, `w6-onsite-${Date.now()}`),
+      payload: { serviceId, addressId, description: "נזילה אצל סבא", structuredAnswers: {}, mediaRefs: [], onSite: { name: "סבא יוסף", phone: "050-1234567" } },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    jobId = res.json().job.id;
+    const offer = await app.inject({ method: "GET", url: "/api/v1/pro/offers/current", headers: as(pro) });
+    expect(offer.json().jobId).toBe(jobId);
+    const accept = await app.inject({ method: "POST", url: `/api/v1/offers/${offer.json().offerId}/accept`, headers: as(pro, `acc-onsite-${Date.now()}`), payload: {} });
+    expect(accept.statusCode, accept.body).toBe(200);
+    for (const step of ["en-route", "arrive", "start"]) {
+      const r = await app.inject({ method: "POST", url: `/api/v1/jobs/${jobId}/${step}`, headers: as(pro), payload: {} });
+      expect(r.statusCode, `${step}: ${r.body}`).toBe(200);
+    }
+    const view = (await app.inject({ method: "GET", url: `/api/v1/pro/jobs/${jobId}`, headers: as(pro) })).json();
+    expect(view).toMatchObject({ status: "DIAGNOSIS", priceModel: "VISIT_QUOTE", onSiteNameHe: "סבא יוסף" });
+  });
+
+  it("the quote from the diagnosis is approved on sending while no money moves (D1)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/jobs/${jobId}/quotes`,
+      headers: as(pro),
+      payload: { lineItems: [{ description: "החלפת סיפון", quantity: 1, unitPriceMinorUnits: 22000, kind: "MATERIALS" }] },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({ autoApproved: true, quote: { status: "APPROVED" } });
+    const job = (await app.inject({ method: "GET", url: `/api/v1/jobs/${jobId}`, headers: as(customer) })).json().job;
+    expect(job.status).toBe("IN_PROGRESS");
+    expect(job.events.map((e: { type: string; actor: string }) => `${e.type}:${e.actor}`)).toContain("QUOTE_APPROVED:SYSTEM");
+  });
+
+  it("completion closes it at the approved quote", async () => {
+    const done = await app.inject({ method: "POST", url: `/api/v1/jobs/${jobId}/complete`, headers: as(pro), payload: {} });
+    expect(done.json()).toMatchObject({ ok: true, status: "COMPLETION_PENDING" });
+    const confirm = await app.inject({ method: "POST", url: `/api/v1/jobs/${jobId}/confirm-completion`, headers: as(customer), payload: {} });
+    expect(confirm.statusCode, confirm.body).toBe(200);
+    expect(confirm.json()).toMatchObject({ status: "REVIEW_PENDING", receipt: { paidInApp: false, amountMinorUnits: 22000, basis: "APPROVED_QUOTE" } });
+    expect(await db.payment.count({ where: { jobId } })).toBe(0);
   });
 });

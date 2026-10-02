@@ -327,3 +327,20 @@ describe("no money in the app (D1)", () => {
     }
   });
 });
+
+describe("ordered for someone else: the repair is quoted in the app (Amit, 2026-10-01)", () => {
+  it("the money line promises a quote in the app, not a price at the door", () => {
+    expect(visitMoneyLineHe("PRO_EN_ROUTE", { visitFeeHe: "‏179 ‏₪", forSomeoneElse: true })).toBe("דמי ביקור ואבחון ‏179 ‏₪ · אחר כך הצעת מחיר אליך באפליקציה");
+    expect(visitMoneyLineHe("DIAGNOSIS", { visitFeeHe: "‏179 ‏₪", forSomeoneElse: true })).toBe("אחרי הביקור והאבחון הצעת המחיר תגיע אליך באפליקציה · בבית לא סוגרים מחיר");
+  });
+
+  it("an ordinary visit still settles the repair directly", () => {
+    expect(visitMoneyLineHe("DIAGNOSIS", { visitFeeHe: "‏179 ‏₪" })).toContain("סוגרים ישירות מול המקצוען");
+  });
+
+  it("the progress line says the same, and never that the orderer approves or pays in the app (D1)", () => {
+    const line = jobProgressHe("DIAGNOSIS", "יוסי", { forSomeoneElse: true }) ?? "";
+    expect(line).toBe("יוסי מאבחן. הצעת המחיר תגיע אליך באפליקציה — בבית לא סוגרים מחיר.");
+    expect(line).not.toMatch(/לאישור|משלמים/);
+  });
+});

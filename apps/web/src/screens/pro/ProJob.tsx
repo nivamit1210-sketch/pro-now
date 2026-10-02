@@ -20,6 +20,7 @@ import { api } from "../../api";
 import { useFrame } from "../../frame";
 import { ErrorScreen, LoadingScreen } from "../../states";
 import { useJobSocket } from "../../useJobSocket";
+import { proJobPlan } from "./jobPlan";
 import { proStatusKey } from "./ProOnline";
 import { PRO_TAB_BAR_H, ProTabBar } from "./ProTabBar";
 import { SETTLED_STATES, settledView } from "./settled";
@@ -163,6 +164,8 @@ export function ProJob() {
   const mark = ((pilotId && catalogServicePages[pilotId]?.mark) || "wrench") as MarkName;
   const next = NEXT_STEP[j.status];
   const agreed = j.approvedQuote?.totalMinorUnits;
+  /* Ordinary visit: finish the diagnosis. Ordered for someone else: quote in the app. */
+  const plan = proJobPlan(j);
   const navigateTo = j.lat !== null && j.lng !== null
     ? () => window.open(`https://waze.com/ul?ll=${j.lat},${j.lng}&navigate=yes`, "_blank", "noopener")
     : undefined;
@@ -180,6 +183,10 @@ export function ProJob() {
         customerNameHe={j.customerNameHe}
         customerSeed={j.jobId}
         onSiteContactNameHe={j.onSiteNameHe}
+        kind={plan.kind}
+        visitTerms={plan.visitTerms}
+        diagnosisOnly={plan.diagnosisOnly}
+        quoteGoesToHe={plan.quoteGoesToHe}
         doorCodeHe={j.doorCodeHe}
         symptomsHe={[]}
         descriptionHe={j.descriptionHe}

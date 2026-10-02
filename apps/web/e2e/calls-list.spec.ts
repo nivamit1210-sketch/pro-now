@@ -52,7 +52,6 @@ test("a customer's job in the calls list, live, waiting for stars, then closed",
     await expect(page).toHaveURL(new RegExp(`/jobs/${jobId}$`));
 
     for (const step of ["arrive", "start"] as const) await pro.step(jobId, step);
-    await pro.quote(jobId, 32000);
     await pro.step(jobId, "complete");
     const confirm = page.getByRole("button", { name: "אישור שהעבודה הושלמה" });
     await expect(confirm).toBeVisible({ timeout: 15_000 });
@@ -78,7 +77,8 @@ test("a customer's job in the calls list, live, waiting for stars, then closed",
     await expect(row).toHaveCount(1);
     await expect(row).toContainText("היום · הושלם");
     await expect(row).toContainText("דנה");
-    await expect(row).toContainText("320");
+    // An ordinary visit settles at the visit fee (docs/18, 2026-09-29).
+    await expect(row).toContainText("180");
     await expect(page.getByText(/חויב|מאושר בכרטיס/)).toHaveCount(0);
     await shot("calls-closed");
     await row.click();

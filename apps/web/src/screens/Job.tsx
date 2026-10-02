@@ -286,6 +286,8 @@ export function Job() {
         paidDirectly: !job.data.paymentsInApp,
         visitFeeHe: ils(m.price.visitFeeMinorUnits),
         approvedTotalHe: ils(approvedQuote?.totalMinorUnits),
+        /* Ordered for someone else: the repair is quoted here, not at their door. */
+        forSomeoneElse: Boolean(onSite),
       }}
       departmentCode={departmentCode}
       onSiteNameHe={onSite?.name ?? null}
