@@ -226,6 +226,18 @@ describe("joining as a professional", () => {
       expect(await db.upload.count({ where: { id: { in: before.uploadIds } } })).toBe(0);
     });
 
+    it("a retake that reuses one old photo keeps it, and deletes the rest of the old check's photos", async () => {
+      const before = await db.identityVerification.findFirstOrThrow({ where: { professionalId: proId, status: "MANUAL_REVIEW" } });
+      const kept = before.uploadIds[1]!;
+      const fresh = await four();
+      const res = await send({ ...fresh, selfieUploadIds: [kept, fresh.selfieUploadIds[1], fresh.selfieUploadIds[2]] });
+      expect(res.statusCode, res.body).toBe(200);
+      expect(await db.upload.count({ where: { id: kept } })).toBe(1);
+      expect(await db.upload.count({ where: { id: { in: before.uploadIds.filter((id) => id !== kept) } } })).toBe(0);
+      const live = await db.identityVerification.findFirstOrThrow({ where: { professionalId: proId, status: "MANUAL_REVIEW" } });
+      expect(live.uploadIds).toContain(kept);
+    });
+
     it("an upload the clean-up already deleted is a 422, not a 500", async () => {
       const payload = await four();
       await db.upload.delete({ where: { id: payload.selfieUploadIds[1]! } });

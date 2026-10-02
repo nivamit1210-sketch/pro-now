@@ -424,7 +424,8 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
       await tx.auditLog.create({
         data: { actorId: req.user!.userId, action: "IDENTITY_SUBMITTED", targetType: "professional", targetId: p.id, afterJson: { status: result.status, vendor: app.providers.identity.vendorName }, requestId: req.id },
       });
-      return { conflict: false as const, replacedUploadIds: replaced.flatMap((a) => a.uploadIds) };
+      // A photo the new check reuses stays: it belongs to the live check now.
+      return { conflict: false as const, replacedUploadIds: replaced.flatMap((a) => a.uploadIds).filter((id) => !ids.includes(id)) };
     });
     if (outcome.conflict) return reply.status(409).send({ code: "IDENTITY_ALREADY_VERIFIED", message: "Identity is already verified" });
     await deleteIdentityPhotos(app, outcome.replacedUploadIds);
