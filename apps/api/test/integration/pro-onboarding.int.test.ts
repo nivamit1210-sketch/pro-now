@@ -360,6 +360,31 @@ describe("the admin approves, in order, on the record", () => {
     expect(again.json().code).toBe("IDENTITY_ALREADY_VERIFIED");
   });
 
+  it("a credential cannot be verified without an expiry date or 'no expiry', nor with a past date", async () => {
+    const c = await db.professionalCredential.findFirstOrThrow({ where: { professionalId: proId, status: "PENDING" } });
+    const url = `/api/v1/admin/credentials/${c.id}/decision`;
+    expect((await decide(url, { approve: true })).json().code).toBe("EXPIRY_REQUIRED");
+    expect((await decide(url, { approve: true, expiresAt: new Date(Date.now() - 86_400_000).toISOString() })).json().code).toBe("EXPIRY_IN_PAST");
+    expect((await decide(url, { approve: true, expiresAt: new Date(Date.now() + 86_400_000).toISOString(), noExpiry: true })).statusCode).toBe(400);
+    const ok = await decide(url, { approve: true, noExpiry: true });
+    expect(ok.statusCode, ok.body).toBe(200);
+    expect(await db.professionalCredential.findUniqueOrThrow({ where: { id: c.id } })).toMatchObject({ status: "VERIFIED", noExpiry: true, expiresAt: null });
+    // An already-verified credential can get its date later (staff filling in old ones).
+    const dated = await decide(url, { approve: true, expiresAt: new Date(Date.now() + 200 * 86_400_000).toISOString() });
+    expect(dated.statusCode).toBe(200);
+    expect((await db.professionalCredential.findUniqueOrThrow({ where: { id: c.id } })).noExpiry).toBe(false);
+    // Back to pending, so the next test still starts from an unverified licence.
+    await db.professionalCredential.update({ where: { id: c.id }, data: { status: "PENDING", expiresAt: null } });
+  });
+
+  it("the application shows each credential's expiry and a pending renewal", async () => {
+    const view = (await app.inject({ method: "GET", url: "/api/v1/pro/application", headers: as(applicant) })).json();
+    const req = view.services.flatMap((s: { requirements: unknown[] }) => s.requirements).find((r: { credential: unknown }) => r.credential) as { credential: { expiresAt: string | null; noExpiry: boolean }; renewalPending: boolean };
+    expect(req.credential).toHaveProperty("expiresAt");
+    expect(req.credential).toHaveProperty("noExpiry");
+    expect(req.renewalPending).toBe(false);
+  });
+
   it("refuses a service whose licence is not verified, then approves it once it is", async () => {
     expect((await decide(`/api/v1/admin/professionals/${proId}/decision`, { approve: true })).statusCode).toBe(200);
     const ps = await db.professionalService.findFirstOrThrow({ where: { professionalId: proId, serviceId: approvedSvc.id } });

@@ -3,6 +3,7 @@ import { adminDecisionSchema, adminIdentityDecisionSchema } from "@pro-now/valid
 import { requireRole } from "../auth/access.js";
 import { evaluateServiceCredentials } from "../domain/dispatch/credential-eligibility.js";
 import { accountApprovalBlocker, currentCheck } from "../domain/identity-check.js";
+import { israelDay } from "../domain/credentials/expiry.js";
 import { credentialTypeFor } from "@pro-now/types";
 import { parseItem, serviceItem } from "../domain/review-loop.js";
 import { cancelMarksFor, closeForRefusal, hasPendingReview, lockProfessional } from "../domain/review-loop-store.js";
@@ -128,9 +129,15 @@ export default async function adminProsRoutes(app: FastifyInstance) {
     const body = adminDecisionSchema.parse(req.body);
     const credential = await app.prisma.professionalCredential.findUnique({ where: { id } });
     if (!credential) return reply.status(404).send({ code: "CREDENTIAL_NOT_FOUND", message: "No such credential" });
+    // docs/10 §Life after approval: a verified credential always says when it expires, or that it doesn't.
+    if (body.approve) {
+      if (!body.expiresAt && body.noExpiry !== true) return reply.status(422).send({ code: "EXPIRY_REQUIRED", message: "Enter the expiry date, or mark it as having none" });
+      if (body.expiresAt && israelDay(new Date(body.expiresAt)) <= israelDay(new Date())) return reply.status(422).send({ code: "EXPIRY_IN_PAST", message: "התאריך כבר עבר" });
+    }
     const after = {
       status: body.approve ? "VERIFIED" : "REJECTED",
-      expiresAt: body.expiresAt ? new Date(body.expiresAt) : credential.expiresAt,
+      expiresAt: body.approve ? (body.expiresAt ? new Date(body.expiresAt) : null) : credential.expiresAt,
+      noExpiry: body.approve ? body.noExpiry === true : credential.noExpiry,
     };
     await app.prisma.$transaction(async (tx) => {
       await lockProfessional(tx, credential.professionalId);

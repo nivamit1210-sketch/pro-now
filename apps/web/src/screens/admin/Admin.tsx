@@ -78,6 +78,8 @@ function AdminTabs({ tab, setTab, width, height }: { tab: Tab; setTab: (t: Tab) 
 
 /** Server refusals the reviewer acts on, in their words; the code stays beside them. */
 const ERROR_HE: Record<string, string> = {
+  EXPIRY_REQUIRED: "צריך תאריך תפוגה, או לסמן ״ללא תוקף״",
+  EXPIRY_IN_PAST: "התאריך כבר עבר",
   IDENTITY_NOT_VERIFIED: "קודם צריך לאשר את הזהות.",
   UNDER_MINIMUM_AGE: "לפי תאריך הלידה, מתחת לגיל 18.",
   DATE_OF_BIRTH_MISSING: "חסר תאריך לידה בפרטים.",
@@ -134,6 +136,7 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
   const view = useQuery({ queryKey: key, queryFn: () => api.admin.professional(id) });
   const [reason, setReason] = useState("");
   const [expires, setExpires] = useState("");
+  const [noExpiry, setNoExpiry] = useState(false);
   const { busy, errorHe, run } = useAct();
   const decide = (fn: () => Promise<unknown>) => run(async () => { await fn(); await queryClient.invalidateQueries({ queryKey: key }); });
   if (view.isPending) return <LoadingScreen />;
@@ -233,19 +236,22 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
 
       <Text style={styles.section}>רישיונות ותעודות</Text>
       <Field label="בתוקף עד (YYYY-MM-DD, לאישור רישיון)" value={expires} onChange={setExpires} />
+      <View style={styles.actions}>
+        <Chip labelHe="ללא תוקף" on={noExpiry} onPress={() => setNoExpiry(!noExpiry)} />
+      </View>
       {v.credentials.map((c) => {
         const itemKey = credentialKey(c.id);
         return (
         <View key={c.id} style={styles.row}>
           <Text style={styles.rowTitle}>
-            {[c.serviceNameHe, c.type, c.number, c.status, c.expiresAt ? `עד ${c.expiresAt.slice(0, 10)}` : null].filter(Boolean).join(" · ")}
+            {[c.serviceNameHe, c.type, c.number, c.status, ...(c.status === "VERIFIED" ? [c.noExpiry ? "ללא תוקף" : c.expiresAt ? `בתוקף עד ${expiryDate(c.expiresAt)}` : "אומת בלי תאריך"] : [c.expiresAt ? `עד ${expiryDate(c.expiresAt)}` : null])].filter(Boolean).join(" · ")}
           </Text>
           {c.url ? <Text style={styles.link} accessibilityRole="link" onPress={() => window.open(c.url!, "_blank", "noopener")}>פתיחת המסמך ›</Text> : null}
           <View style={styles.actions}>
             <Action
               labelHe="אימות"
               disabled={busy}
-              onPress={() => decide(() => api.admin.decideCredential(c.id, { approve: true, ...(/^\d{4}-\d{2}-\d{2}$/.test(expires) ? { expiresAt: new Date(expires).toISOString() } : {}) }))}
+              onPress={() => decide(() => api.admin.decideCredential(c.id, { approve: true, ...(noExpiry ? { noExpiry: true } : /^\d{4}-\d{2}-\d{2}$/.test(expires) ? { expiresAt: new Date(expires).toISOString() } : {}) }))}
             />
             <Action labelHe="סירוב" danger disabled={busy} onPress={() => { const r = refusal(); return r ? decide(() => api.admin.decideCredential(c.id, r)) : run(async () => { throw new Error(needReason); }); }} />
           </View>
@@ -729,6 +735,11 @@ function Action({ labelHe, accessibilityLabelHe, onPress, danger, quiet, disable
       <Text style={[styles.actionText, quiet && styles.actionTextQuiet]}>{labelHe}</Text>
     </Pressable>
   );
+}
+
+/** DD/MM/YYYY, the Israel calendar day. */
+function expiryDate(iso: string): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(iso));
 }
 
 function Chip({ labelHe, on, onPress }: { labelHe: string; on: boolean; onPress: () => void }) {

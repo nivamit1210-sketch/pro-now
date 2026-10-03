@@ -435,9 +435,10 @@ export const proIdentitySchema = z
 
 /** `POST /api/v1/admin/...` decisions: a reason is required to refuse. */
 export const adminDecisionSchema = z
-  .object({ approve: z.boolean(), reason: z.string().trim().max(500).optional(), expiresAt: z.string().datetime().optional() })
+  .object({ approve: z.boolean(), reason: z.string().trim().max(500).optional(), expiresAt: z.string().datetime().optional(), noExpiry: z.boolean().optional() })
   .strict()
-  .refine((d) => d.approve || Boolean(d.reason), { message: "A refusal needs a reason", path: ["reason"] });
+  .refine((d) => d.approve || Boolean(d.reason), { message: "A refusal needs a reason", path: ["reason"] })
+  .refine((d) => !(d.expiresAt && d.noExpiry), { message: "Either an expiry date or no expiry, not both", path: ["noExpiry"] });
 
 /** `POST /api/v1/admin/professionals/:id/fix-requests` (docs/10 §Review loop). */
 export const adminFixMarkSchema = z

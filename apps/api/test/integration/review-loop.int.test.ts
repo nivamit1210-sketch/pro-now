@@ -376,7 +376,7 @@ describe("final review fixes (docs/10 §Review loop)", () => {
     const key = `CREDENTIAL:${reqRow.serviceId}:${reqRow.requirement}`;
     const fix = await db.fixRequest.create({ data: { professionalId: p.id, itemKey: key, reasonHe: "המסמך לא קריא", round: { create: { professionalId: p.id, createdById: p.userId } } } });
     const other = await db.fixRequest.create({ data: { professionalId: p.id, itemKey: "DETAILS", reasonHe: "השם לא תואם", roundId: fix.roundId } });
-    const res = await app.inject({ method: "POST", url: `/api/v1/admin/credentials/${credential.id}/decision`, headers: as(admin), payload: approve ? { approve: true } : { approve: false, reason: "לא תקף" } });
+    const res = await app.inject({ method: "POST", url: `/api/v1/admin/credentials/${credential.id}/decision`, headers: as(admin), payload: approve ? { approve: true, noExpiry: true } : { approve: false, reason: "לא תקף" } });
     expect(res.statusCode, res.body).toBe(200);
     expect((await db.fixRequest.findUniqueOrThrow({ where: { id: fix.id } })).status).toBe("CANCELLED");
     expect((await db.fixRequest.findUniqueOrThrow({ where: { id: other.id } })).status).toBe("OPEN");

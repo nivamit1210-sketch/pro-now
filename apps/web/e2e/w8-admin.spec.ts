@@ -49,7 +49,7 @@ test("the admin approves an application, account, licence and service", async ({
   await expect(page.getByText("TAX_FILE · VERIFIED")).toBeVisible();
   await page.getByRole("textbox", { name: /בתוקף עד/ }).fill("2027-12-31");
   for (const b of await page.getByRole("button", { name: "אימות" }).all()) await b.click();
-  await expect(page.getByText("עד 2027-12-31").first()).toBeVisible();
+  await expect(page.getByText("בתוקף עד 31/12/2027").first()).toBeVisible();
   await page.getByRole("button", { name: "אישור השירות" }).click();
   await expect(page.getByText(/· APPROVED/)).toBeVisible();
 

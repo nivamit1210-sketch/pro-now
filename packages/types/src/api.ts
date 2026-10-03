@@ -833,7 +833,9 @@ export interface ProApplicationView {
     requirements: Array<{
       requirement: string;
       mandatory: boolean;
-      credential: { id: string; status: string; number: string | null } | null;
+      credential: { id: string; status: string; number: string | null; expiresAt: string | null; noExpiry: boolean } | null;
+      /** A PENDING credential of the same service and type exists besides `credential`. */
+      renewalPending: boolean;
     }>;
   }>;
   area: { lat: number; lng: number; radiusKm: number } | null;

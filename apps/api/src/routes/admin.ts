@@ -149,6 +149,7 @@ export default async function adminRoutes(app: FastifyInstance) {
             number: c.number,
             status: c.status,
             expiresAt: c.expiresAt?.toISOString() ?? null,
+            noExpiry: c.noExpiry,
             mime: u?.mime ?? null,
             url: u ? await signed(u.storageKey) : null,
           };

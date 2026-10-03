@@ -104,13 +104,17 @@ export async function applicationView(db: PrismaClient, professionalId: string):
       .filter((r) => credentialTypeFor(r.requirement) !== null)
       .map((r) => {
         const type = credentialTypeFor(r.requirement)!;
-        const credential =
-          [...pro.credentials].reverse().find((c) => c.serviceId === ps.serviceId && c.type === type && c.status !== "REJECTED") ?? null;
+        const sameType = pro.credentials.filter((c) => c.serviceId === ps.serviceId && c.type === type);
+        const now = new Date();
+        const current = sameType.find((c) => c.status === "VERIFIED" && (c.noExpiry || (c.expiresAt !== null && c.expiresAt > now)));
+        const credential = current ?? [...sameType].reverse().find((c) => c.status !== "REJECTED") ?? null;
+        const renewalPending = sameType.some((c) => c.status === "PENDING" && c.id !== credential?.id);
         if (r.mandatory && !credential) missing.push(`CREDENTIAL:${ps.service.code}:${r.requirement}`);
         return {
           requirement: r.requirement,
           mandatory: r.mandatory,
-          credential: credential ? { id: credential.id, status: credential.status, number: credential.number } : null,
+          credential: credential ? { id: credential.id, status: credential.status, number: credential.number, expiresAt: credential.expiresAt?.toISOString() ?? null, noExpiry: credential.noExpiry } : null,
+          renewalPending,
         };
       });
     return {

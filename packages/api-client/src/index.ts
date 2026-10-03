@@ -288,6 +288,7 @@ export interface AdminDecision {
   approve: boolean;
   reason?: string;
   expiresAt?: string;
+  noExpiry?: boolean;
 }
 export interface AdminProfessionalView {
   application: ProApplicationView;
@@ -310,7 +311,7 @@ export interface AdminProfessionalView {
   documents: Array<{ id: string; kind: string; status: string; mime: string | null; url: string | null }>;
   /** The face they chose while joining; `url` is a short-lived link to their photo. */
   portrait: { kind: "PHOTO" | "CHARACTER"; mime: string | null; url: string | null } | null;
-  credentials: Array<{ id: string; serviceNameHe: string; type: string; number: string | null; status: string; expiresAt: string | null; mime: string | null; url: string | null }>;
+  credentials: Array<{ id: string; serviceNameHe: string; type: string; number: string | null; status: string; expiresAt: string | null; noExpiry: boolean; mime: string | null; url: string | null }>;
 }
 export interface AdminJobRow { id: string; status: string; serviceNameHe: string; professional: string | null; createdAt: string; updatedAt: string }
 export interface AdminJobDetail {

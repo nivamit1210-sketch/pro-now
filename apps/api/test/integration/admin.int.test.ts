@@ -87,7 +87,7 @@ describe("every admin mutation writes an audit row", () => {
       "POST /api/v1/admin/professionals/:id/decision": { url: `/api/v1/admin/professionals/${pro.id}/decision`, payload: { approve: true } },
       "POST /api/v1/admin/identity/:id/decision": { url: `/api/v1/admin/identity/${pendingId.id}/decision`, payload: { action: "APPROVE" } },
       "POST /api/v1/admin/credentials/:id/decision": credential
-        ? { url: `/api/v1/admin/credentials/${credential.id}/decision`, payload: { approve: true } }
+        ? { url: `/api/v1/admin/credentials/${credential.id}/decision`, payload: { approve: true, noExpiry: true } }
         : { url: "", payload: {} },
       "POST /api/v1/admin/pro-services/:id/decision": { url: `/api/v1/admin/pro-services/${ps.id}/decision`, payload: { approve: true } },
       "POST /api/v1/admin/professionals/:id/fix-requests": { url: `/api/v1/admin/professionals/${reviewed.id}/fix-requests`, payload: { itemKey: "PORTRAIT", reasonHe: "התמונה חשוכה" }, status: 201 },

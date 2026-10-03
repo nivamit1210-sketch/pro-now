@@ -10,13 +10,13 @@ function application(over: Partial<ProApplicationView> = {}): ProApplicationView
       {
         id: "ps1", serviceId: "s1", code: "HOME_ELECT_FAULT", nameHe: "תקלה חשמלית", priceModel: "VISIT_QUOTE", status: "APPROVED", priced: true,
         requirements: [
-          { requirement: "LICENSE:ELECTRICIAN", mandatory: true, credential: { id: "c1", status: "VERIFIED", number: "123" } },
-          { requirement: "INSURANCE:LIABILITY", mandatory: false, credential: null },
+          { requirement: "LICENSE:ELECTRICIAN", mandatory: true, credential: { id: "c1", status: "VERIFIED", number: "123", expiresAt: null, noExpiry: false }, renewalPending: false },
+          { requirement: "INSURANCE:LIABILITY", mandatory: false, credential: null, renewalPending: false },
         ],
       },
       {
         id: "ps2", serviceId: "s2", code: "HOME_ELECT_INSTALL", nameHe: "התקנת גוף תאורה", priceModel: "VISIT_QUOTE", status: "APPROVED", priced: true,
-        requirements: [{ requirement: "LICENSE:ELECTRICIAN", mandatory: true, credential: null }],
+        requirements: [{ requirement: "LICENSE:ELECTRICIAN", mandatory: true, credential: null, renewalPending: false }],
       },
     ],
     area: null,

@@ -19,7 +19,8 @@ function view(opts: {
   const requirements: Req[] = (opts.credentials ?? []).map((status, i) => ({
     requirement: `LICENSE:${i}`,
     mandatory: true,
-    credential: status ? { id: `c${i}`, status, number: null } : null,
+    credential: status ? { id: `c${i}`, status, number: null, expiresAt: null, noExpiry: false } : null,
+    renewalPending: false,
   }));
   return {
     profile: { id: "p", displayName: "דנה", legalName: "דנה לוי", addressAs: "F", dateOfBirth: opts.dateOfBirth === undefined ? "1990-05-14" : opts.dateOfBirth, vehicle: { vehicleHe: null, plateTail: null }, verificationStatus: opts.account ?? "SERVICE_REVIEW", business: null, shop: null, portrait: null },
