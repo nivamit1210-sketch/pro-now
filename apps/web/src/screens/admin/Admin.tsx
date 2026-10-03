@@ -224,9 +224,9 @@ function IdentityBlock({ identity: idn, busy, reason, decide, run }: {
     ["פנים · שמאלה", idn.photos.left],
   ];
   const dob = idn.declared.dateOfBirth ? idn.declared.dateOfBirth.split("-").reverse().join("/") : "—";
-  const withReason = (action: "RETAKE" | "REJECT") => {
+  const withReason = (action: "REJECT") => {
     const r = reason.trim();
-    return r.length >= 3 ? decide(() => api.admin.decideIdentity(idn.id, { action, reason: r })) : run(async () => { throw new Error("לצילום מחדש או לסירוב צריך לכתוב סיבה"); });
+    return r.length >= 3 ? decide(() => api.admin.decideIdentity(idn.id, { action, reason: r })) : run(async () => { throw new Error("לסירוב צריך לכתוב סיבה"); });
   };
   const open = idn.status === "MANUAL_REVIEW" || idn.status === "PENDING";
   return (
@@ -256,7 +256,6 @@ function IdentityBlock({ identity: idn, busy, reason, decide, run }: {
       {open ? (
         <View style={styles.actions}>
           <Action labelHe="הזהות אושרה" disabled={busy} onPress={() => decide(() => api.admin.decideIdentity(idn.id, { action: "APPROVE" }))} />
-          <Action labelHe="צילום מחדש" disabled={busy} onPress={() => withReason("RETAKE")} />
           <Action labelHe="סירוב זהות" danger disabled={busy} onPress={() => withReason("REJECT")} />
         </View>
       ) : null}

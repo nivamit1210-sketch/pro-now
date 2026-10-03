@@ -3,6 +3,9 @@ import { adminDecisionSchema, adminIdentityDecisionSchema } from "@pro-now/valid
 import { requireRole } from "../auth/access.js";
 import { evaluateServiceCredentials } from "../domain/dispatch/credential-eligibility.js";
 import { accountApprovalBlocker, currentCheck } from "../domain/identity-check.js";
+import { credentialTypeFor } from "@pro-now/types";
+import { parseItem, serviceItem } from "../domain/review-loop.js";
+import { cancelMarksFor, closeForRefusal, hasPendingReview, lockProfessional } from "../domain/review-loop-store.js";
 import { applicationView, deleteIdentityPhotos } from "./pro-onboarding.js";
 
 /**
@@ -54,20 +57,28 @@ export default async function adminProsRoutes(app: FastifyInstance) {
   app.post("/v1/admin/professionals/:id/decision", admin, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = adminDecisionSchema.parse(req.body);
-    const pro = await app.prisma.professionalProfile.findUnique({ where: { id } });
-    if (!pro) return reply.status(404).send({ code: "PROFESSIONAL_NOT_FOUND", message: "No such professional" });
-    if (body.approve) {
-      const checks = await app.prisma.identityVerification.findMany({ where: { professionalId: id } });
-      const blocker = accountApprovalBlocker({ dateOfBirth: pro.dateOfBirth, current: currentCheck(checks) }, new Date());
-      if (blocker) return reply.status(409).send({ code: blocker, message: "The account cannot be approved yet" });
-    }
-    const status = body.approve ? "APPROVED" : "DRAFT";
-    await app.prisma.professionalProfile.update({ where: { id }, data: { verificationStatus: status } });
-    await app.prisma.professionalDocument.updateMany({
-      where: { professionalId: id, status: "PENDING" },
-      data: { status: body.approve ? "VERIFIED" : "REJECTED" },
+    const outcome = await app.prisma.$transaction(async (tx) => {
+      const exists = await tx.professionalProfile.findUnique({ where: { id }, select: { id: true } });
+      if (!exists) return { status: 404, body: { code: "PROFESSIONAL_NOT_FOUND", message: "No such professional" } };
+      await lockProfessional(tx, id);
+      const pro = await tx.professionalProfile.findUniqueOrThrow({ where: { id } });
+      if (body.approve) {
+        const checks = await tx.identityVerification.findMany({ where: { professionalId: id } });
+        const blocker = accountApprovalBlocker({ dateOfBirth: pro.dateOfBirth, current: currentCheck(checks) }, new Date());
+        if (blocker) return { status: 409, body: { code: blocker, message: "The account cannot be approved yet" } };
+        if (await hasPendingReview(tx, id)) return { status: 409, body: { code: "FIXES_PENDING", message: "Items are marked for fixing; send or cancel them first" } };
+      }
+      const status = body.approve ? "APPROVED" : "DRAFT";
+      await tx.professionalProfile.update({ where: { id }, data: { verificationStatus: status } });
+      await tx.professionalDocument.updateMany({
+        where: { professionalId: id, status: "PENDING" },
+        data: { status: body.approve ? "VERIFIED" : "REJECTED" },
+      });
+      if (!body.approve) await closeForRefusal(tx, id);
+      await audit(req.user!.userId, body.approve ? "PRO_ACCOUNT_APPROVED" : "PRO_ACCOUNT_REJECTED", "professional", id, { verificationStatus: pro.verificationStatus }, { verificationStatus: status }, body.reason, req.id, tx);
+      return null;
     });
-    await audit(req.user!.userId, body.approve ? "PRO_ACCOUNT_APPROVED" : "PRO_ACCOUNT_REJECTED", "professional", id, { verificationStatus: pro.verificationStatus }, { verificationStatus: status }, body.reason, req.id);
+    if (outcome) return reply.status(outcome.status).send(outcome.body);
     return reply.send(await applicationView(app.prisma, id));
   });
 
@@ -77,8 +88,8 @@ export default async function adminProsRoutes(app: FastifyInstance) {
     const found = await app.prisma.identityVerification.findUnique({ where: { id } });
     if (!found) return reply.status(404).send({ code: "IDENTITY_NOT_FOUND", message: "No such identity check" });
 
-    const status = body.action === "APPROVE" ? "VERIFIED" : body.action === "RETAKE" ? "RETAKE_REQUESTED" : "REJECTED";
-    const actionName = body.action === "APPROVE" ? "APPROVED" : body.action === "RETAKE" ? "RETAKE_REQUESTED" : "REJECTED";
+    const status = body.action === "APPROVE" ? "VERIFIED" : "REJECTED";
+    const actionName = body.action === "APPROVE" ? "APPROVED" : "REJECTED";
     const outcome = await app.prisma.$transaction(async (tx) => {
       // Same lock as the professional's submit: a decision and a resubmission never interleave.
       await tx.$queryRawUnsafe(`SELECT id FROM professional_profiles WHERE id = $1 FOR UPDATE`, found.professionalId);
@@ -91,6 +102,7 @@ export default async function adminProsRoutes(app: FastifyInstance) {
       // What the photos were compared against, as it stood at the decision (the photos themselves are deleted).
       const pro = await tx.professionalProfile.findUniqueOrThrow({ where: { id: check.professionalId }, select: { legalName: true, dateOfBirth: true } });
       const declared = { legalName: pro.legalName, dateOfBirth: pro.dateOfBirth ? pro.dateOfBirth.toISOString().slice(0, 10) : null };
+      await cancelMarksFor(tx, check.professionalId, (k) => k === "IDENTITY");
       await audit(req.user!.userId, `IDENTITY_${actionName}`, "professional", check.professionalId, { status: check.status }, { status, method: after.method, declared }, body.reason, req.id, tx);
       return { code: null, uploadIds: check.uploadIds };
     });
@@ -109,8 +121,15 @@ export default async function adminProsRoutes(app: FastifyInstance) {
       status: body.approve ? "VERIFIED" : "REJECTED",
       expiresAt: body.expiresAt ? new Date(body.expiresAt) : credential.expiresAt,
     };
-    await app.prisma.professionalCredential.update({ where: { id }, data: after });
-    await audit(req.user!.userId, body.approve ? "CREDENTIAL_VERIFIED" : "CREDENTIAL_REJECTED", "credential", id, { status: credential.status }, after, body.reason, req.id);
+    await app.prisma.$transaction(async (tx) => {
+      await lockProfessional(tx, credential.professionalId);
+      await tx.professionalCredential.update({ where: { id }, data: after });
+      await cancelMarksFor(tx, credential.professionalId, (k) => {
+        const p = parseItem(k);
+        return p?.kind === "CREDENTIAL" && p.serviceId === credential.serviceId && credentialTypeFor(p.requirement) === credential.type;
+      });
+      await audit(req.user!.userId, body.approve ? "CREDENTIAL_VERIFIED" : "CREDENTIAL_REJECTED", "credential", id, { status: credential.status }, after, body.reason, req.id, tx);
+    });
     return reply.send(await applicationView(app.prisma, credential.professionalId));
   });
 
@@ -142,8 +161,12 @@ export default async function adminProsRoutes(app: FastifyInstance) {
       }
     }
     const status = body.approve ? "APPROVED" : "DISABLED";
-    await app.prisma.professionalService.update({ where: { id }, data: { status } });
-    await audit(req.user!.userId, body.approve ? "PRO_SERVICE_APPROVED" : "PRO_SERVICE_REJECTED", "professional_service", id, { status: ps.status }, { status }, body.reason, req.id);
+    await app.prisma.$transaction(async (tx) => {
+      await lockProfessional(tx, ps.professionalId);
+      await tx.professionalService.update({ where: { id }, data: { status } });
+      await cancelMarksFor(tx, ps.professionalId, (k) => k === serviceItem(ps.serviceId));
+      await audit(req.user!.userId, body.approve ? "PRO_SERVICE_APPROVED" : "PRO_SERVICE_REJECTED", "professional_service", id, { status: ps.status }, { status }, body.reason, req.id, tx);
+    });
     return reply.send(await applicationView(app.prisma, ps.professionalId));
   });
 }

@@ -36,3 +36,27 @@ export async function dispatchablePro(db: PrismaClient, email: string, serviceId
 export async function takeOffline(db: PrismaClient, professionalId: string | undefined) {
   if (professionalId) await db.professionalProfile.update({ where: { id: professionalId }, data: { presenceState: "OFFLINE" } });
 }
+
+async function applicantWith(db: PrismaClient, email: string, verificationStatus: "DRAFT" | "SERVICE_REVIEW") {
+  const user = await db.user.create({ data: { email, emailVerified: true, name: "Rina Applicant" } });
+  await db.userRole.create({ data: { userId: user.id, role: "PROFESSIONAL" } });
+  const profile = await db.professionalProfile.create({
+    data: { userId: user.id, legalName: "רינה אברהם", displayName: "רינה", addressAs: "F", dateOfBirth: new Date("1990-05-14"), verificationStatus, portraitKind: "CHARACTER" },
+  });
+  await db.businessProfile.create({ data: { professionalId: profile.id, taxStatus: "LICENSED_DEALER" } });
+  await db.serviceArea.create({ data: { professionalId: profile.id, centerLat: 31.25, centerLng: 34.79, radiusMeters: 10000 } });
+  const open = await db.marketActivation.findFirstOrThrow({ where: { providerOnboardingEnabled: true, service: { priceModel: "VISIT_QUOTE" } } });
+  await db.professionalService.create({ data: { professionalId: profile.id, serviceId: open.serviceId, status: "PENDING", basePriceMinorUnits: 25000 } });
+  const upload = async (kind: string) =>
+    db.upload.create({ data: { ownerId: user.id, kind, mime: "image/jpeg", bytes: 10, status: "READY", storageKey: `test/${kind}-${crypto.randomUUID()}.jpg` } });
+  const doc = await upload("DOCUMENT");
+  await db.professionalDocument.create({ data: { professionalId: profile.id, kind: "TAX_FILE", storageRef: doc.storageKey, uploadId: doc.id } });
+  const photos = [await upload("IDENTITY"), await upload("IDENTITY"), await upload("IDENTITY"), await upload("IDENTITY")].map((u) => u.id);
+  await db.identityVerification.create({ data: { professionalId: profile.id, vendorName: "sandbox-identity", status: "MANUAL_REVIEW", uploadIds: photos } });
+  return { id: profile.id, userId: user.id, email, serviceId: open.serviceId };
+}
+
+/** An application waiting for a reviewer: everything given, nothing decided (docs/10 §Review loop). */
+export const applicantInReview = (db: PrismaClient, email: string) => applicantWith(db, email, "SERVICE_REVIEW");
+/** The same application, still the professional's own to finish. */
+export const draftApplicant = (db: PrismaClient, email: string) => applicantWith(db, email, "DRAFT");

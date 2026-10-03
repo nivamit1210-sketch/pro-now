@@ -5,7 +5,7 @@ import type { PrismaClient } from "@prisma/client";
 import { startApp } from "./harness.js";
 import { signInByEmail, uniqueEmail, whoAmI, type CookieJar } from "./auth-helpers.js";
 import { createPrisma } from "../../src/db/prisma-client.js";
-import { dispatchablePro, takeOffline } from "./pro-helpers.js";
+import { applicantInReview, dispatchablePro, takeOffline } from "./pro-helpers.js";
 
 /**
  * W8 acceptance (docs/21): a non-admin gets 403 on EVERY /api/v1/admin/*
@@ -78,13 +78,20 @@ describe("every admin mutation writes an audit row", () => {
     const pendingId = await db.identityVerification.create({ data: { professionalId: idPro.id, vendorName: "sandbox-identity", status: "MANUAL_REVIEW" } });
     const ticket = await db.supportTicket.create({ data: { kind: "SAFETY", userId: customerId, subject: "test", reason: "OTHER" } });
 
-    const cases: Record<string, { url: string; payload: object }> = {
+    const reviewed = await applicantInReview(db, uniqueEmail("w8-review"));
+    const mark = await db.fixRequest.create({
+      data: { professionalId: reviewed.id, itemKey: "DETAILS", reasonHe: "השם לא תואם", round: { create: { professionalId: reviewed.id, createdById: reviewed.userId } } },
+    });
+
+    const cases: Record<string, { url: string; payload: object; status?: number }> = {
       "POST /api/v1/admin/professionals/:id/decision": { url: `/api/v1/admin/professionals/${pro.id}/decision`, payload: { approve: true } },
       "POST /api/v1/admin/identity/:id/decision": { url: `/api/v1/admin/identity/${pendingId.id}/decision`, payload: { action: "APPROVE" } },
       "POST /api/v1/admin/credentials/:id/decision": credential
         ? { url: `/api/v1/admin/credentials/${credential.id}/decision`, payload: { approve: true } }
         : { url: "", payload: {} },
       "POST /api/v1/admin/pro-services/:id/decision": { url: `/api/v1/admin/pro-services/${ps.id}/decision`, payload: { approve: true } },
+      "POST /api/v1/admin/professionals/:id/fix-requests": { url: `/api/v1/admin/professionals/${reviewed.id}/fix-requests`, payload: { itemKey: "PORTRAIT", reasonHe: "התמונה חשוכה" }, status: 201 },
+      "DELETE /api/v1/admin/fix-requests/:id": { url: `/api/v1/admin/fix-requests/${mark.id}`, payload: {}, status: 204 },
       "POST /api/v1/admin/users/:id/roles": { url: `/api/v1/admin/users/${customerId}/roles`, payload: { role: "PROFESSIONAL", grant: true, reason: "test grant" } },
       "PATCH /api/v1/admin/market/:id": { url: `/api/v1/admin/market/${activation.id}`, payload: { customerVisible: true, reason: "test switch" } },
       "POST /api/v1/admin/support-tickets/:id/handled": { url: `/api/v1/admin/support-tickets/${ticket.id}/handled`, payload: { reason: "test handled" } },
@@ -97,34 +104,20 @@ describe("every admin mutation writes an audit row", () => {
       const c = cases[key]!;
       if (!c.url) continue;
       const before = await db.auditLog.count();
-      const res = await app.inject({ method: r.method as never, url: c.url, headers: as(admin), payload: c.payload });
-      expect(res.statusCode, `${key}: ${res.body}`).toBe(200);
+      const res = await app.inject({ method: r.method as never, url: c.url, headers: as(admin), ...(r.method === "DELETE" ? {} : { payload: c.payload }) });
+      expect(res.statusCode, `${key}: ${res.body}`).toBe(c.status ?? 200);
       expect(await db.auditLog.count(), key).toBe(before + 1);
     }
   });
 });
 
 describe("identity decisions", () => {
-  it("identity: a retake shows the reason to the professional; a stale tab cannot decide a replaced check", async () => {
+  it("a retake is no longer an identity decision: RETAKE is a 400", async () => {
     const user = await db.user.create({ data: { email: uniqueEmail("id-retake"), emailVerified: true, name: "Id Retake" } });
     const pro = await db.professionalProfile.create({ data: { userId: user.id, legalName: "דנה לוי", displayName: "דנה", dateOfBirth: new Date("1992-03-01") } });
-    const old = await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "SUPERSEDED", createdAt: new Date(Date.now() - 60_000) } });
-    const photo = () => db.upload.create({ data: { ownerId: user.id, kind: "IDENTITY", mime: "image/jpeg", bytes: 10, status: "READY", storageKey: `test/id-${crypto.randomUUID()}.jpg` } });
-    const photos = [await photo(), await photo(), await photo(), await photo()].map((u) => u.id);
-    const cur = await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "MANUAL_REVIEW", uploadIds: photos } });
-    const decideId = (id: string, payload: object) => app.inject({ method: "POST", url: `/api/v1/admin/identity/${id}/decision`, headers: as(admin), payload });
-
-    expect((await decideId(old.id, { action: "APPROVE" })).json().code).toBe("IDENTITY_NOT_CURRENT");
-    const retake = await decideId(cur.id, { action: "RETAKE", reason: "התמונה מטושטשת, אפשר לצלם שוב באור טוב?" });
-    expect(retake.statusCode, retake.body).toBe(200);
-    expect(retake.json().identity).toMatchObject({ status: "RETAKE_REQUESTED", reasonHe: "התמונה מטושטשת, אפשר לצלם שוב באור טוב?" });
-    expect(retake.json().missing).toContain("IDENTITY");
-    // A retake is a decision too: the check's photos are deleted.
-    expect(await db.upload.count({ where: { id: { in: photos } } })).toBe(0);
-    expect(await db.identityVerification.findUniqueOrThrow({ where: { id: cur.id } })).toMatchObject({ uploadIds: [] });
-    // The record says what the reviewer compared the photos against.
-    const record = await db.auditLog.findFirstOrThrow({ where: { targetId: pro.id, action: "IDENTITY_RETAKE_REQUESTED" } });
-    expect(record.afterJson).toMatchObject({ status: "RETAKE_REQUESTED", declared: { legalName: "דנה לוי", dateOfBirth: "1992-03-01" } });
+    const cur = await db.identityVerification.create({ data: { professionalId: pro.id, vendorName: "sandbox-identity", status: "MANUAL_REVIEW" } });
+    const res = await app.inject({ method: "POST", url: `/api/v1/admin/identity/${cur.id}/decision`, headers: as(admin), payload: { action: "RETAKE", reason: "התמונה מטושטשת" } });
+    expect(res.statusCode).toBe(400);
   });
 
   it("a refusal tells the professional why and deletes the photos", async () => {

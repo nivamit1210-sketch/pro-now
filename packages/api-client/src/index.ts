@@ -179,7 +179,7 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
       applications: () => request<{ applications: ProApplicationView[] }>("GET", "/admin/pro-applications"),
       professional: (id: string) => request<AdminProfessionalView>("GET", `/admin/professionals/${encodeURIComponent(id)}`),
       decideAccount: (id: string, input: AdminDecision) => request<ProApplicationView>("POST", `/admin/professionals/${encodeURIComponent(id)}/decision`, input),
-      decideIdentity: (id: string, input: { action: "APPROVE" | "RETAKE" | "REJECT"; reason?: string }) =>
+      decideIdentity: (id: string, input: { action: "APPROVE" | "REJECT"; reason?: string }) =>
         request<ProApplicationView>("POST", `/admin/identity/${encodeURIComponent(id)}/decision`, input),
       decideCredential: (id: string, input: AdminDecision) => request<ProApplicationView>("POST", `/admin/credentials/${encodeURIComponent(id)}/decision`, input),
       decideService: (id: string, input: AdminDecision) => request<ProApplicationView>("POST", `/admin/pro-services/${encodeURIComponent(id)}/decision`, input),
