@@ -37,6 +37,11 @@ and whether they ship at all (`01-PRD.md §Sponsored shops`).
 - **Pricing kind per service** — Amit: *"צריך לחשוב על זה"*.
 - **Several live orders at once** — see the 2026-10-01 entry below.
 - **Services beyond our list** — on hold (D3).
+- **An approved professional stopping or pausing a service** — not built;
+  today an approved service cannot be dropped. Needs its own design
+  (dispatch effect, reversal) (docs/10 §Life after approval).
+- **Where "פנו ל־PRO NOW" leads** (changing a locked name or date of birth) —
+  the support channel is open (WhatsApp/email/phone, hours).
 - **For Amit's demo first** (the product shows no UI the demo lacks —
   Dvir, 2026-10-02):
   - *Deleting the account* from "החשבון שלי". The server already does it

@@ -363,6 +363,145 @@ the professional's profile as piece 1, and re-read inside the transaction.
   professional sees "צריך לתקן 2 דברים" with both reasons, fixes both
   through "לתקן ›" and resends. The reviewer sees "תוקן" twice and approves.
 
+## Life after approval: expiry and edits (pilot design, 2026-10-03)
+
+Approved by Dvir on 2026-10-03. This is piece 3 of 3 (piece 1: the identity
+check; piece 2: the review loop).
+
+**Why.**
+- Dispatch already stops a service whose required credential is past its
+  expiry date (`domain/dispatch/credential-eligibility.ts`). But nobody was
+  warned, the stored status never became `EXPIRED`, and the expiry date
+  was optional when verifying, so a forgotten date meant "never expires".
+- After approval a professional could change anything instantly, including
+  the legal name and date of birth the identity check had compared against
+  the ID card.
+
+**Decisions (Dvir).**
+- **Warnings:** 30 days before, 7 days before, and on expiry. Each goes to
+  the inbox plus a push.
+- **Legal name and date of birth are locked** once identity is verified.
+  Only staff can change them, audited.
+- **How the warnings run:** a daily check plus a log of notices sent.
+
+### Expiry dates become explicit
+Verifying a credential of type `LICENSE`, `CERTIFICATE` or `INSURANCE`
+needs either `expiresAt` or `noExpiry: true` ("ללא תוקף", e.g. a lifetime
+certificate). The server refuses a verification with neither
+(`EXPIRY_REQUIRED`), and refuses an `expiresAt` that is not after today
+(`EXPIRY_IN_PAST`, "התאריך כבר עבר"). `noExpiry` is stored as a column on
+the credential, so "no date because none applies" differs from "no date
+because nobody entered one".
+
+### The daily check
+- **What runs:** a scheduled job (the pattern of `plugins/media-cleanup.ts`
+  and the sweeps; the first run soon after start, then once a day). It
+  covers every `VERIFIED` credential with an `expiresAt`, on a professional
+  service that is `APPROVED` or `PENDING`.
+- **Days are counted by Israel's calendar** (Asia/Jerusalem): "in 30 days"
+  and "expired" are calendar days there.
+- **Which notice is due:**
+  - `EXPIRED` from the day of `expiresAt`;
+  - `WARN_7` from 7 days before;
+  - `WARN_30` from 30 days before.
+
+  Only the most relevant one not yet sent goes out: a missed week sends
+  `EXPIRED` or `WARN_7`, never all three. A notice whose more urgent
+  sibling was already sent is skipped.
+- **No notice when:**
+  - another `VERIFIED` credential of the same type for the same service is
+    current past that date (a renewal covers it);
+  - the professional service is `DISABLED` or `SUSPENDED`.
+- **The notices:**
+  - `WARN_30`: "<credential> ל<service> יפוג בעוד 30 יום — אפשר להעלות את
+    החידוש כבר עכשיו"
+  - `WARN_7`: "<credential> ל<service> יפוג בעוד שבוע"
+  - `EXPIRED`: "<credential> ל<service> פג — השירות לא מקבל קריאות עד
+    שהחידוש יאושר"
+
+  Each goes to the inbox (notification `type: "CREDENTIAL_EXPIRY"`) and to
+  push, linking to "המסמכים שלי".
+- **On expiry** the credential's status becomes `EXPIRED`. Dispatch rules
+  are unchanged; it already stops at the date.
+- **No duplicates:** a new table `credential_notices` (`credentialId`,
+  `kind`, `sentAt`, unique on `(credentialId, kind)`). A notice is stored
+  before it is pushed, and only the run that stored it pushes it, so a
+  restart or two overlapping runs (a deploy) never send twice.
+
+### Renewal
+- **"המסמכים שלי"** shows each credential's expiry date. Anything expiring
+  within 30 days, or expired, is highlighted with **"העלאת חידוש"**.
+- **A renewal** is a new `PENDING` credential next to the old one
+  (`POST /v1/pro/application/credentials`, unchanged). Dispatch accepts
+  any verified, current credential of the type, so the service keeps
+  working on the old one until it expires, and works again the moment a
+  reviewer verifies the renewal.
+- **The admin queue gets "חידושים לבדיקה":** pending credentials of
+  approved professionals, ordered by how soon the credential they replace
+  expires.
+
+### Staff view
+- **The admin list "פג בקרוב":**
+  - credentials expiring within 30 days, and expired ones (professional,
+    service, date);
+  - a section **"אומת בלי תאריך תפוגה"** for credentials verified before
+    this change with neither a date nor `noExpiry`, so staff can fill them
+    in (the credential decision accepts a date or `noExpiry` on an
+    already-verified credential).
+- **The professional's admin card** gets **"שינויים אחרונים"**: the last 30
+  days of `PRO_APPLICATION_ITEM_CHANGED` and staff edits, with dates.
+
+### Edits after approval
+The principle: anything that changes who they are or what they may do goes
+through a person; the rest takes effect immediately. Nothing already
+approved is taken away while a review is pending.
+
+| Edit by an approved professional | What happens |
+|---|---|
+| Legal name, date of birth | **Locked** once identity is `VERIFIED`: `POST /v1/pro/join` answers `409 IDENTITY_LOCKED` when either changes. The details step shows them read-only with "לשינוי שם או תאריך לידה — פנו ל־PRO NOW" (no support channel is promised; that choice is open, docs/18). |
+| Display name, form of address | Immediate |
+| Prices | Immediate (CLAUDE.md §4) |
+| Area and radius, shop, vehicle | Immediate |
+| Photo or trade character | Immediate (D1) |
+| Business name, tax status | Immediate. A tax-status change sends staff an inbox notice (each `ADMIN_EMAILS` user), because the invoicing model is open. |
+| A new service | Review (unchanged). Approved services keep working. |
+| A new or replacement credential | Review. The old one keeps its service working until it expires. |
+| Tax file | A new upload is reviewed. The old verified one stays until replaced. |
+| Identity | Already verified: no new check (piece 1). |
+
+**Staff correction of a name or date of birth:**
+`PATCH /v1/admin/professionals/:id/identity-details
+{ legalName?, dateOfBirth?, reason }`.
+- ADMIN-only and audited with the before and after values.
+- The age rule (18) still applies.
+- The professional gets an inbox line: "הפרטים בחשבון עודכנו על ידי PRO NOW".
+
+**Out of scope (follow-up):** an approved professional stopping or pausing
+a service. The app cannot drop an approved service today, and doing it
+properly affects dispatch.
+
+### Tests
+- **Unit:**
+  - which notice is due on a given day (30 / 7 / expired / none / already
+    sent / missed days / covered by a renewal / service disabled);
+  - Israel calendar-day counting around midnight.
+- **Integration (real Postgres):**
+  - verification refused without an expiry or `noExpiry`, or with a past
+    date;
+  - the daily check sends each notice once and sets `EXPIRED` on the day;
+  - a repeated or overlapping run stores and pushes nothing twice;
+  - a renewal stops further notices;
+  - `IDENTITY_LOCKED` for the professional; the admin correction is allowed,
+    audited and notified;
+  - a tax-status change notifies staff;
+  - the three admin lists are correct;
+  - "שינויים אחרונים" on the admin card.
+- **End to end:**
+  - a professional whose licence expires in 5 days sees the highlight and
+    "העלאת חידוש", uploads the renewal; the reviewer finds it under
+    "חידושים לבדיקה" and verifies it with a new date;
+  - the details step shows the locked name and date of birth read-only.
+
 ## Customer-facing trust badges (factual only)
 `זהות אומתה` · `עסק אומת` · `רישיון מקצועי אומת` (where applicable) ·
 `תעודות נבדקו` · `מוניטין חיצוני מקושר` (when verified) · `X עבודות הושלמו
