@@ -90,7 +90,7 @@ describe("loadEnv — sign-in", () => {
   };
 
   it("refuses production without an email provider", () => {
-    expect(() => loadEnv({ ...deployed, RESEND_API_KEY: undefined })).toThrow("RESEND_API_KEY or SMTP_URL");
+    expect(() => loadEnv({ ...deployed, RESEND_API_KEY: undefined })).toThrow("BREVO_API_KEY, RESEND_API_KEY or SMTP_URL");
   });
 
   it("accepts SMTP as a production fallback", () => {

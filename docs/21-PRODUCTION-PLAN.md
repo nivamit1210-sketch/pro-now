@@ -14,7 +14,7 @@ so going live is configuration, not code:
 |---|---|---|
 | Neon Postgres + PostGIS | `postgis/postgis:16-3.4` | `DATABASE_URL` |
 | Cloudflare R2 | SeaweedFS | `S3_ENDPOINT`, keys, bucket |
-| Resend | Mailpit | `RESEND_API_KEY` / `SMTP_URL` |
+| Brevo (Resend once we own a domain) | Mailpit | `BREVO_API_KEY` / `RESEND_API_KEY` / `SMTP_URL` |
 | Google sign-in | `navikt/mock-oauth2-server` | `GOOGLE_CLIENT_ID/SECRET`, issuer |
 | Web Push | our own VAPID keys | `VAPID_*` |
 | Nominatim geocoding | real (free), fixture adapter in tests | — |
@@ -34,7 +34,7 @@ configured.
    ├─ WebSocket, in-process event bus
    └─ in-process workers on Postgres (dispatch sweeper, email outbox, upload cleanup, retention)
         ▼
- Postgres + PostGIS (Neon) · S3 (R2 / SeaweedFS) · email (Resend / Mailpit)
+ Postgres + PostGIS (Neon) · S3 (R2 / SeaweedFS) · email (Brevo / Mailpit)
 ```
 1. **One origin** for app and API, so the session cookie is first-party on
    Safari.

@@ -37,8 +37,13 @@ and each epic recognised by a route it added. Run it after every deploy.
   the environment. Amit: "Sync" the Blueprint once so the variables
   `render.yaml` declares (`DIRECT_DATABASE_URL`, `VAPID_*`, alert keys,
   Google keys) appear on the service.
-- **Email sign-in fails with a 500.** Resend sends only from a verified
-  domain you own, so `EMAIL_FROM` needs a domain (a purchase, Amit's call).
+- **Email sign-in: switching to Brevo** (no domain needed; Resend sends
+  only from a verified domain you own). Setup: a free Brevo account
+  (300 emails a day), one verified sender address under Senders, an API
+  key (SMTP & API → API keys). In Render's Environment set `BREVO_API_KEY`
+  and `EMAIL_FROM` to that address, e.g. `PRO NOW <name@gmail.com>`.
+  Without a domain Brevo sends from `@brevosend.com` on the sender's
+  behalf. `BREVO_API_KEY` wins over `RESEND_API_KEY` when both are set.
 - **Google sign-in:** `render.yaml` declares `GOOGLE_CLIENT_ID` /
   `GOOGLE_CLIENT_SECRET` (`sync: false`); the values go in Render's
   Environment. The OAuth client is a "Web application" with origin

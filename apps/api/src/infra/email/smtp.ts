@@ -16,6 +16,6 @@ export function createSmtpEmailProvider(smtpUrl: string, from: string): EmailPro
  */
 export const unconfiguredEmailProvider: EmailProvider = {
   async send() {
-    throw new Error("Email is not configured: set SMTP_URL locally or RESEND_API_KEY in production.");
+    throw new Error("Email is not configured: set SMTP_URL locally or BREVO_API_KEY in production.");
   },
 };

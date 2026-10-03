@@ -44,6 +44,9 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
+      # Brevo sends from one verified address, no domain needed (docs/16).
+      - key: BREVO_API_KEY
+        sync: false
       - key: RESEND_API_KEY
         sync: false
       # Google sign-in (docs/16 §Google sign-in). Without both, the server

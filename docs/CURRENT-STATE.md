@@ -144,7 +144,7 @@ Screenshots go to `qa/out/`.
 
 ## 7. Open items and suggested next steps
 
-1. **Production** (`docs/16 §Production`): a domain for email sign-in, Google sign-in keys,
+1. **Production** (`docs/16 §Production`): Brevo keys for email sign-in, Google sign-in keys,
    Amit's iPhone pass, an uptime monitor.
 2. **Next demo catch-up** from the marker in `docs/DEMO-SYNC.md` — the
    2026-10-01 demo work (several orders, the repair quoted to the orderer;

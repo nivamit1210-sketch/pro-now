@@ -4,6 +4,7 @@ import { fromNodeHeaders } from "better-auth/node";
 
 import { AUTH_BASE_PATH, CLIENT_IP_HEADER, createAuth, type Auth } from "../auth/auth.js";
 import { rolesOf, type Role } from "../auth/roles.js";
+import { createBrevoEmailProvider } from "../infra/email/brevo.js";
 import { createResendEmailProvider } from "../infra/email/resend.js";
 import type { EmailProvider } from "../infra/email/email-provider.js";
 import { createSmtpEmailProvider, unconfiguredEmailProvider } from "../infra/email/smtp.js";
@@ -27,13 +28,15 @@ declare module "fastify" {
 }
 
 export default fp(async (app: FastifyInstance) => {
-  const { EMAIL_FROM, RESEND_API_KEY, SMTP_URL } = app.config;
+  const { BREVO_API_KEY, EMAIL_FROM, RESEND_API_KEY, SMTP_URL } = app.config;
   const from = EMAIL_FROM ?? "PRO NOW <no-reply@pronow.test>";
-  const email = RESEND_API_KEY
-    ? createResendEmailProvider(RESEND_API_KEY, from)
-    : SMTP_URL
-      ? createSmtpEmailProvider(SMTP_URL, from)
-      : unconfiguredEmailProvider;
+  const email = BREVO_API_KEY
+    ? createBrevoEmailProvider(BREVO_API_KEY, from)
+    : RESEND_API_KEY
+      ? createResendEmailProvider(RESEND_API_KEY, from)
+      : SMTP_URL
+        ? createSmtpEmailProvider(SMTP_URL, from)
+        : unconfiguredEmailProvider;
   const auth = createAuth({ config: app.config, prisma: app.prisma, email });
   app.decorate("auth", auth);
   app.decorate("email", email);

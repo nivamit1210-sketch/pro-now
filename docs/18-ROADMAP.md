@@ -182,6 +182,11 @@ Also decided (Amit, 2026-09-30, after joining as a vet in a live demo):
 
 ## Decided
 
+### 2026-10-03 (Dvir) — email goes through Brevo until we own a domain
+- Resend needs a domain we own, and Render Free blocks SMTP ports, so
+  production sends through Brevo's HTTPS API (free, 300 a day) from one
+  verified address. Buying a domain later is a configuration change.
+
 ### 2026-10-01 (Dvir) — an address is a real place
 - Suggestions as you type, from two characters, come from Israel's official
   street list (data.gov.il) in our own database — not from a vendor, and

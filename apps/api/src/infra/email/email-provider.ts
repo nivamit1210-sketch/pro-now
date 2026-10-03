@@ -1,6 +1,7 @@
 /**
  * Outgoing email, vendor-neutral (CLAUDE.md §6). Mailpit speaks SMTP locally;
- * production uses Resend's HTTPS API on Render Free.
+ * production uses Brevo's HTTPS API (Render Free blocks SMTP ports), or
+ * Resend's once we own a domain.
  */
 export interface OutgoingEmail {
   to: string;
