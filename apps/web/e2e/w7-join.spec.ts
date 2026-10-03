@@ -89,6 +89,12 @@ test("a professional joins, is reviewed, and is approved for one service", async
   await (await idChooser).setFiles({ name: "id.jpg", mimeType: "image/jpeg", buffer: Buffer.from(png) });
   await page.getByRole("button", { name: "נראה טוב" }).click();
   // Chromium's fake camera shows no face, so nothing is taken by itself: the shutter, three times.
+  // The shutter does nothing until the camera has its first frame (IdentityCheck's captureFrame
+  // returns while videoWidth is 0), and on a slow CI runner that can come after the first press.
+  await page.waitForFunction(() => {
+    const v = document.querySelector("video");
+    return !!v && v.videoWidth > 0;
+  }, undefined, { timeout: 20_000 });
   for (const tick of ["ישר ✓", "ימינה ✓", "שמאלה ✓"]) {
     await page.getByRole("button", { name: "צילום", exact: true }).click();
     await expect(page.getByText(tick)).toBeVisible();
