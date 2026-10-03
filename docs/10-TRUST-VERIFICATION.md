@@ -204,7 +204,7 @@ rules (piece 3).
 
 ## Review loop: asking for fixes (pilot design, 2026-10-02)
 
-Approved by Dvir on 2026-10-02. This is piece 2 of 3 (piece 1: the identity
+Approved by Dvir on 2026-10-02. Built 2026-10-03. This is piece 2 of 3 (piece 1: the identity
 check above; piece 3: expiry warnings and re-approval rules).
 
 **Why.** Before this, a reviewer could only approve or refuse the whole
@@ -230,7 +230,7 @@ Every item has one stable name, used by requests, fixes and "what changed":
 | Name | Covers |
 |---|---|
 | `IDENTITY` | the identity check |
-| `DETAILS` | names, form of address, date of birth, business and tax status |
+| `DETAILS` | names, form of address, date of birth, business and tax status, and the vehicle |
 | `AREA` | home and radius |
 | `PORTRAIT` | the photo or trade character |
 | `SHOP` | sign, colour, logo |

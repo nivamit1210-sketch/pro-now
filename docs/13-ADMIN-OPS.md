@@ -8,10 +8,17 @@ is 403 for anyone not in `ADMIN_EMAILS`, and every admin mutation writes an
 ## What exists (W8)
 - **Applications / verification queue** per professional and per service:
   account documents, licences, approve or reject with a reason.
+- **Review loop** (docs/10 §Review loop): on an application in review every
+  item has "בקשת תיקון" with a reason; marks are drafts (cancellable) until
+  "החזרה לתיקון (N)" sends them as one round, which takes the application
+  out of the queue. It comes back tagged "חזר אחרי תיקון", showing each item
+  as "תוקן" or "השתנה" and the earlier rounds. Account approval is refused
+  while items are marked. Refusing the account cancels open requests and
+  closes a sent round. Marks, cancels and sends are audited.
 - **Identity block** on the professional's page: date of birth, the check's
   status and the four photos (2-minute signed links; each opening is
-  audited as `IDENTITY_PHOTOS_VIEWED`). Three decisions: approve, retake
-  (reason required), reject (reason required). The photos are deleted
+  audited as `IDENTITY_PHOTOS_VIEWED`). Two immediate decisions: approve and
+  reject (reason required); a retake is the `IDENTITY` mark below. The photos are deleted
   after the decision commits; the decision record stays. Account approval
   stays blocked until a `VERIFIED` check and age 18.
 - **Job inspector** with the full `job_events` timeline. It is what turns

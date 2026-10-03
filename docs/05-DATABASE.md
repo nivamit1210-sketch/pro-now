@@ -45,6 +45,15 @@ columns: `method` (VENDOR | MANUAL), `verificationId`, `uploadIds`
 `dateOfBirth` (date). The media clean-up keeps photos of `MANUAL_REVIEW` /
 `PENDING` checks.
 
+## Review loop
+`review_rounds` (`professionalId`, `createdById`, `status` DRAFT | SENT |
+ANSWERED, `sentAt`, `answeredAt`; a partial unique index
+`review_rounds_one_draft` allows one `DRAFT` per professional) and
+`fix_requests` (`roundId`, `professionalId`, `itemKey`, `reasonHe`, `status`
+OPEN | FIXED | CANCELLED, `fixedAt`; unique `(roundId, itemKey)`).
+`VerificationStatus` gains `CHANGES_REQUESTED`. Migration
+`20261003a_review_loop`. See `/docs/10-TRUST-VERIFICATION.md §Review loop`.
+
 ## Addresses
 An `Address` is saved from one of two sources only (`POST /v1/me/addresses`):
 a street from `street_names` — Israel's official street list (data.gov.il),
