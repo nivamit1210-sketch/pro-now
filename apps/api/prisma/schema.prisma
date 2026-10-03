@@ -156,6 +156,7 @@ enum VerificationStatus {
   BUSINESS_PENDING
   CREDENTIALS_PENDING
   SERVICE_REVIEW
+  CHANGES_REQUESTED
   APPROVED
   LIMITED
   SUSPENDED
@@ -204,6 +205,7 @@ model ProfessionalProfile {
   identityChecks IdentityVerification[]
   businessProfile      BusinessProfile?
   documents            ProfessionalDocument[]
+  reviewRounds         ReviewRound[]
   credentials          ProfessionalCredential[]
   services             ProfessionalService[]
   availabilitySessions AvailabilitySession[]
@@ -1217,4 +1219,37 @@ model AppConfig {
   updatedAt DateTime @updatedAt
 
   @@map("app_config")
+}
+
+model ReviewRound {
+  id             String              @id @default(cuid())
+  professionalId String
+  professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  createdById    String
+  /// DRAFT | SENT | ANSWERED (docs/10 §Review loop)
+  status         String              @default("DRAFT")
+  sentAt         DateTime?
+  answeredAt     DateTime?
+  createdAt      DateTime            @default(now())
+  requests       FixRequest[]
+
+  @@index([professionalId, createdAt])
+  @@map("review_rounds")
+}
+
+model FixRequest {
+  id             String      @id @default(cuid())
+  roundId        String
+  round          ReviewRound @relation(fields: [roundId], references: [id])
+  professionalId String
+  itemKey        String
+  reasonHe       String
+  /// OPEN | FIXED | CANCELLED
+  status         String      @default("OPEN")
+  fixedAt        DateTime?
+  createdAt      DateTime    @default(now())
+
+  @@unique([roundId, itemKey])
+  @@index([professionalId, status])
+  @@map("fix_requests")
 }
