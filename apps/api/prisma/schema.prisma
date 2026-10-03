@@ -351,11 +351,24 @@ model ProfessionalCredential {
   documentRef    String?
   status         String              @default("PENDING") // PENDING | VERIFIED | EXPIRED | REJECTED
   expiresAt      DateTime?
+  /// true: verified as having no expiry ("ללא תוקף"); false with a null expiresAt means nobody entered one (docs/10 §Life after approval)
+  noExpiry       Boolean             @default(false)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
   @@index([professionalId, type, expiresAt])
   @@map("professional_credentials")
+}
+
+model CredentialNotice {
+  id           String   @id @default(cuid())
+  credentialId String
+  /// WARN_30 | WARN_7 | EXPIRED (docs/10 §Life after approval)
+  kind         String
+  sentAt       DateTime @default(now())
+
+  @@unique([credentialId, kind])
+  @@map("credential_notices")
 }
 
 // ---------------------------------------------------------------------
