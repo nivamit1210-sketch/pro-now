@@ -227,6 +227,12 @@ describe("the professional fixes and resends", () => {
     expect(res.json().fixRequests).toEqual([]);
     expect(await db.reviewRound.count({ where: { professionalId: pro.id, status: "ANSWERED" } })).toBe(1);
     expect(await db.auditLog.count({ where: { action: "PRO_APPLICATION_SUBMITTED", targetId: pro.id } })).toBe(1);
+    // The queue marks it as back after fixes; an application never sent back is not.
+    const fresh = await applicantInReview(db, uniqueEmail("rl-fresh"));
+    const queue = (await app.inject({ method: "GET", url: "/api/v1/admin/pro-applications", headers: as(admin) })).json();
+    const row = (id: string) => queue.applications.find((a: { profile: { id: string } }) => a.profile.id === id);
+    expect(row(pro.id)).toMatchObject({ returned: true });
+    expect(row(fresh.id)).toMatchObject({ returned: false });
   });
 
   it("the reviewer sees the round: fixed requests with their reasons, and what else changed", async () => {

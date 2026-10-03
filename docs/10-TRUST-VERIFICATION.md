@@ -251,7 +251,8 @@ Every item has one stable name, used by requests, fixes and "what changed":
 - **The returned application** comes back to the queue showing, per item,
   **"תוקן"** with the original reason. Items changed outside the requests
   are flagged **"השתנה"**, and earlier rounds are listed below the current
-  one.
+  one. In the queue it carries the tag **"חזר אחרי תיקון"** (the queue's
+  `returned` flag: it has an answered round).
 
 ### The professional
 - **The notice.** One inbox notice plus a push, linking to the application

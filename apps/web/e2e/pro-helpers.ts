@@ -140,7 +140,7 @@ export async function adminApi(baseURL: string) {
   return api;
 }
 
-/** An application waiting for review (docs/21 W8): identity, account, one service, its licences and documents pending. */
+/** An application waiting for review (docs/21 W8): identity, account, one service, its licences and documents pending; the trade's character as the photo, and nothing missing. */
 export async function pendingApplicant(serviceCode: string, displayName: string) {
   const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
   try {
@@ -149,8 +149,10 @@ export async function pendingApplicant(serviceCode: string, displayName: string)
     const user = await db.user.create({ data: { email, emailVerified: true, name: displayName } });
     await db.userRole.create({ data: { userId: user.id, role: "PROFESSIONAL" } });
     const profile = await db.professionalProfile.create({
-      data: { userId: user.id, legalName: `${displayName} כהן`, displayName, addressAs: "M", verificationStatus: "SERVICE_REVIEW", dateOfBirth: new Date("1988-04-12") },
+      data: { userId: user.id, legalName: `${displayName} כהן`, displayName, addressAs: "M", verificationStatus: "SERVICE_REVIEW", dateOfBirth: new Date("1988-04-12"), portraitKind: "CHARACTER" },
     });
+    // Complete, as a sent application is: the professional can resend it after a round of fixes (docs/10 §Review loop).
+    await db.businessProfile.create({ data: { professionalId: profile.id, taxStatus: "EXEMPT" } });
     await db.professionalService.create({ data: { professionalId: profile.id, serviceId: service.id, status: "PENDING", basePriceMinorUnits: 20000 } });
     await db.serviceArea.create({ data: { professionalId: profile.id, centerLat: 32.08, centerLng: 34.78, radiusMeters: 10_000 } });
     for (const kind of ["TAX_FILE"]) {

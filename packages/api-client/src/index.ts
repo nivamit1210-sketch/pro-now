@@ -176,7 +176,7 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
       request<{ quote: { id: string }; autoApproved?: boolean }>("POST", `/jobs/${encodeURIComponent(jobId)}/quotes`, input),
     // --- The admin (docs/21 W8). The server enforces ADMIN on every one. ---
     admin: {
-      applications: () => request<{ applications: ProApplicationView[] }>("GET", "/admin/pro-applications"),
+      applications: () => request<{ applications: Array<ProApplicationView & { returned: boolean }> }>("GET", "/admin/pro-applications"),
       professional: (id: string) => request<AdminProfessionalView>("GET", `/admin/professionals/${encodeURIComponent(id)}`),
       /** Marks an item for fixing (a draft until the round is sent). */
       markFix: (professionalId: string, input: { itemKey: string; reasonHe: string }) =>

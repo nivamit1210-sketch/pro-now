@@ -26,6 +26,9 @@ test("the admin approves an application, account, licence and service", async ({
   await expect(page.getByText("ספק בדיקה: סביבת ניסיון — אין בדיקה אוטומטית")).toBeVisible();
   await expect(page.getByLabel("תעודת זהות")).toBeVisible();
   await expect(page.getByText("פתיחת המסמך ›").first()).toBeVisible();
+  // A retake is asked for with the round of fixes now (docs/10 §Review loop), not on its own.
+  await expect(page.getByRole("button", { name: "צילום מחדש" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "בקשת תיקון · בדיקת הזהות" })).toBeVisible();
 
   // A refusal without a reason is refused.
   await page.getByRole("button", { name: "סירוב", exact: true }).first().click();

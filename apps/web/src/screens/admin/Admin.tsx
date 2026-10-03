@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Navigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,6 +8,7 @@ import { customerDarkTheme, spacing, type as t } from "@pro-now/ui";
 import { api, useMe } from "../../api";
 import { useFrame } from "../../frame";
 import { ErrorScreen, LoadingScreen } from "../../states";
+import { fixLabelHe } from "../pro/approval";
 
 /**
  * THE ADMIN (docs/21 W8, inside the web app per D7).
@@ -80,6 +81,10 @@ const ERROR_HE: Record<string, string> = {
   IDENTITY_NOT_VERIFIED: "קודם צריך לאשר את הזהות.",
   UNDER_MINIMUM_AGE: "לפי תאריך הלידה, מתחת לגיל 18.",
   DATE_OF_BIRTH_MISSING: "חסר תאריך לידה בפרטים.",
+  FIXES_PENDING: "יש בקשות תיקון פתוחות — שלחו או בטלו אותן קודם.",
+  NOTHING_MARKED: "לא סומן שום דבר לתיקון.",
+  NOT_IN_REVIEW: "הבקשה לא בבדיקה כרגע.",
+  ALREADY_SENT: "הבקשה כבר נשלחה למקצוען.",
 };
 
 /** An action that needs a reason when it refuses; errors shown in place. */
@@ -114,6 +119,7 @@ function Queue() {
       {list.data.applications.map((a) => (
         <Pressable key={a.profile.id} onPress={() => setOpenId(a.profile.id)} accessibilityRole="button" accessibilityLabel={`בקשה של ${a.profile.displayName}`} style={styles.row}>
           <Text style={styles.rowTitle}>{a.profile.displayName} · {a.profile.legalName}</Text>
+          {a.returned ? <Text style={styles.tag}>חזר אחרי תיקון</Text> : null}
           <Text style={styles.rowSub}>{a.services.map((s) => s.nameHe).join(" · ")}</Text>
         </Pressable>
       ))}
@@ -135,6 +141,35 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
   const a = v.application;
   const refusal = () => (reason.trim() ? { approve: false, reason: reason.trim() } : null);
   const needReason = "לסירוב צריך לכתוב סיבה";
+  /*
+   * The review loop (docs/10): each item can be marked for fixing with the
+   * shared reason; marks are a draft until sent as one round. Item keys are
+   * the server's own names.
+   */
+  const markFix = (itemKey: string) => {
+    const reasonHe = reason.trim();
+    if (reasonHe.length < 3) return run(async () => { throw new Error("לבקשת תיקון צריך לכתוב סיבה"); });
+    return decide(async () => {
+      await api.admin.markFix(id, { itemKey, reasonHe });
+      setReason("");
+    });
+  };
+  const fixMark = (itemKey: string) => (
+    <FixMark
+      labelHe={fixLabelHe(itemKey, a)}
+      draft={v.review.draft.find((d) => d.itemKey === itemKey) ?? null}
+      busy={busy}
+      onMark={() => markFix(itemKey)}
+      onCancel={(markId) => decide(() => api.admin.cancelFix(markId))}
+    />
+  );
+  const credentialKey = (credentialId: string) => {
+    for (const s of a.services) for (const r of s.requirements) if (r.credential?.id === credentialId) return `CREDENTIAL:${s.serviceId}:${r.requirement}`;
+    return null;
+  };
+  const dob = a.profile.dateOfBirth ? a.profile.dateOfBirth.split("-").reverse().join("/") : "בלי תאריך לידה";
+  const vehicle = [a.profile.vehicle.vehicleHe, a.profile.vehicle.plateTail ? `…${a.profile.vehicle.plateTail}` : null].filter(Boolean).join(" ");
+  const marked = v.review.draft.length;
   return (
     <View style={styles.list}>
       <Pressable onPress={onBack} accessibilityRole="button"><Text style={styles.link}>› חזרה לרשימה</Text></Pressable>
@@ -145,15 +180,38 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
           ? `${a.profile.business.tradingName ?? "בלי שם עסק"} · ${({ EXEMPT: "עוסק פטור", LICENSED: "עוסק מורשה", COMPANY: "חברה בע״מ" } as const)[a.profile.business.taxStatus]} · לא נבדק`
           : "פרטי העסק: לא מולאו"}
       </Text>
-      <Field label="סיבה (חובה לסירוב, נשמרת ביומן)" value={reason} onChange={setReason} />
+      <Field label="סיבה (חובה לסירוב ולבקשת תיקון, נשמרת ביומן)" value={reason} onChange={setReason} />
 
-      {v.identity ? <IdentityBlock identity={v.identity} busy={busy} reason={reason} decide={decide} run={run} /> : null}
+      {v.review.current?.status === "ANSWERED" ? <ReturnedRound review={v.review} application={a} /> : null}
+
+      <Text style={styles.section}>פרטי הבקשה</Text>
+      <View style={styles.row}>
+        <Text style={styles.rowTitle}>
+          הפרטים: {[a.profile.legalName, a.profile.displayName, dob, a.profile.business?.tradingName ?? null, vehicle || null].filter(Boolean).join(" · ")}
+        </Text>
+        {fixMark("DETAILS")}
+      </View>
+      {a.area ? (
+        <View style={styles.row}>
+          <Text style={styles.rowTitle}>אזור העבודה: רדיוס {a.area.radiusKm} ק״מ</Text>
+          {fixMark("AREA")}
+        </View>
+      ) : null}
+      {a.profile.shop ? (
+        <View style={styles.row}>
+          <Text style={styles.rowTitle}>החנות: {a.profile.shop.name} · {a.profile.shop.brandColor}{a.profile.shop.logoUploadId ? " · עם לוגו" : ""}</Text>
+          {fixMark("SHOP")}
+        </View>
+      ) : null}
+
+      {v.identity ? <IdentityBlock identity={v.identity} busy={busy} reason={reason} decide={decide} run={run} fixAction={fixMark("IDENTITY")} /> : null}
 
       <Text style={styles.section}>החשבון והמסמכים</Text>
       {v.documents.map((d) => (
         <View key={d.id} style={styles.row}>
           <Text style={styles.rowTitle}>{d.kind} · {d.status}</Text>
           {d.url ? <Text style={styles.link} accessibilityRole="link" onPress={() => window.open(d.url!, "_blank", "noopener")}>פתיחת המסמך ›</Text> : <Text style={styles.rowSub}>אין קובץ</Text>}
+          {fixMark(`DOCUMENT:${d.kind}`)}
         </View>
       ))}
       <View style={styles.row}>
@@ -161,6 +219,7 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
           {v.portrait?.kind === "PHOTO" ? "תמונה" : v.portrait?.kind === "CHARACTER" ? "תמונה · הדמות של המקצוע" : "תמונה · לא נבחרה"}
         </Text>
         {v.portrait?.url ? <Text style={styles.link} accessibilityRole="link" onPress={() => window.open(v.portrait!.url!, "_blank", "noopener")}>פתיחת התמונה ›</Text> : null}
+        {v.portrait ? fixMark("PORTRAIT") : null}
       </View>
       <View style={styles.actions}>
         <Action labelHe="אישור החשבון" disabled={busy} onPress={() => decide(() => api.admin.decideAccount(id, { approve: true }))} />
@@ -169,7 +228,9 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
 
       <Text style={styles.section}>רישיונות ותעודות</Text>
       <Field label="בתוקף עד (YYYY-MM-DD, לאישור רישיון)" value={expires} onChange={setExpires} />
-      {v.credentials.map((c) => (
+      {v.credentials.map((c) => {
+        const itemKey = credentialKey(c.id);
+        return (
         <View key={c.id} style={styles.row}>
           <Text style={styles.rowTitle}>
             {[c.serviceNameHe, c.type, c.number, c.status, c.expiresAt ? `עד ${c.expiresAt.slice(0, 10)}` : null].filter(Boolean).join(" · ")}
@@ -183,8 +244,10 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
             />
             <Action labelHe="סירוב" danger disabled={busy} onPress={() => { const r = refusal(); return r ? decide(() => api.admin.decideCredential(c.id, r)) : run(async () => { throw new Error(needReason); }); }} />
           </View>
+          {itemKey ? fixMark(itemKey) : null}
         </View>
-      ))}
+        );
+      })}
 
       <Text style={styles.section}>שירותים — כל אחד בנפרד</Text>
       {a.services.map((s) => (
@@ -194,9 +257,91 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
             <Action labelHe="אישור השירות" disabled={busy} onPress={() => decide(() => api.admin.decideService(s.id, { approve: true }))} />
             <Action labelHe="סירוב" danger disabled={busy} onPress={() => { const r = refusal(); return r ? decide(() => api.admin.decideService(s.id, r)) : run(async () => { throw new Error(needReason); }); }} />
           </View>
+          {fixMark(`SERVICE:${s.serviceId}`)}
         </View>
       ))}
       {errorHe ? <Text accessibilityRole="alert" style={styles.error}>{errorHe}</Text> : null}
+
+      {/* One round, one notice to the professional (docs/10 §Review loop); the application then leaves the queue. */}
+      <View style={styles.sendBar}>
+        <Action
+          labelHe={`החזרה לתיקון (${marked})`}
+          disabled={busy || marked === 0}
+          onPress={() => run(async () => {
+            await api.admin.sendRound(id);
+            onBack();
+          })}
+        />
+      </View>
+    </View>
+  );
+}
+
+type Review = AdminProfessionalView["review"];
+
+/** An item's "ask to fix": the mark with its reason once made, and its cancel while a draft. */
+function FixMark({ labelHe, draft, busy, onMark, onCancel }: {
+  labelHe: string;
+  draft: Review["draft"][number] | null;
+  busy: boolean;
+  onMark: () => unknown;
+  onCancel: (markId: string) => unknown;
+}) {
+  return (
+    <>
+      {draft ? <Text style={styles.marked}>לתיקון: {draft.reasonHe}</Text> : null}
+      <View style={styles.actions}>
+        <Action labelHe="בקשת תיקון" accessibilityLabelHe={`בקשת תיקון · ${labelHe}`} quiet disabled={busy} onPress={onMark} />
+        {draft ? <Action labelHe="ביטול" accessibilityLabelHe={`ביטול · ${labelHe}`} quiet disabled={busy} onPress={() => onCancel(draft.id)} /> : null}
+      </View>
+    </>
+  );
+}
+
+const REQUEST_STATUS_HE: Record<string, string> = { FIXED: "תוקן ✓", CANCELLED: "בוטל", OPEN: "לא תוקן" };
+
+/**
+ * An application back from a round of fixes (docs/10 §Review loop): each
+ * request with what became of it and the original reason, what else the
+ * professional changed, and the earlier rounds folded away.
+ */
+function ReturnedRound({ review, application }: { review: Review; application: AdminProfessionalView["application"] }) {
+  const [showEarlier, setShowEarlier] = useState(false);
+  const current = review.current!;
+  const requested = new Set(current.requests.map((r) => r.itemKey));
+  const alsoChanged = review.changedItemKeys.filter((k) => !requested.has(k));
+  return (
+    <View style={styles.round}>
+      <Text style={styles.section}>סבב התיקונים האחרון</Text>
+      {current.requests.map((r) => (
+        <View key={r.itemKey} style={styles.roundLine}>
+          <View style={styles.line}>
+            <Text style={styles.rowTitle}>{fixLabelHe(r.itemKey, application)}</Text>
+            <Text style={[styles.rowSub, r.status === "FIXED" && styles.good]}>{REQUEST_STATUS_HE[r.status] ?? r.status}</Text>
+          </View>
+          <Text style={styles.rowSub}>{r.reasonHe}</Text>
+        </View>
+      ))}
+      {alsoChanged.length ? <Text style={styles.rowSub}>השתנה גם: {alsoChanged.map((k) => fixLabelHe(k, application)).join(" · ")}</Text> : null}
+      {review.earlier.length ? (
+        <>
+          <Pressable onPress={() => setShowEarlier((x) => !x)} accessibilityRole="button" accessibilityState={{ expanded: showEarlier }}>
+            <Text style={styles.link}>סבבים קודמים ({review.earlier.length})</Text>
+          </Pressable>
+          {showEarlier
+            ? review.earlier.map((round) => (
+                <View key={round.roundId} style={styles.roundLine}>
+                  <Text style={styles.rowSub}>{new Date(round.sentAt).toLocaleDateString("he-IL")}</Text>
+                  {round.requests.map((r) => (
+                    <Text key={r.itemKey} style={styles.rowSub}>
+                      {fixLabelHe(r.itemKey, application)} · {REQUEST_STATUS_HE[r.status] ?? r.status} · {r.reasonHe}
+                    </Text>
+                  ))}
+                </View>
+              ))
+            : null}
+        </>
+      ) : null}
     </View>
   );
 }
@@ -210,12 +355,14 @@ const mark = (b: boolean | null) => (b === true ? "✓" : b === false ? "✗" : 
  * provider found, and a person's decision. The photos are deleted once it is
  * decided, so a decided check shows where they were.
  */
-function IdentityBlock({ identity: idn, busy, reason, decide, run }: {
+function IdentityBlock({ identity: idn, busy, reason, decide, run, fixAction }: {
   identity: Identity;
   busy: boolean;
   reason: string;
   decide: (fn: () => Promise<unknown>) => Promise<void>;
   run: (fn: () => Promise<unknown>) => Promise<void>;
+  /** "Ask to fix" for the identity (a retake), sent with the round (docs/10 §Review loop). */
+  fixAction: ReactNode;
 }) {
   const photos: Array<[string, string | null]> = [
     ["תעודת זהות", idn.photos.idCard],
@@ -259,6 +406,7 @@ function IdentityBlock({ identity: idn, busy, reason, decide, run }: {
           <Action labelHe="סירוב זהות" danger disabled={busy} onPress={() => withReason("REJECT")} />
         </View>
       ) : null}
+      {open ? fixAction : null}
     </>
   );
 }
@@ -518,10 +666,25 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
   );
 }
 
-function Action({ labelHe, onPress, danger, disabled }: { labelHe: string; onPress: () => unknown; danger?: boolean; disabled?: boolean }) {
+function Action({ labelHe, accessibilityLabelHe, onPress, danger, quiet, disabled }: {
+  labelHe: string;
+  /** When the visible words repeat on the screen, a name that says which item. */
+  accessibilityLabelHe?: string;
+  onPress: () => unknown;
+  danger?: boolean;
+  quiet?: boolean;
+  disabled?: boolean;
+}) {
   return (
-    <Pressable onPress={() => void onPress()} disabled={disabled} accessibilityRole="button" accessibilityState={{ disabled }} style={[styles.action, danger && styles.actionDanger, disabled && { opacity: 0.45 }]}>
-      <Text style={styles.actionText}>{labelHe}</Text>
+    <Pressable
+      onPress={() => void onPress()}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabelHe}
+      accessibilityState={{ disabled }}
+      style={[styles.action, danger && styles.actionDanger, quiet && styles.actionQuiet, disabled && { opacity: 0.45 }]}
+    >
+      <Text style={[styles.actionText, quiet && styles.actionTextQuiet]}>{labelHe}</Text>
     </Pressable>
   );
 }
@@ -564,6 +727,14 @@ const styles = StyleSheet.create({
   action: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 10, backgroundColor: colors.action },
   actionDanger: { backgroundColor: colors.statusDanger },
   actionText: { ...t.metaStrong, color: colors.bg, writingDirection: "rtl" },
+  actionQuiet: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.textSecondary },
+  actionTextQuiet: { color: colors.textPrimary },
+  marked: { ...t.metaStrong, color: colors.statusWarningText, textAlign: "right", writingDirection: "rtl" },
+  tag: { ...t.metaStrong, color: colors.actionText, textAlign: "right", writingDirection: "rtl" },
+  good: { color: colors.trust },
+  round: { padding: spacing.md, borderRadius: 12, borderWidth: 1, borderColor: colors.trust, gap: spacing.xs },
+  roundLine: { gap: 2, paddingVertical: 4 },
+  sendBar: { marginTop: spacing.lg, flexDirection: "row-reverse" },
   chip: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: colors.textSecondary },
   chipOn: { backgroundColor: colors.trust, borderColor: colors.trust },
   chipText: { ...t.meta, color: colors.textPrimary, writingDirection: "rtl" },

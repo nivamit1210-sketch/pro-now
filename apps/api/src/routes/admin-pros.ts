@@ -51,7 +51,16 @@ export default async function adminProsRoutes(app: FastifyInstance) {
       select: { id: true },
       take: 50,
     });
-    return { applications: await Promise.all(pending.map((p) => applicationView(app.prisma, p.id))) };
+    // Back after a round of fixes (docs/10 §Review loop): the reviewer sees it in the list.
+    const answered = await app.prisma.reviewRound.findMany({
+      where: { professionalId: { in: pending.map((p) => p.id) }, status: "ANSWERED" },
+      select: { professionalId: true },
+      distinct: ["professionalId"],
+    });
+    const returned = new Set(answered.map((r) => r.professionalId));
+    return {
+      applications: await Promise.all(pending.map(async (p) => ({ ...(await applicationView(app.prisma, p.id)), returned: returned.has(p.id) }))),
+    };
   });
 
   app.post("/v1/admin/professionals/:id/decision", admin, async (req, reply) => {
