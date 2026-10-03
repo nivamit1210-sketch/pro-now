@@ -1226,7 +1226,7 @@ model ReviewRound {
   professionalId String
   professional   ProfessionalProfile @relation(fields: [professionalId], references: [id])
   createdById    String
-  /// DRAFT | SENT | ANSWERED (docs/10 §Review loop)
+  /// DRAFT | SENT | ANSWERED | CLOSED (CLOSED: refused while sent; docs/10 §Review loop)
   status         String              @default("DRAFT")
   sentAt         DateTime?
   answeredAt     DateTime?

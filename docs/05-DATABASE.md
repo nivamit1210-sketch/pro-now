@@ -47,7 +47,8 @@ columns: `method` (VENDOR | MANUAL), `verificationId`, `uploadIds`
 
 ## Review loop
 `review_rounds` (`professionalId`, `createdById`, `status` DRAFT | SENT |
-ANSWERED, `sentAt`, `answeredAt`; a partial unique index
+ANSWERED | CLOSED (CLOSED: the account was refused while the round was
+out), `sentAt`, `answeredAt`; a partial unique index
 `review_rounds_one_draft` allows one `DRAFT` per professional) and
 `fix_requests` (`roundId`, `professionalId`, `itemKey`, `reasonHe`, `status`
 OPEN | FIXED | CANCELLED, `fixedAt`; unique `(roundId, itemKey)`).

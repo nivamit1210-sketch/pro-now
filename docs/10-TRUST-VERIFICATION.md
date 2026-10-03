@@ -206,6 +206,7 @@ rules (piece 3).
 
 Approved by Dvir on 2026-10-02. Built 2026-10-03. This is piece 2 of 3 (piece 1: the identity
 check above; piece 3: expiry warnings and re-approval rules).
+Not built: "removing an item shows 'הוסר'" — removal is possible only for DRAFT services, so it rarely applies.
 
 **Why.** Before this, a reviewer could only approve or refuse the whole
 account, verify or reject a licence, or disable a service. Reasons stayed in
@@ -241,18 +242,27 @@ Every item has one stable name, used by requests, fixes and "what changed":
 ### The reviewer (application card in `/admin`)
 - **Marking.** Every item has **"בקשת תיקון"**. It takes a reason of at
   least 3 characters and marks the item **"לתיקון: <reason>"**. The mark is
-  a draft and can be cancelled.
+  a draft and can be cancelled. `IDENTITY` can be marked only while the
+  check is undecided (`MANUAL_REVIEW`/`PENDING`); otherwise `409
+  IDENTITY_NOT_OPEN`.
+- **Taking a sent request back.** An `OPEN` request of a round already sent
+  can still be cancelled (**"ביטול הבקשה"**) — the way out of a request the
+  professional cannot answer. A fixed request, or one of an answered or
+  closed round, cannot (`409 ALREADY_SENT`).
 - **Approving** still works per item. Approving an item that has an open
   request cancels the request.
 - **Sending.** **"החזרה לתיקון (N)"** sends every marked item as one round.
   It is disabled with nothing marked.
-- **No account approval during a round.** The server refuses it while a
-  round is waiting for fixes.
+- **No account approval during a round.** The server refuses it
+  (`FIXES_PENDING`) while items are marked, and while the account is
+  `CHANGES_REQUESTED` — even with every request fixed or cancelled, approval
+  waits for the resend.
 - **The returned application** comes back to the queue showing, per item,
   **"תוקן"** with the original reason. Items changed outside the requests
   are flagged **"השתנה"**, and earlier rounds are listed below the current
   one. In the queue it carries the tag **"חזר אחרי תיקון"** (the queue's
-  `returned` flag: it has an answered round).
+  `returned` flag: its latest sent round is `ANSWERED`). Before any round,
+  items changed since the submission are flagged "השתנה" too.
 
 ### The professional
 - **The notice.** One inbox notice plus a push, linking to the application
@@ -270,7 +280,8 @@ Every item has one stable name, used by requests, fixes and "what changed":
 
 ### Data (one migration)
 - **`review_rounds`:** `professionalId`, `createdById`,
-  `status` `DRAFT | SENT | ANSWERED`, `sentAt`, `answeredAt`. A partial
+  `status` `DRAFT | SENT | ANSWERED | CLOSED`, `sentAt`, `answeredAt`
+  (`CLOSED`: the account was refused while the round was out). A partial
   unique index allows at most one `DRAFT` per professional.
 - **`fix_requests`:** `roundId`, `professionalId`, `itemKey`, `reasonHe`,
   `status` `OPEN | FIXED | CANCELLED`, `fixedAt`.
@@ -284,12 +295,14 @@ Every item has one stable name, used by requests, fixes and "what changed":
   created if needed. The server checks that the item exists in this
   application. Marking is allowed only while the account is in
   `SERVICE_REVIEW`.
-- **Cancel a draft mark.**
+- **Cancel a mark:** any of the draft round, or an `OPEN` one of the sent round.
 - **Send the round.** One transaction:
   - the round becomes `SENT`;
   - the account becomes `CHANGES_REQUESTED`;
   - an `IDENTITY` request sets the current check to `RETAKE_REQUESTED` and
-    deletes its photos (piece 1's path);
+    deletes its photos (piece 1's path); if the check is no longer
+    undecided, the request is cancelled instead and not counted, and if it
+    was the only one the send is `NOTHING_MARKED` and changes nothing;
   - the inbox notice is stored.
 
   The push goes out after commit; a push failure is logged and does not
@@ -308,7 +321,8 @@ Every item has one stable name, used by requests, fixes and "what changed":
   `audit_logs`.
   - Uploads always count as changed.
   - Value fields are compared before and after.
-  - Removing an item resolves its request; the reviewer sees "הוסר".
+  - Removing an item resolves its request; the reviewer sees "הוסר" (not
+    built, see above).
 - **`ProApplicationView` adds `fixRequests: [{ itemKey, reasonHe, status }]`**
   for the current round.
 - **`POST /v1/pro/application/submit`** is refused with

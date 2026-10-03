@@ -54,14 +54,14 @@ POST /v1/pro/application/identity { documentUploadId, selfieUploadIds: [straight
                                       (422 UPLOAD_NOT_READY, 409 IDENTITY_ALREADY_VERIFIED | IDENTITY_REJECTED (a refusal is final); a retake supersedes an undecided check and deletes its photos except any the new check reuses; serialized by a row lock on the profile)
 POST /v1/admin/identity/:id/decision { action: APPROVE|REJECT, reason? }
                                       (RETAKE is gone: it is the `IDENTITY` mark of a review round; reason required for REJECT; 404 IDENTITY_NOT_FOUND, 409 IDENTITY_NOT_CURRENT | IDENTITY_ALREADY_DECIDED; same row lock; photos deleted after commit)
-GET  /v1/admin/professionals/:id  (gains `identity`: 2-minute signed photo links, each opening audited as IDENTITY_PHOTOS_VIEWED)
+GET  /v1/admin/professionals/:id  (gains `identity`: 2-minute signed photo links, each opening audited as IDENTITY_PHOTOS_VIEWED; and `review` { draft, current (with request ids; status SENT | ANSWERED | CLOSED), earlier, changedItemKeys: changes since the latest sent round, or before any round since the latest PRO_APPLICATION_SUBMITTED })
 POST /v1/admin/professionals/:id/fix-requests { itemKey, reasonHe (3-500) }
-                                      (ADMIN, audited FIX_REQUEST_MARKED; 201 { id }; 404 PROFESSIONAL_NOT_FOUND, 409 NOT_IN_REVIEW, 422 UNKNOWN_ITEM; marks go into the one draft round)
-DELETE /v1/admin/fix-requests/:id     (ADMIN, audited FIX_REQUEST_CANCELLED; 204; 404 FIX_REQUEST_NOT_FOUND, 409 ALREADY_SENT)
+                                      (ADMIN, audited FIX_REQUEST_MARKED, a re-mark with beforeJson { reasonHe: previous }; 201 { id }; 404 PROFESSIONAL_NOT_FOUND, 409 NOT_IN_REVIEW | IDENTITY_NOT_OPEN (IDENTITY only while the check is MANUAL_REVIEW/PENDING), 422 UNKNOWN_ITEM; marks go into the one draft round)
+DELETE /v1/admin/fix-requests/:id     (ADMIN, audited FIX_REQUEST_CANCELLED with afterJson { status: CANCELLED }; 204; any request of the draft round, or an OPEN one of a SENT round; 404 FIX_REQUEST_NOT_FOUND, 409 ALREADY_SENT for a FIXED/CANCELLED request or an ANSWERED/CLOSED round)
 POST /v1/admin/professionals/:id/review-round/send
-                                      (ADMIN, audited REVIEW_ROUND_SENT; 200 { roundId, count }; round SENT, account CHANGES_REQUESTED, one inbox notice, push after commit; 404 PROFESSIONAL_NOT_FOUND, 409 NOTHING_MARKED | NOT_IN_REVIEW)
-POST /v1/admin/professionals/:id/decision (approve) answers 409 FIXES_PENDING while items are marked; refusing cancels open requests and closes a sent round
-GET  /v1/admin/pro-applications       (each queue item gains `returned: boolean`: an ANSWERED round exists)
+                                      (ADMIN, audited REVIEW_ROUND_SENT; 200 { roundId, count }; round SENT, account CHANGES_REQUESTED, one inbox notice, push after commit; an IDENTITY request whose check is no longer MANUAL_REVIEW/PENDING is cancelled, not sent, and left out of `count`; 404 PROFESSIONAL_NOT_FOUND, 409 NOTHING_MARKED (also when that IDENTITY request was all; nothing changes) | NOT_IN_REVIEW)
+POST /v1/admin/professionals/:id/decision (approve) answers 409 FIXES_PENDING while items are marked or the account is CHANGES_REQUESTED; refusing cancels open requests and closes a sent round as CLOSED
+GET  /v1/admin/pro-applications       (each queue item gains `returned: boolean`: its latest sent round is ANSWERED)
 POST /v1/pro/application/submit       (409 FIXES_OPEN { open: [itemKey] } while a request is open; success closes the round as ANSWERED)
 GET  /v1/pro/public-profile           (their profile as customers see it: the match card's summary, approved services, published reviews)
 ```

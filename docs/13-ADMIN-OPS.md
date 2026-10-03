@@ -12,9 +12,12 @@ is 403 for anyone not in `ADMIN_EMAILS`, and every admin mutation writes an
   item has "בקשת תיקון" with a reason; marks are drafts (cancellable) until
   "החזרה לתיקון (N)" sends them as one round, which takes the application
   out of the queue. It comes back tagged "חזר אחרי תיקון", showing each item
-  as "תוקן" or "השתנה" and the earlier rounds. Account approval is refused
-  while items are marked. Refusing the account cancels open requests and
-  closes a sent round. Marks, cancels and sends are audited.
+  as "תוקן" or "השתנה" and the earlier rounds. `IDENTITY` can be marked only
+  while the check is undecided (409 IDENTITY_NOT_OPEN). An open request of a
+  sent round can be taken back ("ביטול הבקשה"). Account approval is refused
+  while items are marked or the application is back with the professional
+  (CHANGES_REQUESTED). Refusing the account cancels open requests and closes
+  a sent round as CLOSED. Marks, cancels and sends are audited.
 - **Identity block** on the professional's page: date of birth, the check's
   status and the four photos (2-minute signed links; each opening is
   audited as `IDENTITY_PHOTOS_VIEWED`). Two immediate decisions: approve and
