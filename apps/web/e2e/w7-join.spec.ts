@@ -95,10 +95,14 @@ test("a professional joins, is reviewed, and is approved for one service", async
     const v = document.querySelector("video");
     return !!v && v.videoWidth > 0;
   }, undefined, { timeout: 20_000 });
-  for (const tick of ["ישר ✓", "ימינה ✓", "שמאלה ✓"]) {
-    await page.getByRole("button", { name: "צילום", exact: true }).click();
+  const shutter = page.getByRole("button", { name: "צילום", exact: true });
+  for (const tick of ["ישר ✓", "ימינה ✓"]) {
+    await shutter.click();
     await expect(page.getByText(tick)).toBeVisible();
   }
+  // The third photo sends all three by itself once they are uploaded, so its tick ("שמאלה ✓")
+  // can be gone before anyone looks: the sent state is what proves it was taken.
+  await shutter.click();
   await expect(page.getByText("הזהות נשלחה לבדיקה")).toBeVisible();
   // The tax file, then the licences.
   await uploadVia(page.getByRole("button", { name: "העלאה" }).first());
