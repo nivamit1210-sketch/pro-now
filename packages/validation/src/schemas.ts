@@ -445,6 +445,12 @@ export const adminFixMarkSchema = z
   .object({ itemKey: z.string().min(1).max(200), reasonHe: z.string().trim().min(3).max(500) })
   .strict();
 
+/** `PATCH /api/v1/admin/professionals/:id/identity-details` (docs/10 §Life after approval). */
+export const adminIdentityDetailsSchema = z
+  .object({ legalName: z.string().trim().min(2).max(80).optional(), dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), reason: z.string().trim().min(3).max(500) })
+  .strict()
+  .refine((d) => d.legalName !== undefined || d.dateOfBirth !== undefined, { message: "Nothing to correct", path: ["legalName"] });
+
 /** `POST /api/v1/admin/identity/:id/decision` (docs/10): a refusal says why, to the professional. A retake is the IDENTITY mark of a review round now. */
 export const adminIdentityDecisionSchema = z
   .object({ action: z.enum(["APPROVE", "REJECT"]), reason: z.string().trim().min(3).max(500).optional() })

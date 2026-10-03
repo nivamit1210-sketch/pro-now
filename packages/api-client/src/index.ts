@@ -187,6 +187,8 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
       },
       sendRound: (professionalId: string) =>
         request<{ roundId: string; count: number }>("POST", `/admin/professionals/${encodeURIComponent(professionalId)}/review-round/send`, {}),
+      correctIdentityDetails: (id: string, input: { legalName?: string; dateOfBirth?: string; reason: string }) =>
+        request<ProApplicationView>("PATCH", `/admin/professionals/${encodeURIComponent(id)}/identity-details`, input),
       decideAccount: (id: string, input: AdminDecision) => request<ProApplicationView>("POST", `/admin/professionals/${encodeURIComponent(id)}/decision`, input),
       decideIdentity: (id: string, input: { action: "APPROVE" | "REJECT"; reason?: string }) =>
         request<ProApplicationView>("POST", `/admin/identity/${encodeURIComponent(id)}/decision`, input),
@@ -306,6 +308,8 @@ export interface AdminProfessionalView {
     declared: { legalName: string; dateOfBirth: string | null };
     provider: { nameMatch: boolean | null; livenessPassed: boolean | null; documentValid: boolean | null; reasonCodes: string[] };
   } | null;
+  /** The last 30 days of edits by the professional or by staff, newest first (at most 50). */
+  recentChanges: Array<{ at: string; action: string; itemKey: string | null; byStaff: boolean }>;
   email: string;
   joinedAt: string;
   documents: Array<{ id: string; kind: string; status: string; mime: string | null; url: string | null }>;
