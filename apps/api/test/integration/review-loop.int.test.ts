@@ -100,3 +100,45 @@ describe("decisions that cancel marks", () => {
     expect((await db.reviewRound.findUniqueOrThrow({ where: { id: round.id } })).status).toBe("ANSWERED");
   });
 });
+
+describe("sending a round (docs/10 §Review loop)", () => {
+  it("refuses to send with nothing marked", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-empty"));
+    const res = await app.inject({ method: "POST", url: `/api/v1/admin/professionals/${p.id}/review-round/send`, headers: as(admin) });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("NOTHING_MARKED");
+  });
+
+  it("sends every mark at once: account out of the queue, one inbox notice, an identity retake with its photos deleted", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-send"));
+    const mark = (itemKey: string, reasonHe: string) => app.inject({ method: "POST", url: `/api/v1/admin/professionals/${p.id}/fix-requests`, headers: as(admin), payload: { itemKey, reasonHe } });
+    await mark("DOCUMENT:TAX_FILE", "המסמך לא קריא");
+    await mark("IDENTITY", "הפנים לא רואים בתמונה");
+    const check = await db.identityVerification.findFirstOrThrow({ where: { professionalId: p.id } });
+
+    const sent = await app.inject({ method: "POST", url: `/api/v1/admin/professionals/${p.id}/review-round/send`, headers: as(admin) });
+    expect(sent.statusCode, sent.body).toBe(200);
+    expect(sent.json().count).toBe(2);
+
+    expect((await db.professionalProfile.findUniqueOrThrow({ where: { id: p.id } })).verificationStatus).toBe("CHANGES_REQUESTED");
+    const queue = (await app.inject({ method: "GET", url: "/api/v1/admin/pro-applications", headers: as(admin) })).json();
+    expect(queue.applications.map((a: { profile: { id: string } }) => a.profile.id)).not.toContain(p.id);
+    expect(await db.reviewRound.count({ where: { professionalId: p.id, status: "SENT" } })).toBe(1);
+    const notices = await db.notification.findMany({ where: { userId: p.userId, type: "PRO_FIXES_REQUESTED" } });
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.title).toBe("יש כמה דברים לתקן בבקשה");
+
+    const after = await db.identityVerification.findUniqueOrThrow({ where: { id: check.id } });
+    expect(after).toMatchObject({ status: "RETAKE_REQUESTED", decisionReason: "הפנים לא רואים בתמונה", uploadIds: [] });
+    expect(await db.upload.count({ where: { id: { in: check.uploadIds } } })).toBe(0);
+    expect(await db.auditLog.count({ where: { action: "REVIEW_ROUND_SENT", targetId: p.id } })).toBe(1);
+
+    const sentReq = await db.fixRequest.findFirstOrThrow({ where: { professionalId: p.id, itemKey: "DOCUMENT:TAX_FILE", round: { status: "SENT" } } });
+    expect((await app.inject({ method: "DELETE", url: `/api/v1/admin/fix-requests/${sentReq.id}`, headers: as(admin) })).json().code).toBe("ALREADY_SENT");
+  });
+
+  it("an unknown professional is a 404", async () => {
+    const res = await app.inject({ method: "POST", url: `/api/v1/admin/professionals/00000000-0000-0000-0000-000000000000/review-round/send`, headers: as(admin) });
+    expect(res.statusCode).toBe(404);
+  });
+});

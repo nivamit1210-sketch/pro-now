@@ -1,8 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { adminFixMarkSchema } from "@pro-now/validation";
 import { requireRole } from "../auth/access.js";
+import { FIXES_TITLE_HE, fixesBodyHe, storeFixesNotice } from "../domain/notifications/fixes-requested.js";
+import { deleteIdentityPhotos } from "./pro-onboarding.js";
 import { itemExists } from "../domain/review-loop.js";
-import { applicationItems, cancelMark, lockProfessional, markItem } from "../domain/review-loop-store.js";
+import { applicationItems, cancelMark, lockProfessional, markItem, sendRound } from "../domain/review-loop-store.js";
 
 /** THE REVIEWER'S MARKS (docs/10 §Review loop): items to fix, collected in a draft round. */
 export default async function adminReviewRoutes(app: FastifyInstance) {
@@ -40,5 +42,28 @@ export default async function adminReviewRoutes(app: FastifyInstance) {
     if (result === "NOT_FOUND") return reply.status(404).send({ code: "FIX_REQUEST_NOT_FOUND", message: "No such request" });
     if (result === "NOT_DRAFT") return reply.status(409).send({ code: "ALREADY_SENT", message: "This request was already sent" });
     return reply.status(204).send();
+  });
+
+  app.post("/v1/admin/professionals/:id/review-round/send", admin, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const outcome = await app.prisma.$transaction(async (tx) => {
+      const pro = await tx.professionalProfile.findUnique({ where: { id } });
+      if (!pro) return { code: "PROFESSIONAL_NOT_FOUND" as const };
+      await lockProfessional(tx, id);
+      const sent = await sendRound(tx, { professionalId: id, actorId: req.user!.userId });
+      if (sent.code === "SENT") {
+        await storeFixesNotice(tx, sent.userId, sent.count);
+        await tx.auditLog.create({ data: { actorId: req.user!.userId, action: "REVIEW_ROUND_SENT", targetType: "professional", targetId: id, afterJson: { roundId: sent.roundId, count: sent.count }, requestId: req.id } });
+      }
+      return sent;
+    });
+    if (outcome.code === "PROFESSIONAL_NOT_FOUND") return reply.status(404).send({ code: outcome.code, message: "No such professional" });
+    if (outcome.code === "NOTHING_MARKED") return reply.status(409).send({ code: outcome.code, message: "Mark at least one item before sending" });
+    if (outcome.code === "NOT_IN_REVIEW") return reply.status(409).send({ code: outcome.code, message: "Only an application in review can be sent" });
+    const { userId, count } = outcome;
+    await deleteIdentityPhotos(app, outcome.identityUploadIds);
+    app.userEvents.publish(userId, { type: "NOTIFICATION", title: FIXES_TITLE_HE, body: fixesBodyHe(count), url: "/pro" });
+    void app.push.sendPush({ userId, title: FIXES_TITLE_HE, body: fixesBodyHe(count), data: { url: "/pro" } }).catch((err) => app.log.warn({ err }, "fixes push failed"));
+    return reply.send({ roundId: outcome.roundId, count });
   });
 }

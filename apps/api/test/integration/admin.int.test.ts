@@ -92,6 +92,7 @@ describe("every admin mutation writes an audit row", () => {
       "POST /api/v1/admin/pro-services/:id/decision": { url: `/api/v1/admin/pro-services/${ps.id}/decision`, payload: { approve: true } },
       "POST /api/v1/admin/professionals/:id/fix-requests": { url: `/api/v1/admin/professionals/${reviewed.id}/fix-requests`, payload: { itemKey: "PORTRAIT", reasonHe: "התמונה חשוכה" }, status: 201 },
       "DELETE /api/v1/admin/fix-requests/:id": { url: `/api/v1/admin/fix-requests/${mark.id}`, payload: {}, status: 204 },
+      "POST /api/v1/admin/professionals/:id/review-round/send": { url: `/api/v1/admin/professionals/${reviewed.id}/review-round/send`, payload: {} },
       "POST /api/v1/admin/users/:id/roles": { url: `/api/v1/admin/users/${customerId}/roles`, payload: { role: "PROFESSIONAL", grant: true, reason: "test grant" } },
       "PATCH /api/v1/admin/market/:id": { url: `/api/v1/admin/market/${activation.id}`, payload: { customerVisible: true, reason: "test switch" } },
       "POST /api/v1/admin/support-tickets/:id/handled": { url: `/api/v1/admin/support-tickets/${ticket.id}/handled`, payload: { reason: "test handled" } },

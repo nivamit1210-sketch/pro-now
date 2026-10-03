@@ -72,3 +72,26 @@ export async function hasPendingReview(tx: Tx, professionalId: string): Promise<
   const n = await tx.fixRequest.count({ where: { professionalId, status: "OPEN", round: { status: { in: ["DRAFT", "SENT"] } } } });
   return n > 0;
 }
+
+export async function sendRound(tx: Tx, p: { professionalId: string; actorId: string }) {
+  const pro = await tx.professionalProfile.findUniqueOrThrow({ where: { id: p.professionalId } });
+  if (pro.verificationStatus !== "SERVICE_REVIEW") return { code: "NOT_IN_REVIEW" as const };
+  const round = await tx.reviewRound.findFirst({ where: { professionalId: p.professionalId, status: "DRAFT" }, include: { requests: { where: { status: "OPEN" } } } });
+  if (!round || round.requests.length === 0) return { code: "NOTHING_MARKED" as const };
+  const now = new Date();
+  await tx.reviewRound.update({ where: { id: round.id }, data: { status: "SENT", sentAt: now } });
+  await tx.professionalProfile.update({ where: { id: p.professionalId }, data: { verificationStatus: "CHANGES_REQUESTED" } });
+  let identityUploadIds: string[] = [];
+  const identityReq = round.requests.find((r) => r.itemKey === "IDENTITY");
+  if (identityReq) {
+    const check = currentCheck(await tx.identityVerification.findMany({ where: { professionalId: p.professionalId } }));
+    if (check && ["MANUAL_REVIEW", "PENDING"].includes(check.status)) {
+      identityUploadIds = check.uploadIds;
+      await tx.identityVerification.update({
+        where: { id: check.id },
+        data: { status: "RETAKE_REQUESTED", decidedById: p.actorId, decidedAt: now, decisionReason: identityReq.reasonHe, uploadIds: [], photosDeletedAt: now },
+      });
+    }
+  }
+  return { code: "SENT" as const, roundId: round.id, count: round.requests.length, identityUploadIds, userId: pro.userId };
+}
