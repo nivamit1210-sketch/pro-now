@@ -40,7 +40,7 @@ export default async function adminIdentityDetailsRoutes(app: FastifyInstance) {
       await tx.auditLog.create({
         data: { actorId: req.user!.userId, action: "PRO_IDENTITY_DETAILS_CORRECTED", targetType: "professional", targetId: id, beforeJson: fields(pro), afterJson: fields(updated), reason: body.reason, requestId: req.id },
       });
-      await tx.notification.create({ data: { userId: pro.userId, type: "PRO_DETAILS_CORRECTED", title: NOTICE_HE, body: NOTICE_HE } });
+      await tx.notification.create({ data: { userId: pro.userId, type: "PRO_DETAILS_CORRECTED", title: NOTICE_HE, body: NOTICE_HE, data: { url: "/pro" } } });
       return pro.userId;
     });
     if (outcome === null) return reply.status(404).send({ code: "PROFESSIONAL_NOT_FOUND", message: "No such professional" });

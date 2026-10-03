@@ -318,7 +318,7 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
         const admins = await app.prisma.userRole.findMany({ where: { role: "ADMIN" }, select: { userId: true } });
         if (admins.length > 0) {
           await app.prisma.notification.createMany({
-            data: admins.map((a) => ({ userId: a.userId, type: "STAFF_TAX_STATUS_CHANGED", title: "שינוי סטטוס מס", body: text })),
+            data: admins.map((a) => ({ userId: a.userId, type: "STAFF_TAX_STATUS_CHANGED", title: "שינוי סטטוס מס", body: text, data: { url: "/admin" } })),
           });
           for (const a of admins) app.userEvents.publish(a.userId, { type: "NOTIFICATION", title: "שינוי סטטוס מס", body: text, url: "/admin" });
         }

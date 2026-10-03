@@ -59,6 +59,7 @@ describe("edits after approval", () => {
     expect(a.beforeJson).toMatchObject({ legalName: "Pat Pro" });
     expect(a.afterJson).toMatchObject({ legalName: "Pat Proper" });
     expect(await db.notification.count({ where: { userId: pro.userId, type: "PRO_DETAILS_CORRECTED" } })).toBe(1);
+    expect((await db.notification.findFirstOrThrow({ where: { userId: pro.userId, type: "PRO_DETAILS_CORRECTED" } })).data).toMatchObject({ url: "/pro" });
   });
 
   it("a tax-status change on an approved account notifies every admin; an unchanged one does not", async () => {
@@ -70,6 +71,7 @@ describe("edits after approval", () => {
     await put("COMPANY");
     const adminUser = (await whoAmI(app, admin))!.user.id;
     expect(await db.notification.count({ where: { userId: adminUser, type: "STAFF_TAX_STATUS_CHANGED" } })).toBeGreaterThan(0);
+    expect((await db.notification.findFirstOrThrow({ where: { userId: adminUser, type: "STAFF_TAX_STATUS_CHANGED" } })).data).toMatchObject({ url: "/admin" });
   });
 
   it("the admin card lists the last 30 days of changes, staff corrections marked", async () => {
