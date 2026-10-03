@@ -5,9 +5,10 @@ import { CREDENTIAL_TYPE_HE, NOTICE_TEXT_HE, daysUntil, dueNotice, isCoveredByRe
 
 /**
  * THE DAILY EXPIRY CHECK (docs/10 §Life after approval: the daily check).
- * Every VERIFIED credential with a date, on a professional service that is
- * neither DISABLED nor SUSPENDED: the one notice due (30 days, 7 days, on
- * expiry), stored and pushed once, and EXPIRED set from the day itself.
+ * Every VERIFIED credential with a date becomes EXPIRED from the day
+ * itself, whatever else holds. The notice due (30 days, 7 days, on expiry)
+ * is stored and pushed once, and only when the professional service is
+ * neither DISABLED nor SUSPENDED and no verified renewal covers the date.
  *
  * "Once" holds across overlapping runs: the notice row is unique per
  * (credential, kind) and is written in the same transaction as the
@@ -38,20 +39,19 @@ export async function runExpiryCheck(deps: ExpiryDeps, now: Date = new Date()): 
   if (candidates.length === 0) return { notices: 0, expired: 0 };
 
   const professionalIds = [...new Set(candidates.map((c) => c.professionalId))];
-  // The service the credential serves must be live (not DISABLED/SUSPENDED).
+  // Notices go only where the service is live (not DISABLED/SUSPENDED).
   const offered = await prisma.professionalService.findMany({
     where: { professionalId: { in: professionalIds }, status: { notIn: ["DISABLED", "SUSPENDED"] } },
     select: { professionalId: true, serviceId: true },
   });
   const live = new Set(offered.map((s) => `${s.professionalId}:${s.serviceId}`));
-  const due = candidates.filter((c) => live.has(`${c.professionalId}:${c.serviceId}`));
 
   // Every credential of the same professionals, for renewal coverage.
   const all = await prisma.professionalCredential.findMany({
     where: { professionalId: { in: professionalIds } },
     select: { id: true, professionalId: true, serviceId: true, type: true, status: true, expiresAt: true, noExpiry: true },
   });
-  const sentRows = await prisma.credentialNotice.findMany({ where: { credentialId: { in: due.map((c) => c.id) } }, select: { credentialId: true, kind: true } });
+  const sentRows = await prisma.credentialNotice.findMany({ where: { credentialId: { in: candidates.map((c) => c.id) } }, select: { credentialId: true, kind: true } });
   const sentBy = new Map<string, Set<NoticeKind>>();
   for (const r of sentRows) {
     const s = sentBy.get(r.credentialId) ?? new Set<NoticeKind>();
@@ -61,13 +61,14 @@ export async function runExpiryCheck(deps: ExpiryDeps, now: Date = new Date()): 
 
   let notices = 0;
   let expired = 0;
-  for (const c of due) {
+  for (const c of candidates) {
     const expiresAt = c.expiresAt!;
     const days = daysUntil(expiresAt, now);
     const others = all.filter((o) => o.id !== c.id && o.professionalId === c.professionalId && o.serviceId === c.serviceId && o.type === c.type);
-    if (isCoveredByRenewal({ expiresAt }, others)) continue;
+    // Coverage and the service's status gate the notice only, never the EXPIRED status below.
+    const notify = live.has(`${c.professionalId}:${c.serviceId}`) && !isCoveredByRenewal({ expiresAt }, others);
 
-    const kind = dueNotice(days, sentBy.get(c.id) ?? new Set());
+    const kind = notify ? dueNotice(days, sentBy.get(c.id) ?? new Set()) : null;
     let noticeFailed = false;
     if (kind) {
       try {

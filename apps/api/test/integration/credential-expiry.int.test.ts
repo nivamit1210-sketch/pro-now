@@ -96,4 +96,31 @@ describe("the daily credential expiry check", () => {
     expect(await notices(b.pro.userId)).toHaveLength(0);
     expect((await db.professionalCredential.findUniqueOrThrow({ where: { id: a.credentialId } })).status).toBe("VERIFIED");
   });
+
+  it("'no expiry' (noExpiry: true) gets no notice and stays VERIFIED", async () => {
+    const { pro, credentialId } = await proWithCredentialExpiringIn(3);
+    await db.professionalCredential.update({ where: { id: credentialId }, data: { expiresAt: null, noExpiry: true } });
+    await app.checkCredentialExpiryNow();
+    expect(await notices(pro.userId)).toHaveLength(0);
+    expect((await db.professionalCredential.findUniqueOrThrow({ where: { id: credentialId } })).status).toBe("VERIFIED");
+  });
+
+  it("an old credential past its date is marked EXPIRED even when a renewal covers it, with no notice", async () => {
+    const { pro, credentialId } = await proWithCredentialExpiringIn(-2);
+    const old = await db.professionalCredential.findUniqueOrThrow({ where: { id: credentialId } });
+    await db.professionalCredential.create({
+      data: { professionalId: pro.id, serviceId: old.serviceId, type: old.type, status: "VERIFIED", expiresAt: new Date(Date.now() + 400 * DAY) },
+    });
+    await app.checkCredentialExpiryNow();
+    expect(await notices(pro.userId)).toHaveLength(0);
+    expect((await db.professionalCredential.findUniqueOrThrow({ where: { id: credentialId } })).status).toBe("EXPIRED");
+  });
+
+  it("a disabled service's credential past its date is marked EXPIRED, with no notice", async () => {
+    const { pro, credentialId } = await proWithCredentialExpiringIn(-2);
+    await db.professionalService.updateMany({ where: { professionalId: pro.id }, data: { status: "DISABLED" } });
+    await app.checkCredentialExpiryNow();
+    expect(await notices(pro.userId)).toHaveLength(0);
+    expect((await db.professionalCredential.findUniqueOrThrow({ where: { id: credentialId } })).status).toBe("EXPIRED");
+  });
 });
