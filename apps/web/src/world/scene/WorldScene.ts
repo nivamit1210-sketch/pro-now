@@ -29,12 +29,12 @@ import {
 } from "./street";
 import { createPlayer, movePlayer, createContactShadow, type PlayerState } from "./player";
 import { createRoom } from "./shopRooms";
+import { createShopFront, type ShopFront } from "./shopFront";
 import { paving, asphalt, plaster, neonGlow, glow } from "./textures";
 import {
   WORLD_LIGHTING,
   aimSun,
   configureSunShadow,
-  createShadowCaster,
   shadowFocus,
   shadowForSprite,
   skyTexture,
@@ -66,8 +66,6 @@ const VEHICLE_BY_DEPARTMENT: Partial<Record<string, WorldAssetId>> = {
 const LAMP_SPACING = 31;
 const LAMP_HEIGHT = 4.2;
 const TREE_SPACING = 35;
-const FACADE_SCALE: [number, number] = [BAY_W(), 5.2];
-const FACADE_Y = 2.6;
 const NPC_COUNT = 14;
 const TRAFFIC_COUNT = 10;
 
@@ -985,20 +983,22 @@ export function createWorldScene({
   };
 
   /* ---------- shop facades (prefer shop_* art over district_*) ---------- */
+  const shopGlow = glow();
+  const shopFronts: ShopFront[] = [];
   for (const shop of WORLD_SHOPS) {
     const shopArtId = `shop_${shop.shopId}` as WorldAssetId;
     const usesShopArt = shopArtId in WORLD_ASSETS;
     const facadeId = usesShopArt ? shopArtId : (shop.assetId as WorldAssetId);
-    const facade = createSprite(loader, facadeId, FACADE_SCALE, [shop.x, FACADE_Y, shop.z]);
-    // The shopfront's shadow is a building's: lined up with the street, not turned to the sun.
-    const facadeShadow = createShadowCaster(
-      (facade.material as THREE.SpriteMaterial).map,
-      FACADE_SCALE[0],
-      FACADE_SCALE[1],
-      [shop.x, FACADE_Y, shop.z],
-      frontageYaw(shop.side),
-    );
-    root.add(facade, facadeShadow);
+    // The drawing as a lit wall at its own proportions, dressed as the demo's
+    // (shopFront.ts); it is sized to the drawing once the drawing is in.
+    const drawing: THREE.Texture = loader.load(worldAssetUrl(facadeId), (loaded) => {
+      const image = loaded.image as { width?: number; height?: number } | undefined;
+      if (image?.width && image.height) front.fit(image.width / image.height);
+    });
+    drawing.colorSpace = THREE.SRGBColorSpace;
+    const front = createShopFront(shop, drawing, shopGlow);
+    shopFronts.push(front);
+    root.add(front.group);
 
     if (!day) {
       root.add(buildNeonHalo(shop.neonColour, new THREE.Vector3(shop.x, 3.8, shop.z), shop.side));
@@ -1169,6 +1169,8 @@ export function createWorldScene({
       if (!reducedMotion) for (const fn of ticking) fn(dt, elapsed);
 
       lendEveningLights(dt);
+      // A projecting sign seen edge-on fades rather than becoming a streak.
+      if (root.visible) for (const front of shopFronts) front.face(camera.position);
 
       // The shadow box rides a few metres ahead of the camera, as in the demo.
       camera.getWorldDirection(cameraDirection);
