@@ -51,13 +51,14 @@ export default async function adminProsRoutes(app: FastifyInstance) {
       select: { id: true },
       take: 50,
     });
-    // Back after a round of fixes (docs/10 §Review loop): the reviewer sees it in the list.
-    const answered = await app.prisma.reviewRound.findMany({
-      where: { professionalId: { in: pending.map((p) => p.id) }, status: "ANSWERED" },
-      select: { professionalId: true },
+    // Back after a round of fixes (docs/10 §Review loop): the latest sent round was answered by a resend.
+    const latestSent = await app.prisma.reviewRound.findMany({
+      where: { professionalId: { in: pending.map((p) => p.id) }, sentAt: { not: null } },
+      orderBy: { sentAt: "desc" },
+      select: { professionalId: true, status: true },
       distinct: ["professionalId"],
     });
-    const returned = new Set(answered.map((r) => r.professionalId));
+    const returned = new Set(latestSent.filter((r) => r.status === "ANSWERED").map((r) => r.professionalId));
     return {
       applications: await Promise.all(pending.map(async (p) => ({ ...(await applicationView(app.prisma, p.id)), returned: returned.has(p.id) }))),
     };
@@ -75,7 +76,8 @@ export default async function adminProsRoutes(app: FastifyInstance) {
         const checks = await tx.identityVerification.findMany({ where: { professionalId: id } });
         const blocker = accountApprovalBlocker({ dateOfBirth: pro.dateOfBirth, current: currentCheck(checks) }, new Date());
         if (blocker) return { status: 409, body: { code: blocker, message: "The account cannot be approved yet" } };
-        if (await hasPendingReview(tx, id)) return { status: 409, body: { code: "FIXES_PENDING", message: "Items are marked for fixing; send or cancel them first" } };
+        // Sent back to the professional: approval waits for the resend, even with every request fixed or cancelled.
+        if (pro.verificationStatus === "CHANGES_REQUESTED" || (await hasPendingReview(tx, id))) return { status: 409, body: { code: "FIXES_PENDING", message: "Items are marked for fixing; send or cancel them first" } };
       }
       const status = body.approve ? "APPROVED" : "DRAFT";
       await tx.professionalProfile.update({ where: { id }, data: { verificationStatus: status } });

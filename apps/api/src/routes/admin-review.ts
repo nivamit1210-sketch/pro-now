@@ -4,9 +4,9 @@ import { requireRole } from "../auth/access.js";
 import { FIXES_TITLE_HE, fixesBodyHe, storeFixesNotice } from "../domain/notifications/fixes-requested.js";
 import { deleteIdentityPhotos } from "./pro-onboarding.js";
 import { itemExists } from "../domain/review-loop.js";
-import { applicationItems, cancelMark, lockProfessional, markItem, sendRound } from "../domain/review-loop-store.js";
+import { applicationItems, cancelMark, identityRetakeable, lockProfessional, markItem, sendRound } from "../domain/review-loop-store.js";
 
-/** THE REVIEWER'S MARKS (docs/10 §Review loop): items to fix, collected in a draft round. */
+/** THE REVIEWER'S MARKS (docs/10 §Review loop): items to fix, collected in a draft round; an open sent request can still be taken back. */
 export default async function adminReviewRoutes(app: FastifyInstance) {
   const admin = { onRequest: requireRole("ADMIN") };
 
@@ -20,8 +20,17 @@ export default async function adminReviewRoutes(app: FastifyInstance) {
       const fresh = await tx.professionalProfile.findUniqueOrThrow({ where: { id } });
       if (fresh.verificationStatus !== "SERVICE_REVIEW") return { status: 409, body: { code: "NOT_IN_REVIEW", message: "Only an application in review can be marked" } };
       if (!itemExists(body.itemKey, await applicationItems(tx, id))) return { status: 422, body: { code: "UNKNOWN_ITEM", message: "This application has no such item" } };
+      if (body.itemKey === "IDENTITY" && !(await identityRetakeable(tx, id))) {
+        return { status: 409, body: { code: "IDENTITY_NOT_OPEN", message: "The identity check is already decided; it cannot be sent back for a retake" } };
+      }
       const mark = await markItem(tx, { professionalId: id, itemKey: body.itemKey, reasonHe: body.reasonHe, actorId: req.user!.userId });
-      await tx.auditLog.create({ data: { actorId: req.user!.userId, action: "FIX_REQUEST_MARKED", targetType: "professional", targetId: id, afterJson: { itemKey: body.itemKey }, reason: body.reasonHe, requestId: req.id } });
+      await tx.auditLog.create({
+        data: {
+          actorId: req.user!.userId, action: "FIX_REQUEST_MARKED", targetType: "professional", targetId: id,
+          ...(mark.previousReasonHe !== null ? { beforeJson: { reasonHe: mark.previousReasonHe } } : {}),
+          afterJson: { itemKey: body.itemKey }, reason: body.reasonHe, requestId: req.id,
+        },
+      });
       return { status: 201, body: { id: mark.id } };
     });
     return reply.status(outcome.status).send(outcome.body);
@@ -35,12 +44,12 @@ export default async function adminReviewRoutes(app: FastifyInstance) {
       await lockProfessional(tx, found.professionalId);
       const r = await cancelMark(tx, id);
       if (r === "CANCELLED") {
-        await tx.auditLog.create({ data: { actorId: req.user!.userId, action: "FIX_REQUEST_CANCELLED", targetType: "professional", targetId: found.professionalId, beforeJson: { itemKey: found.itemKey }, requestId: req.id } });
+        await tx.auditLog.create({ data: { actorId: req.user!.userId, action: "FIX_REQUEST_CANCELLED", targetType: "professional", targetId: found.professionalId, beforeJson: { itemKey: found.itemKey }, afterJson: { status: "CANCELLED" }, requestId: req.id } });
       }
       return r;
     });
     if (result === "NOT_FOUND") return reply.status(404).send({ code: "FIX_REQUEST_NOT_FOUND", message: "No such request" });
-    if (result === "NOT_DRAFT") return reply.status(409).send({ code: "ALREADY_SENT", message: "This request was already sent" });
+    if (result === "NOT_CANCELLABLE") return reply.status(409).send({ code: "ALREADY_SENT", message: "This request was already answered or closed" });
     return reply.status(204).send();
   });
 

@@ -291,10 +291,10 @@ export interface AdminDecision {
 }
 export interface AdminProfessionalView {
   application: ProApplicationView;
-  /** The review loop: marks not yet sent, the latest sent round, older ones, and items changed since the send. */
+  /** The review loop: marks not yet sent, the latest sent round, older ones, and items changed since the send (or, before any round, since the submission). */
   review: {
     draft: Array<{ id: string; itemKey: string; reasonHe: string }>;
-    current: { roundId: string; status: "SENT" | "ANSWERED"; sentAt: string; requests: Array<{ itemKey: string; reasonHe: string; status: "OPEN" | "FIXED" | "CANCELLED"; fixedAt: string | null }> } | null;
+    current: { roundId: string; status: "SENT" | "ANSWERED" | "CLOSED"; sentAt: string; requests: Array<{ id: string; itemKey: string; reasonHe: string; status: "OPEN" | "FIXED" | "CANCELLED"; fixedAt: string | null }> } | null;
     earlier: Array<{ roundId: string; sentAt: string; requests: Array<{ itemKey: string; reasonHe: string; status: string }> }>;
     changedItemKeys: string[];
   };

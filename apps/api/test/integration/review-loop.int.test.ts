@@ -56,17 +56,22 @@ describe("marking items", () => {
     expect((await app.inject({ method: "POST", url: "/api/v1/admin/professionals/nope/fix-requests", headers: as(admin), payload: { itemKey: "DETAILS", reasonHe: "סיבה טובה" } })).json().code).toBe("PROFESSIONAL_NOT_FOUND");
   });
 
-  it("a draft mark can be cancelled; a sent one cannot", async () => {
+  it("a draft mark can be cancelled; a fixed one cannot", async () => {
     const req = await db.fixRequest.findFirstOrThrow({ where: { professionalId: pro.id, itemKey: "PORTRAIT" } });
     expect((await app.inject({ method: "DELETE", url: `/api/v1/admin/fix-requests/${req.id}`, headers: as(admin) })).statusCode).toBe(204);
     expect((await db.fixRequest.findUniqueOrThrow({ where: { id: req.id } })).status).toBe("CANCELLED");
     expect((await app.inject({ method: "DELETE", url: "/api/v1/admin/fix-requests/nope", headers: as(admin) })).json().code).toBe("FIX_REQUEST_NOT_FOUND");
     const sent = await applicantInReview(db, uniqueEmail("rl-sent"));
     const round = await db.reviewRound.create({ data: { professionalId: sent.id, createdById: sent.userId, status: "SENT", sentAt: new Date() } });
-    const r = await db.fixRequest.create({ data: { roundId: round.id, professionalId: sent.id, itemKey: "DETAILS", reasonHe: "השם לא תואם" } });
+    const r = await db.fixRequest.create({ data: { roundId: round.id, professionalId: sent.id, itemKey: "DETAILS", reasonHe: "השם לא תואם", status: "FIXED", fixedAt: new Date() } });
     const res = await app.inject({ method: "DELETE", url: `/api/v1/admin/fix-requests/${r.id}`, headers: as(admin) });
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("ALREADY_SENT");
+    // An open request of a round already answered is not the reviewer's to cancel either.
+    const answered = await applicantInReview(db, uniqueEmail("rl-answered"));
+    const old = await db.reviewRound.create({ data: { professionalId: answered.id, createdById: answered.userId, status: "ANSWERED", sentAt: new Date(), answeredAt: new Date() } });
+    const o = await db.fixRequest.create({ data: { roundId: old.id, professionalId: answered.id, itemKey: "DETAILS", reasonHe: "השם לא תואם" } });
+    expect((await app.inject({ method: "DELETE", url: `/api/v1/admin/fix-requests/${o.id}`, headers: as(admin) })).json().code).toBe("ALREADY_SENT");
   });
 });
 
@@ -97,7 +102,7 @@ describe("decisions that cancel marks", () => {
     await db.reviewRound.update({ where: { id: round.id }, data: { status: "SENT", sentAt: new Date() } });
     await app.inject({ method: "POST", url: `/api/v1/admin/professionals/${other.id}/decision`, headers: as(admin), payload: { approve: false, reason: "לא מתאים" } });
     expect(await db.fixRequest.count({ where: { professionalId: other.id, status: "OPEN" } })).toBe(0);
-    expect((await db.reviewRound.findUniqueOrThrow({ where: { id: round.id } })).status).toBe("ANSWERED");
+    expect((await db.reviewRound.findUniqueOrThrow({ where: { id: round.id } })).status).toBe("CLOSED");
   });
 });
 
@@ -133,8 +138,6 @@ describe("sending a round (docs/10 §Review loop)", () => {
     expect(await db.upload.count({ where: { id: { in: check.uploadIds } } })).toBe(0);
     expect(await db.auditLog.count({ where: { action: "REVIEW_ROUND_SENT", targetId: p.id } })).toBe(1);
 
-    const sentReq = await db.fixRequest.findFirstOrThrow({ where: { professionalId: p.id, itemKey: "DOCUMENT:TAX_FILE", round: { status: "SENT" } } });
-    expect((await app.inject({ method: "DELETE", url: `/api/v1/admin/fix-requests/${sentReq.id}`, headers: as(admin) })).json().code).toBe("ALREADY_SENT");
   });
 
   it("an unknown professional is a 404", async () => {
@@ -272,5 +275,134 @@ describe("the professional fixes and resends", () => {
     expect(req).toHaveLength(1);
     expect(["OPEN", "FIXED"]).toContain(req[0]!.status);
     expect(await db.auditLog.count({ where: { action: "PRO_APPLICATION_ITEM_CHANGED", targetId: p.id } })).toBe(1);
+  });
+});
+
+describe("final review fixes (docs/10 §Review loop)", () => {
+  const mark = (id: string, itemKey: string, reasonHe: string) =>
+    app.inject({ method: "POST", url: `/api/v1/admin/professionals/${id}/fix-requests`, headers: as(admin), payload: { itemKey, reasonHe } });
+  const send = (id: string) => app.inject({ method: "POST", url: `/api/v1/admin/professionals/${id}/review-round/send`, headers: as(admin) });
+  const approveIdentity = async (id: string) => {
+    const check = await db.identityVerification.findFirstOrThrow({ where: { professionalId: id } });
+    const res = await app.inject({ method: "POST", url: `/api/v1/admin/identity/${check.id}/decision`, headers: as(admin), payload: { action: "APPROVE" } });
+    expect(res.statusCode, res.body).toBe(200);
+  };
+
+  it("IDENTITY cannot be marked once the identity check is decided", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-id-decided"));
+    await approveIdentity(p.id);
+    const res = await mark(p.id, "IDENTITY", "התמונה מטושטשת");
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("IDENTITY_NOT_OPEN");
+    expect(await db.fixRequest.count({ where: { professionalId: p.id } })).toBe(0);
+  });
+
+  it("a send drops an IDENTITY request the check can no longer take back, and counts only the rest", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-id-drop"));
+    expect((await mark(p.id, "IDENTITY", "התמונה מטושטשת")).statusCode).toBe(201);
+    expect((await mark(p.id, "DETAILS", "השם לא תואם")).statusCode).toBe(201);
+    // Decided outside the reviewer's identity decision (which would itself cancel the mark).
+    await db.identityVerification.updateMany({ where: { professionalId: p.id }, data: { status: "VERIFIED" } });
+    const res = await send(p.id);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().count).toBe(1);
+    expect((await db.fixRequest.findFirstOrThrow({ where: { professionalId: p.id, itemKey: "IDENTITY" } })).status).toBe("CANCELLED");
+    expect((await db.identityVerification.findFirstOrThrow({ where: { professionalId: p.id } })).status).toBe("VERIFIED");
+  });
+
+  it("a send with only a non-retakeable IDENTITY request is NOTHING_MARKED and changes nothing", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-id-only"));
+    expect((await mark(p.id, "IDENTITY", "התמונה מטושטשת")).statusCode).toBe(201);
+    await db.identityVerification.updateMany({ where: { professionalId: p.id }, data: { status: "VERIFIED" } });
+    const res = await send(p.id);
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("NOTHING_MARKED");
+    expect((await db.professionalProfile.findUniqueOrThrow({ where: { id: p.id } })).verificationStatus).toBe("SERVICE_REVIEW");
+    expect(await db.reviewRound.count({ where: { professionalId: p.id, status: "DRAFT" } })).toBe(1);
+    expect((await db.fixRequest.findFirstOrThrow({ where: { professionalId: p.id, itemKey: "IDENTITY" } })).status).toBe("OPEN");
+    expect(await db.notification.count({ where: { userId: p.userId, type: "PRO_FIXES_REQUESTED" } })).toBe(0);
+  });
+
+  it("an open request of a sent round can be cancelled, audited, and the professional can then resend", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-cancel-sent"));
+    const jar = await signInByEmail(app, p.email);
+    expect((await mark(p.id, "DETAILS", "השם לא תואם")).statusCode).toBe(201);
+    expect((await send(p.id)).statusCode).toBe(200);
+    const req = await db.fixRequest.findFirstOrThrow({ where: { professionalId: p.id, itemKey: "DETAILS" } });
+    const res = await app.inject({ method: "DELETE", url: `/api/v1/admin/fix-requests/${req.id}`, headers: as(admin) });
+    expect(res.statusCode, res.body).toBe(204);
+    expect((await db.fixRequest.findUniqueOrThrow({ where: { id: req.id } })).status).toBe("CANCELLED");
+    const row = await db.auditLog.findFirstOrThrow({ where: { action: "FIX_REQUEST_CANCELLED", targetId: p.id } });
+    expect(row.beforeJson).toEqual({ itemKey: "DETAILS" });
+    expect(row.afterJson).toEqual({ status: "CANCELLED" });
+    const view = (await app.inject({ method: "GET", url: "/api/v1/pro/application", headers: as(jar) })).json();
+    expect(view.fixRequests).toEqual([]);
+    const resend = await app.inject({ method: "POST", url: "/api/v1/pro/application/submit", headers: as(jar), payload: {} });
+    expect(resend.statusCode, resend.body).toBe(200);
+    expect(resend.json().profile.verificationStatus).toBe("SERVICE_REVIEW");
+  });
+
+  it("the account cannot be approved while the application is back with the professional", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-cr-approve"));
+    await approveIdentity(p.id);
+    expect((await mark(p.id, "DETAILS", "השם לא תואם")).statusCode).toBe(201);
+    expect((await send(p.id)).statusCode).toBe(200);
+    const req = await db.fixRequest.findFirstOrThrow({ where: { professionalId: p.id, itemKey: "DETAILS" } });
+    expect((await app.inject({ method: "DELETE", url: `/api/v1/admin/fix-requests/${req.id}`, headers: as(admin) })).statusCode).toBe(204);
+    const res = await app.inject({ method: "POST", url: `/api/v1/admin/professionals/${p.id}/decision`, headers: as(admin), payload: { approve: true } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("FIXES_PENDING");
+    expect((await db.professionalProfile.findUniqueOrThrow({ where: { id: p.id } })).verificationStatus).toBe("CHANGES_REQUESTED");
+  });
+
+  it("a re-mark audits the previous reason; a cancel audits the new status", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-remark"));
+    expect((await mark(p.id, "PORTRAIT", "התמונה חשוכה")).statusCode).toBe(201);
+    expect((await mark(p.id, "PORTRAIT", "התמונה חשוכה מדי")).statusCode).toBe(201);
+    const rows = await db.auditLog.findMany({ where: { action: "FIX_REQUEST_MARKED", targetId: p.id }, orderBy: { createdAt: "asc" } });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.beforeJson).toBeNull();
+    expect(rows[1]!.beforeJson).toEqual({ reasonHe: "התמונה חשוכה" });
+    const req = await db.fixRequest.findFirstOrThrow({ where: { professionalId: p.id, itemKey: "PORTRAIT" } });
+    expect((await app.inject({ method: "DELETE", url: `/api/v1/admin/fix-requests/${req.id}`, headers: as(admin) })).statusCode).toBe(204);
+    expect((await db.auditLog.findFirstOrThrow({ where: { action: "FIX_REQUEST_CANCELLED", targetId: p.id } })).afterJson).toEqual({ status: "CANCELLED" });
+  });
+
+  it.each([true, false])("a credential decision (approve=%s) cancels that credential's mark", async (approve) => {
+    const p = await applicantInReview(db, uniqueEmail(`rl-cred-${approve}`));
+    const reqRow = await db.serviceRequirement.findFirstOrThrow({ where: { OR: [{ requirement: { startsWith: "LICENSE" } }, { requirement: { startsWith: "CERTIFICATE" } }, { requirement: { startsWith: "INSURANCE" } }] } });
+    const type = reqRow.requirement.split(":")[0]!.toUpperCase() as "LICENSE" | "CERTIFICATE" | "INSURANCE";
+    const credential = await db.professionalCredential.create({ data: { professionalId: p.id, serviceId: reqRow.serviceId, type, number: "T-1", issuer: "test", status: "PENDING" } });
+    const key = `CREDENTIAL:${reqRow.serviceId}:${reqRow.requirement}`;
+    const fix = await db.fixRequest.create({ data: { professionalId: p.id, itemKey: key, reasonHe: "המסמך לא קריא", round: { create: { professionalId: p.id, createdById: p.userId } } } });
+    const other = await db.fixRequest.create({ data: { professionalId: p.id, itemKey: "DETAILS", reasonHe: "השם לא תואם", roundId: fix.roundId } });
+    const res = await app.inject({ method: "POST", url: `/api/v1/admin/credentials/${credential.id}/decision`, headers: as(admin), payload: approve ? { approve: true } : { approve: false, reason: "לא תקף" } });
+    expect(res.statusCode, res.body).toBe(200);
+    expect((await db.fixRequest.findUniqueOrThrow({ where: { id: fix.id } })).status).toBe("CANCELLED");
+    expect((await db.fixRequest.findUniqueOrThrow({ where: { id: other.id } })).status).toBe("OPEN");
+  });
+
+  it("before any round, the reviewer sees what changed since the application was sent", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-changed-early"));
+    const jar = await signInByEmail(app, p.email);
+    await db.auditLog.create({ data: { actorId: p.userId, action: "PRO_APPLICATION_ITEM_CHANGED", targetType: "professional", targetId: p.id, afterJson: { itemKey: "PORTRAIT" }, createdAt: new Date(Date.now() - 60_000) } });
+    const none = (await app.inject({ method: "GET", url: `/api/v1/admin/professionals/${p.id}`, headers: as(admin) })).json();
+    expect(none.review.changedItemKeys).toEqual([]);
+    await db.auditLog.create({ data: { actorId: p.userId, action: "PRO_APPLICATION_SUBMITTED", targetType: "professional", targetId: p.id, createdAt: new Date(Date.now() - 30_000) } });
+    const area = await app.inject({ method: "PUT", url: "/api/v1/pro/application/area", headers: as(jar), payload: { lat: 31.3, lng: 34.8, radiusKm: 6 } });
+    expect(area.statusCode, area.body).toBe(200);
+    const detail = (await app.inject({ method: "GET", url: `/api/v1/admin/professionals/${p.id}`, headers: as(admin) })).json();
+    expect(detail.review.current).toBeNull();
+    expect(detail.review.changedItemKeys).toEqual(["AREA"]);
+  });
+
+  it("the queue marks an application as back only when its latest sent round was answered", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-closed-latest"));
+    const t = Date.now();
+    await db.reviewRound.create({ data: { professionalId: p.id, createdById: p.userId, status: "ANSWERED", sentAt: new Date(t - 120_000), answeredAt: new Date(t - 100_000), createdAt: new Date(t - 130_000) } });
+    await db.reviewRound.create({ data: { professionalId: p.id, createdById: p.userId, status: "CLOSED", sentAt: new Date(t - 60_000), answeredAt: new Date(t - 50_000), createdAt: new Date(t - 70_000) } });
+    const queue = (await app.inject({ method: "GET", url: "/api/v1/admin/pro-applications", headers: as(admin) })).json();
+    const row = queue.applications.find((a: { profile: { id: string } }) => a.profile.id === p.id);
+    expect(row).toMatchObject({ returned: false });
   });
 });
