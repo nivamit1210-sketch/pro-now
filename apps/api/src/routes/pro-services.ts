@@ -37,6 +37,8 @@ import {
   type PricingInput,
 } from "../domain/pricing/professional-pricing.js";
 import type { PriceModel } from "../domain/payments/settlement.js";
+import { serviceItem, valuesChanged } from "../domain/review-loop.js";
+import { recordChange } from "../domain/review-loop-store.js";
 
 export default async function proServicesRoutes(app: FastifyInstance) {
   app.get("/v1/pro/services", { onRequest: requireRole("PROFESSIONAL") }, async (req, reply) => {
@@ -176,6 +178,16 @@ export default async function proServicesRoutes(app: FastifyInstance) {
     const updated = await app.prisma.professionalService.update({
       where: { professionalId_serviceId: { professionalId: professional.id, serviceId } },
       data: validation.value,
+    });
+    // The review loop (docs/10 §Review loop): only a real change to a stored price fixes a request about this service.
+    const pick = (ps: typeof updated) =>
+      Object.fromEntries(Object.keys(validation.value).map((k) => [k, ps[k as keyof typeof ps]]));
+    await recordChange(app.prisma, {
+      professionalId: professional.id,
+      itemKey: serviceItem(serviceId),
+      actorId: req.user!.userId,
+      requestId: req.id,
+      changed: valuesChanged(pick(professionalService), pick(updated)),
     });
 
     return reply.send({

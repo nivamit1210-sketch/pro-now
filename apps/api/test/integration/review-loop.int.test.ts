@@ -142,3 +142,118 @@ describe("sending a round (docs/10 §Review loop)", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+async function upload(jar: CookieJar, kind: "PHOTO" | "DOCUMENT" | "IDENTITY"): Promise<string> {
+  const body = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+  const prepared = await app.inject({ method: "POST", url: "/api/v1/uploads", headers: as(jar), payload: { kind, mime: "image/jpeg", bytes: body.byteLength } });
+  expect(prepared.statusCode, prepared.body).toBe(201);
+  const { uploadUrl, upload: u } = prepared.json() as { uploadUrl: string; upload: { id: string } };
+  expect((await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": "image/jpeg" }, body })).status).toBe(200);
+  expect((await app.inject({ method: "POST", url: `/api/v1/uploads/${u.id}/complete`, headers: as(jar) })).statusCode).toBe(200);
+  return u.id;
+}
+
+describe("the professional fixes and resends", () => {
+  let pro: { id: string; userId: string; email: string; serviceId: string };
+  let svcId: string;
+  let proJar: CookieJar;
+  const mark = (id: string, itemKey: string, reasonHe: string) =>
+    app.inject({ method: "POST", url: `/api/v1/admin/professionals/${id}/fix-requests`, headers: as(admin), payload: { itemKey, reasonHe } });
+  const send = (id: string) => app.inject({ method: "POST", url: `/api/v1/admin/professionals/${id}/review-round/send`, headers: as(admin) });
+
+  beforeAll(async () => {
+    pro = await applicantInReview(db, uniqueEmail("rl-fixer"));
+    svcId = pro.serviceId;
+    proJar = await signInByEmail(app, pro.email);
+    expect((await mark(pro.id, "DETAILS", "השם בתעודה שונה")).statusCode).toBe(201);
+    expect((await mark(pro.id, `SERVICE:${svcId}`, "המחיר חסר פירוט")).statusCode).toBe(201);
+    expect((await mark(pro.id, "DOCUMENT:TAX_FILE", "לא קריא")).statusCode).toBe(201);
+    const sent = await send(pro.id);
+    expect(sent.statusCode, sent.body).toBe(200);
+  });
+
+  it("the application lists the requests with their reasons, all open", async () => {
+    const view = (await app.inject({ method: "GET", url: "/api/v1/pro/application", headers: as(proJar) })).json();
+    expect(view.changesRequested).toBe(true);
+    expect(view.submitted).toBe(false);
+    expect(view.fixRequests).toHaveLength(3);
+    expect(view.fixRequests).toEqual(expect.arrayContaining([
+      { itemKey: "DETAILS", reasonHe: "השם בתעודה שונה", status: "OPEN" },
+      { itemKey: `SERVICE:${svcId}`, reasonHe: "המחיר חסר פירוט", status: "OPEN" },
+      { itemKey: "DOCUMENT:TAX_FILE", reasonHe: "לא קריא", status: "OPEN" },
+    ]));
+  });
+
+  it("resending with open requests is refused and names them", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/v1/pro/application/submit", headers: as(proJar), payload: {} });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("FIXES_OPEN");
+    expect(res.json().open).toEqual(expect.arrayContaining(["DETAILS", `SERVICE:${svcId}`, "DOCUMENT:TAX_FILE"]));
+    expect((await db.professionalProfile.findUniqueOrThrow({ where: { id: pro.id } })).verificationStatus).toBe("CHANGES_REQUESTED");
+  });
+
+  it("an unchanged save fixes nothing; a price saved with the same numbers fixes nothing", async () => {
+    const view = (await app.inject({ method: "GET", url: "/api/v1/pro/application", headers: as(proJar) })).json();
+    const join = await app.inject({ method: "POST", url: "/api/v1/pro/join", headers: as(proJar), payload: { displayName: view.profile.displayName, legalName: view.profile.legalName, addressAs: view.profile.addressAs, dateOfBirth: view.profile.dateOfBirth } });
+    expect(join.statusCode, join.body).toBe(200);
+    const ps = await db.professionalService.findFirstOrThrow({ where: { professionalId: pro.id, serviceId: svcId } });
+    const price = await app.inject({ method: "PATCH", url: `/api/v1/pro/services/${svcId}/pricing`, headers: as(proJar), payload: { basePriceMinorUnits: ps.basePriceMinorUnits } });
+    expect(price.statusCode, price.body).toBe(200);
+    expect(await db.fixRequest.count({ where: { professionalId: pro.id, status: "FIXED" } })).toBe(0);
+    expect(await db.auditLog.count({ where: { action: "PRO_APPLICATION_ITEM_CHANGED", targetId: pro.id } })).toBe(0);
+  });
+
+  it("each real change fixes its own item only", async () => {
+    await app.inject({ method: "POST", url: "/api/v1/pro/join", headers: as(proJar), payload: { displayName: "דנה", legalName: "דנה לוי-כהן", addressAs: "F", dateOfBirth: "1990-05-14" } });
+    expect((await db.fixRequest.findFirstOrThrow({ where: { professionalId: pro.id, itemKey: "DETAILS" } })).status).toBe("FIXED");
+    expect((await db.fixRequest.findFirstOrThrow({ where: { professionalId: pro.id, itemKey: "DOCUMENT:TAX_FILE" } })).status).toBe("OPEN");
+    expect((await db.fixRequest.findFirstOrThrow({ where: { professionalId: pro.id, itemKey: `SERVICE:${svcId}` } })).status).toBe("OPEN");
+    const doc = await app.inject({ method: "POST", url: "/api/v1/pro/application/documents", headers: as(proJar), payload: { kind: "TAX_FILE", uploadId: await upload(proJar, "DOCUMENT") } });
+    expect(doc.statusCode, doc.body).toBe(200);
+    const price = await app.inject({ method: "PATCH", url: `/api/v1/pro/services/${svcId}/pricing`, headers: as(proJar), payload: { basePriceMinorUnits: 23000 } });
+    expect(price.statusCode, price.body).toBe(200);
+    expect(await db.fixRequest.count({ where: { professionalId: pro.id, status: "OPEN" } })).toBe(0);
+    const view = (await app.inject({ method: "GET", url: "/api/v1/pro/application", headers: as(proJar) })).json();
+    expect(view.fixRequests.map((r: { status: string }) => r.status)).toEqual(["FIXED", "FIXED", "FIXED"]);
+  });
+
+  it("with everything fixed, resending puts it back in the queue and answers the round", async () => {
+    const res = await app.inject({ method: "POST", url: "/api/v1/pro/application/submit", headers: as(proJar), payload: {} });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().profile.verificationStatus).toBe("SERVICE_REVIEW");
+    expect(res.json().changesRequested).toBe(false);
+    expect(res.json().fixRequests).toEqual([]);
+    expect(await db.reviewRound.count({ where: { professionalId: pro.id, status: "ANSWERED" } })).toBe(1);
+    expect(await db.auditLog.count({ where: { action: "PRO_APPLICATION_SUBMITTED", targetId: pro.id } })).toBe(1);
+  });
+
+  it("a change before the round is sent does not fix the draft mark (Review Focus 1)", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-early"));
+    const jar = await signInByEmail(app, p.email);
+    expect((await mark(p.id, "AREA", "האזור רחב מדי")).statusCode).toBe(201);
+    const area = await app.inject({ method: "PUT", url: "/api/v1/pro/application/area", headers: as(jar), payload: { lat: 31.26, lng: 34.8, radiusKm: 5 } });
+    expect(area.statusCode, area.body).toBe(200);
+    expect((await send(p.id)).statusCode).toBe(200);
+    expect((await db.fixRequest.findFirstOrThrow({ where: { professionalId: p.id, itemKey: "AREA" } })).status).toBe("OPEN");
+    const audits = await db.auditLog.findMany({ where: { action: "PRO_APPLICATION_ITEM_CHANGED", targetId: p.id } });
+    expect(audits.map((a) => a.afterJson)).toEqual([{ itemKey: "AREA" }]);
+  });
+
+  it("a send racing with a fix ends consistent (both succeed; the request is OPEN or FIXED, never lost)", async () => {
+    const p = await applicantInReview(db, uniqueEmail("rl-race"));
+    const jar = await signInByEmail(app, p.email);
+    expect((await mark(p.id, "PORTRAIT", "צריך תמונה אמיתית")).statusCode).toBe(201);
+    const photo = await upload(jar, "PHOTO");
+    const [sent, portrait] = await Promise.all([
+      send(p.id),
+      app.inject({ method: "PUT", url: "/api/v1/pro/application/portrait", headers: as(jar), payload: { kind: "PHOTO", uploadId: photo } }),
+    ]);
+    expect(sent.statusCode, sent.body).toBe(200);
+    expect(portrait.statusCode, portrait.body).toBe(200);
+    expect(await db.reviewRound.count({ where: { professionalId: p.id, status: "SENT" } })).toBe(1);
+    const req = await db.fixRequest.findMany({ where: { professionalId: p.id, itemKey: "PORTRAIT" } });
+    expect(req).toHaveLength(1);
+    expect(["OPEN", "FIXED"]).toContain(req[0]!.status);
+    expect(await db.auditLog.count({ where: { action: "PRO_APPLICATION_ITEM_CHANGED", targetId: p.id } })).toBe(1);
+  });
+});

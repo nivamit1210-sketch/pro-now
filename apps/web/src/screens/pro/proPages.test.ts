@@ -24,6 +24,8 @@ function application(over: Partial<ProApplicationView> = {}): ProApplicationView
     documents: [],
     missing: [],
     submitted: true,
+    fixRequests: [],
+    changesRequested: false,
     ...over,
   };
 }

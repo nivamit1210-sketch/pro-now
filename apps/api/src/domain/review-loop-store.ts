@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { currentCheck } from "./identity-check.js";
 import { credentialTypeFor } from "@pro-now/types";
 import type { ApplicationItems } from "./review-loop.js";
@@ -94,4 +94,52 @@ export async function sendRound(tx: Tx, p: { professionalId: string; actorId: st
     }
   }
   return { code: "SENT" as const, roundId: round.id, count: round.requests.length, identityUploadIds, userId: pro.userId };
+}
+
+/**
+ * A save by the professional (docs/10 §Review loop). Only a real change
+ * counts: `changed` false does nothing. A change is audited, and fixes the
+ * item's open request only if that request was sent — a change made while
+ * the mark is still a reviewer's draft fixes nothing (Review Focus 1).
+ */
+export async function recordChange(
+  db: PrismaClient,
+  p: { professionalId: string; itemKey: string; actorId: string; requestId: string; changed: boolean },
+): Promise<void> {
+  if (!p.changed) return;
+  await db.$transaction(async (tx) => {
+    await lockProfessional(tx, p.professionalId);
+    await tx.auditLog.create({
+      data: { actorId: p.actorId, action: "PRO_APPLICATION_ITEM_CHANGED", targetType: "professional", targetId: p.professionalId, afterJson: { itemKey: p.itemKey }, requestId: p.requestId },
+    });
+    await tx.fixRequest.updateMany({
+      where: { professionalId: p.professionalId, itemKey: p.itemKey, status: "OPEN", round: { status: "SENT" } },
+      data: { status: "FIXED", fixedAt: new Date() },
+    });
+  });
+}
+
+/** The requests the professional was sent and has not yet answered: the latest SENT round's, cancelled ones left out. */
+export async function currentRoundRequests(
+  db: PrismaClient | Tx,
+  professionalId: string,
+): Promise<Array<{ itemKey: string; reasonHe: string; status: "OPEN" | "FIXED" }>> {
+  const round = await db.reviewRound.findFirst({
+    where: { professionalId, status: "SENT" },
+    orderBy: { sentAt: "desc" },
+    include: { requests: { where: { status: { in: ["OPEN", "FIXED"] } }, orderBy: { createdAt: "asc" } } },
+  });
+  return (round?.requests ?? []).map((r) => ({ itemKey: r.itemKey, reasonHe: r.reasonHe, status: r.status as "OPEN" | "FIXED" }));
+}
+
+/** The resend: refused while a sent request is open; otherwise the round is answered. Inside the caller's locked transaction. */
+export async function answerRound(
+  tx: Tx,
+  professionalId: string,
+): Promise<{ code: "ANSWERED" | "NONE" } | { code: "FIXES_OPEN"; open: string[] }> {
+  const round = await tx.reviewRound.findFirst({ where: { professionalId, status: "SENT" }, include: { requests: { where: { status: "OPEN" } } } });
+  if (!round) return { code: "NONE" };
+  if (round.requests.length > 0) return { code: "FIXES_OPEN", open: round.requests.map((r) => r.itemKey) };
+  await tx.reviewRound.update({ where: { id: round.id }, data: { status: "ANSWERED", answeredAt: new Date() } });
+  return { code: "ANSWERED" };
 }

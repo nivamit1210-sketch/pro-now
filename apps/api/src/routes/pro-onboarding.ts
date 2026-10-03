@@ -17,6 +17,8 @@ import { ageOn, currentCheck, MINIMUM_AGE } from "../domain/identity-check.js";
 import { grantRole } from "../auth/roles.js";
 import { requireRole } from "../auth/access.js";
 import { PILOT_MARKET_CODE } from "../config/market.js";
+import { credentialItem, documentItem, serviceItem, valuesChanged } from "../domain/review-loop.js";
+import { answerRound, currentRoundRequests, lockProfessional, recordChange } from "../domain/review-loop-store.js";
 
 /**
  * JOINING AS A PROFESSIONAL (docs/21 W7; Amit, 2026-09-29).
@@ -33,6 +35,10 @@ import { PILOT_MARKET_CODE } from "../config/market.js";
  *
  * Nothing here sets a price or a commission (CLAUDE.md §4): prices are the
  * professional's own, through `PATCH /v1/pro/services/:id/pricing`.
+ *
+ * Every save here tells the review loop what really changed (docs/10
+ * §Review loop: `recordChange`): a real change to an item the reviewer
+ * asked about fixes that request; a save of the same values fixes nothing.
  */
 
 const UNDER_REVIEW = new Set(["SERVICE_REVIEW", "APPROVED", "LIMITED"]);
@@ -143,6 +149,8 @@ export async function applicationView(db: PrismaClient, professionalId: string):
       : null,
     missing,
     submitted: UNDER_REVIEW.has(pro.verificationStatus),
+    fixRequests: await currentRoundRequests(db, professionalId),
+    changesRequested: pro.verificationStatus === "CHANGES_REQUESTED",
   };
 }
 
@@ -164,11 +172,18 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
       return reply.status(422).send({ code: "UNDER_MINIMUM_AGE", message: `Professionals join from age ${MINIMUM_AGE}` });
     }
     await grantRole(app.prisma, userId, "PROFESSIONAL");
+    const before = await app.prisma.professionalProfile.findUnique({ where: { userId } });
     const profile = await app.prisma.professionalProfile.upsert({
       where: { userId },
       update: { displayName: body.displayName, legalName: body.legalName, addressAs: body.addressAs, dateOfBirth },
       create: { userId, displayName: body.displayName, legalName: body.legalName, addressAs: body.addressAs, dateOfBirth },
     });
+    // The first join creates the details; nothing could have been asked about them yet.
+    const changed = before !== null && valuesChanged(
+      { displayName: before.displayName, legalName: before.legalName, addressAs: before.addressAs, dateOfBirth: before.dateOfBirth },
+      { displayName: profile.displayName, legalName: profile.legalName, addressAs: profile.addressAs, dateOfBirth: profile.dateOfBirth },
+    );
+    await recordChange(app.prisma, { professionalId: profile.id, itemKey: "DETAILS", actorId: userId, requestId: req.id, changed });
     return reply.send(await applicationView(app.prisma, profile.id));
   });
 
@@ -249,9 +264,16 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
     if (closed.length > 0) {
       return reply.status(422).send({ code: "SERVICE_NOT_OPEN", message: "Not open to professionals yet", fields: closed.map((id) => ({ path: "serviceIds", message: id })) });
     }
+    const dropped = await app.prisma.professionalService.findMany({
+      where: { professionalId: p.id, status: "DRAFT", serviceId: { notIn: serviceIds } },
+      select: { serviceId: true },
+    });
     await app.prisma.professionalService.deleteMany({
       where: { professionalId: p.id, status: "DRAFT", serviceId: { notIn: serviceIds } },
     });
+    for (const d of dropped) {
+      await recordChange(app.prisma, { professionalId: p.id, itemKey: serviceItem(d.serviceId), actorId: req.user!.userId, requestId: req.id, changed: true });
+    }
     for (const serviceId of serviceIds) {
       await app.prisma.professionalService.upsert({
         where: { professionalId_serviceId: { professionalId: p.id, serviceId } },
@@ -272,7 +294,10 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
     if (!p) return;
     const body = proBusinessSchema.parse(req.body);
     const data = { tradingName: body.tradingName?.trim() || null, taxStatus: body.taxStatus };
+    const before = await app.prisma.businessProfile.findUnique({ where: { professionalId: p.id } });
     await app.prisma.businessProfile.upsert({ where: { professionalId: p.id }, update: data, create: { professionalId: p.id, ...data } });
+    const changed = valuesChanged({ tradingName: before?.tradingName ?? null, taxStatus: before?.taxStatus ?? null }, data);
+    await recordChange(app.prisma, { professionalId: p.id, itemKey: "DETAILS", actorId: req.user!.userId, requestId: req.id, changed });
     return reply.send(await applicationView(app.prisma, p.id));
   });
 
@@ -291,6 +316,8 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
       where: { id: p.id },
       data: { vehicleHe: body.vehicleHe, vehiclePlateTail: body.plateTail },
     });
+    const changed = valuesChanged({ vehicleHe: p.vehicleHe, plateTail: p.vehiclePlateTail }, { vehicleHe: body.vehicleHe, plateTail: body.plateTail });
+    await recordChange(app.prisma, { professionalId: p.id, itemKey: "DETAILS", actorId: req.user!.userId, requestId: req.id, changed });
     return reply.send(await applicationView(app.prisma, p.id));
   });
 
@@ -307,10 +334,10 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
       const logo = await app.prisma.upload.findFirst({ where: { id: body.logoUploadId, ownerId: req.user!.userId, status: "READY", kind: "PHOTO" } });
       if (!logo) return reply.status(422).send({ code: "UPLOAD_NOT_READY", message: "The logo must be a ready photo upload of yours" });
     }
-    await app.prisma.professionalProfile.update({
-      where: { id: p.id },
-      data: { shopName: body.name.trim(), shopBrandColor: body.brandColor.toUpperCase(), shopLogoUploadId: body.logoUploadId ?? null },
-    });
+    const shop = { shopName: body.name.trim(), shopBrandColor: body.brandColor.toUpperCase(), shopLogoUploadId: body.logoUploadId ?? null };
+    await app.prisma.professionalProfile.update({ where: { id: p.id }, data: shop });
+    const changed = valuesChanged({ shopName: p.shopName, shopBrandColor: p.shopBrandColor, shopLogoUploadId: p.shopLogoUploadId }, shop);
+    await recordChange(app.prisma, { professionalId: p.id, itemKey: "SHOP", actorId: req.user!.userId, requestId: req.id, changed });
     return reply.send(await applicationView(app.prisma, p.id));
   });
 
@@ -318,10 +345,12 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
     const p = await professionalOf(app, req, reply);
     if (!p) return;
     const body = proAreaSchema.parse(req.body);
+    const before = await app.prisma.serviceArea.findFirst({ where: { professionalId: p.id }, orderBy: { id: "desc" } });
+    const area = { centerLat: body.lat, centerLng: body.lng, radiusMeters: Math.round(body.radiusKm * 1000) };
     await app.prisma.serviceArea.deleteMany({ where: { professionalId: p.id } });
-    await app.prisma.serviceArea.create({
-      data: { professionalId: p.id, centerLat: body.lat, centerLng: body.lng, radiusMeters: Math.round(body.radiusKm * 1000) },
-    });
+    await app.prisma.serviceArea.create({ data: { professionalId: p.id, ...area } });
+    const changed = !before || valuesChanged({ centerLat: before.centerLat, centerLng: before.centerLng, radiusMeters: before.radiusMeters }, area);
+    await recordChange(app.prisma, { professionalId: p.id, itemKey: "AREA", actorId: req.user!.userId, requestId: req.id, changed });
     return reply.send(await applicationView(app.prisma, p.id));
   });
 
@@ -336,6 +365,8 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
     await app.prisma.professionalDocument.create({
       data: { professionalId: p.id, kind: body.kind, storageRef: upload.storageKey, uploadId: upload.id, status: "PENDING" },
     });
+    // A new copy is always a change.
+    await recordChange(app.prisma, { professionalId: p.id, itemKey: documentItem(body.kind), actorId: req.user!.userId, requestId: req.id, changed: true });
     return reply.send(await applicationView(app.prisma, p.id));
   });
 
@@ -351,10 +382,11 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
     if (body.kind === "PHOTO") {
       const upload = await app.prisma.upload.findFirst({ where: { id: body.uploadId, ownerId: req.user!.userId, status: "READY", kind: "PHOTO" } });
       if (!upload) return reply.status(422).send({ code: "UPLOAD_NOT_READY", message: "The photo must be a ready photo upload of yours" });
-      await app.prisma.professionalProfile.update({ where: { id: p.id }, data: { portraitKind: "PHOTO", portraitUploadId: upload.id } });
-    } else {
-      await app.prisma.professionalProfile.update({ where: { id: p.id }, data: { portraitKind: "CHARACTER", portraitUploadId: null } });
     }
+    const portrait = body.kind === "PHOTO" ? { portraitKind: "PHOTO", portraitUploadId: body.uploadId } : { portraitKind: "CHARACTER", portraitUploadId: null };
+    await app.prisma.professionalProfile.update({ where: { id: p.id }, data: portrait });
+    const changed = valuesChanged({ portraitKind: p.portraitKind, portraitUploadId: p.portraitUploadId }, portrait);
+    await recordChange(app.prisma, { professionalId: p.id, itemKey: "PORTRAIT", actorId: req.user!.userId, requestId: req.id, changed });
     return reply.send(await applicationView(app.prisma, p.id));
   });
 
@@ -380,6 +412,7 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
     await app.prisma.professionalCredential.create({
       data: { professionalId: p.id, serviceId: body.serviceId, type, number: body.number ?? null, documentRef: upload.id, status: "PENDING" },
     });
+    await recordChange(app.prisma, { professionalId: p.id, itemKey: credentialItem(body.serviceId, body.requirement), actorId: req.user!.userId, requestId: req.id, changed: true });
     return reply.send(await applicationView(app.prisma, p.id));
   });
 
@@ -423,9 +456,9 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
       await tx.$queryRawUnsafe(`SELECT id FROM professional_profiles WHERE id = $1 FOR UPDATE`, p.id);
       const attempts = await tx.identityVerification.findMany({ where: { professionalId: p.id } });
       const current = currentCheck(attempts);
-      if (current?.status === "VERIFIED") return { conflict: ALREADY_VERIFIED, replacedUploadIds: [] as string[] };
-      if (current?.status === "REJECTED") return { conflict: IDENTITY_REJECTED, replacedUploadIds: [] as string[] };
-      if (current && sameFour(current)) return { conflict: null, replacedUploadIds: [] as string[] };
+      if (current?.status === "VERIFIED") return { conflict: ALREADY_VERIFIED, created: false, replacedUploadIds: [] as string[] };
+      if (current?.status === "REJECTED") return { conflict: IDENTITY_REJECTED, created: false, replacedUploadIds: [] as string[] };
+      if (current && sameFour(current)) return { conflict: null, created: false, replacedUploadIds: [] as string[] };
       const replaced = attempts.filter((a) => a.status === "MANUAL_REVIEW" || a.status === "PENDING");
       await tx.identityVerification.create({
         data: {
@@ -449,9 +482,11 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
         data: { actorId: req.user!.userId, action: "IDENTITY_SUBMITTED", targetType: "professional", targetId: p.id, afterJson: { status: result.status, vendor: app.providers.identity.vendorName }, requestId: req.id },
       });
       // A photo the new check reuses stays: it belongs to the live check now.
-      return { conflict: null, replacedUploadIds: replaced.flatMap((a) => a.uploadIds).filter((id) => !ids.includes(id)) };
+      return { conflict: null, created: true, replacedUploadIds: replaced.flatMap((a) => a.uploadIds).filter((id) => !ids.includes(id)) };
     });
     if (outcome.conflict) return reply.status(409).send(outcome.conflict);
+    // Only a new attempt is a change; the same four photos again are not.
+    await recordChange(app.prisma, { professionalId: p.id, itemKey: "IDENTITY", actorId: req.user!.userId, requestId: req.id, changed: outcome.created });
     await deleteIdentityPhotos(app, outcome.replacedUploadIds);
     return reply.send(await applicationView(app.prisma, p.id));
   });
@@ -464,13 +499,25 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
     if (view.missing.length > 0) {
       return reply.status(409).send({ code: "APPLICATION_INCOMPLETE", message: "Some required items are missing", missing: view.missing });
     }
-    await app.prisma.professionalService.updateMany({ where: { professionalId: p.id, status: "DRAFT" }, data: { status: "PENDING" } });
-    if (!UNDER_REVIEW.has(p.verificationStatus)) {
-      await app.prisma.professionalProfile.update({ where: { id: p.id }, data: { verificationStatus: "SERVICE_REVIEW" } });
-    }
-    await app.prisma.auditLog.create({
-      data: { actorId: req.user!.userId, action: "PRO_APPLICATION_SUBMITTED", targetType: "professional", targetId: p.id, requestId: req.id },
+    // One transaction under the professional's lock: a resend never interleaves with a send or a fix (docs/10 §Review loop).
+    const answer = await app.prisma.$transaction(async (tx) => {
+      await lockProfessional(tx, p.id);
+      const a = await answerRound(tx, p.id);
+      if (a.code === "FIXES_OPEN") return a;
+      await tx.professionalService.updateMany({ where: { professionalId: p.id, status: "DRAFT" }, data: { status: "PENDING" } });
+      // Read fresh under the lock. CHANGES_REQUESTED is not in UNDER_REVIEW, so a resend after fixes goes back to SERVICE_REVIEW — the queue.
+      const fresh = await tx.professionalProfile.findUniqueOrThrow({ where: { id: p.id } });
+      if (!UNDER_REVIEW.has(fresh.verificationStatus)) {
+        await tx.professionalProfile.update({ where: { id: p.id }, data: { verificationStatus: "SERVICE_REVIEW" } });
+      }
+      await tx.auditLog.create({
+        data: { actorId: req.user!.userId, action: "PRO_APPLICATION_SUBMITTED", targetType: "professional", targetId: p.id, requestId: req.id },
+      });
+      return a;
     });
+    if (answer.code === "FIXES_OPEN") {
+      return reply.status(409).send({ code: "FIXES_OPEN", message: "Some requested fixes are still open", open: answer.open });
+    }
     return reply.send(await applicationView(app.prisma, p.id));
   });
 }

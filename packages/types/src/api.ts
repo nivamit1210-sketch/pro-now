@@ -842,5 +842,14 @@ export interface ProApplicationView {
   identity: { id: string; status: string; submittedAt: string; reasonHe: string | null } | null;
   /** What stands between this application and review, as codes. Empty: ready. */
   missing: string[];
+  /** In the review queue or decided. CHANGES_REQUESTED is not submitted: it is the professional's turn. */
   submitted: boolean;
+  /**
+   * What the reviewer asked to fix, with their words (docs/10 §Review loop):
+   * the latest sent round's requests. FIXED once a real change was saved;
+   * empty when no round is waiting on the professional.
+   */
+  fixRequests: Array<{ itemKey: string; reasonHe: string; status: "OPEN" | "FIXED" }>;
+  /** A round of fixes was sent and the account waits on the professional (verificationStatus CHANGES_REQUESTED, docs/10 §Review loop). */
+  changesRequested: boolean;
 }

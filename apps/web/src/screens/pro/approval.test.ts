@@ -30,6 +30,8 @@ function view(opts: {
     documents: (opts.documents ?? ["PENDING", "PENDING", "PENDING"]).map((status, i) => ({ kind: `K${i}`, status })),
     missing: opts.missing ?? [],
     submitted: opts.submitted ?? true,
+    fixRequests: [],
+    changesRequested: false,
   };
 }
 // The four review steps after the identity row.
