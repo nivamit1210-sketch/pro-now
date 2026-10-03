@@ -476,6 +476,16 @@ export interface PriceQuoteView {
 }
 
 /** GET /v1/jobs/:id/match — everything the customer's match card renders. */
+/**
+ * What the customer looks for at the door (audit v2 #8a): the car as the
+ * professional wrote it, and only the last two or three digits of its plate.
+ * Either may be null; the whole is null before assignment and after the visit.
+ */
+export interface ProVehicleView {
+  vehicleHe: string | null;
+  plateTailHe: string | null;
+}
+
 export interface JobMatchView {
   jobId: string;
   status: JobState;
@@ -490,6 +500,8 @@ export interface JobMatchView {
    */
   etaSecondsAtAssignment?: number | null;
   price: PriceQuoteView;
+  /** The professional's car, while this visit is on; null otherwise or when they gave none. */
+  vehicle: ProVehicleView | null;
 }
 
 /** GET /v1/pro/offers/current — everything the professional's offer card renders. */
@@ -720,6 +732,8 @@ export interface OnSiteView {
     /** See ProfessionalSummaryView.addressAs. */
     addressAs: ProAddressAs | null;
     verifications: VerificationBadgeKind[];
+    /** The car to look for (no plate digits here), while the visit is on. */
+    vehicleHe: string | null;
   } | null;
   etaSeconds: number | null;
   /** Only once a professional is assigned. */
@@ -797,6 +811,8 @@ export interface ProApplicationView {
     addressAs: string | null;
     /** YYYY-MM-DD; null for applications from before 2026-10-02. */
     dateOfBirth: string | null;
+    /** Their car, optional (audit v2 #8a): free text and the plate's last 2-3 digits only. */
+    vehicle: { vehicleHe: string | null; plateTail: string | null };
     verificationStatus: string;
     /** Trading name (optional) and tax status; null until answered. Entered, not verified. */
     business: { tradingName: string | null; taxStatus: "EXEMPT" | "LICENSED" | "COMPANY" } | null;

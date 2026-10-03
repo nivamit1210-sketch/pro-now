@@ -24,7 +24,7 @@ import { api, useMe } from "../api";
 import { capsuleFigureUri, capsuleTrip } from "../activeCapsule";
 import { servicesForCategory } from "../categories";
 import { shortAddressHe } from "../addressLabel";
-import { resolveAddress, useOrderTarget } from "../orderTarget";
+import { orderAddressHe, resolveAddress, useOrderTarget } from "../orderTarget";
 import { signOutHere } from "../auth";
 import { CityHero, TradeBackdrop } from "../art/CityHero";
 import { worldSources } from "../art/worldSources";
@@ -33,6 +33,7 @@ import { useFrame } from "../frame";
 import { useWebMediaCapture } from "../useWebMediaCapture";
 import { inboxKey } from "../useUserChannel";
 import { RequestComposer } from "./RequestComposer";
+import { Addresses } from "./Addresses";
 import { jobKey } from "./Job";
 import { activeLabelHe } from "./activeLabel";
 
@@ -73,6 +74,13 @@ export function Home() {
    */
   const [requestServiceId, setRequestServiceId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  /*
+   * The address picker, opened over the order in progress (the demo's
+   * AddressLine "שינוי", and sending before any address is saved): the
+   * service page or the form stay as they were underneath, and confirming
+   * or going back returns to them.
+   */
+  const [pickingAddress, setPickingAddress] = useState(false);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   // A sentence typed on a category page that matched nothing there, handed
   // back to the home box where the whole catalogue can answer it.
@@ -129,6 +137,7 @@ export function Home() {
   const firstAddress = resolveAddress(addresses.data?.addresses ?? [], target.addressId);
   const servicePage = requestServiceId ? catalogServicePages[requestServiceId] : undefined;
   const closeService = () => {
+    setPickingAddress(false);
     setTypedText("");
     setComposing(false);
     setRequestServiceId(null);
@@ -152,7 +161,8 @@ export function Home() {
       {typing ? null : (
         <AppHeader width={width} greetingHe={null} avatarUri={avatarUri} onMenu={() => setTab(tab === "menu" ? "home" : "menu")} onAccount={() => navigate("/avatar")} />
       )}
-      <View style={{ height: bodyH, overflow: "hidden" }}>
+      {/* Under the address picker the order waits, kept but out of reach (and out of screen readers). */}
+      <View style={{ height: bodyH, overflow: "hidden" }} aria-hidden={pickingAddress || undefined}>
         {tab === "menu" ? (
           <AppMenuBody
             /*
@@ -216,7 +226,7 @@ export function Home() {
             initialText={typedText}
             height={bodyH}
             onBack={() => setComposing(false)}
-            onOpenAddresses={() => navigate("/addresses")}
+            onOpenAddresses={() => setPickingAddress(true)}
             onSent={(jobId) => {
               media.capture.onClearPhotos?.();
               media.capture.onDeleteVoice?.();
@@ -227,6 +237,10 @@ export function Home() {
         ) : requestServiceId && servicePage ? (
           <ServiceDetailBody
             {...servicePage}
+            // Where it goes, while ordering (the demo's AddressLine): "לאן · address · שינוי".
+            orderAddressHe={orderAddressHe(firstAddress)}
+            orderForHe={target.onSite?.name ?? null}
+            onChangeAddress={() => setPickingAddress(true)}
             /* No problem chips before calling — words, a recording, a photo (Amit, 2026-09-29). */
             symptomsHe={[]}
             priceListFromMinorUnits={lowestListed(requestServiceId)}
@@ -324,6 +338,11 @@ export function Home() {
           onPress={() => navigate(`/jobs/${active.id}`)}
           width={width}
         />
+      ) : null}
+      {pickingAddress ? (
+        <View style={{ position: "absolute", top: 0, left: 0, width, height, zIndex: 50 }}>
+          <Addresses onDone={() => setPickingAddress(false)} />
+        </View>
       ) : null}
     </View>
   );

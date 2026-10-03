@@ -17,7 +17,13 @@ test("at the door: the professional, the server's code, and back to the live job
   await finishFirstRun(page);
   const address = await page.request.post("/api/v1/me/addresses", { data: { kind: "location", lat: LAT, lng: LNG, details: "שינקין 12" }, headers: { origin: baseURL! } });
   expect(address.ok(), await address.text()).toBe(true);
-  const pro = await dispatchableProfessional({ serviceCode: "HOME_PLUMB_LEAK", lat: LAT, lng: LNG, baseURL: baseURL! });
+  const pro = await dispatchableProfessional({
+    serviceCode: "HOME_PLUMB_LEAK",
+    lat: LAT,
+    lng: LNG,
+    baseURL: baseURL!,
+    vehicle: { vehicleHe: "יונדאי i20 לבנה", plateTail: "47" },
+  });
   try {
     await page.getByRole("textbox", { name: "ספרו מה צריך" }).fill("נזילה במטבח");
     await page.getByRole("button", { name: /המשך עם נזילה/ }).click();
@@ -48,10 +54,13 @@ test("at the door: the professional, the server's code, and back to the live job
     // The name the customer picked, not the dispatch catalogue's "נזילה/פיצוץ בצנרת" (audit v2 #1).
     await expect(page.getByText("נזילה או דליפת מים · עבודה ראשונה דרך PRO NOW")).toBeVisible();
     await expect(page.getByText("אל תכניסו אדם שאינו תואם לשם, לתמונה ולקוד שמופיעים כאן.")).toBeVisible();
-    // No calling or messaging without a masking vendor, no vehicle the server never recorded.
+    // What to look for at the door, as she gave it while joining (audit v2 #8a): the car and the plate's last digits only.
+    await expect(page.getByText("מגיעה ב", { exact: true })).toBeVisible();
+    await expect(page.getByText("יונדאי i20 לבנה", { exact: true })).toBeVisible();
+    await expect(page.getByText("••• 47", { exact: true })).toBeVisible();
+    // No calling or messaging without a masking vendor.
     await expect(page.getByRole("button", { name: "שיחה" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "הודעה" })).toHaveCount(0);
-    await expect(page.getByText("מגיע ב")).toHaveCount(0);
     await testInfo.attach("arrival", { body: await page.screenshot(), contentType: "image/png" });
 
     // Back: the live job, still at the door.

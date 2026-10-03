@@ -128,7 +128,14 @@ test("the product's screens match the demo's", async ({ browser }) => {
   }
 
   // Someone to take the product's call (the demo invents its match).
-  const pro = await dispatchableProfessional({ serviceCode: "CLEAN_URGENT", lat: 32.0853, lng: 34.7818, baseURL: PRODUCT });
+  // The demo's car at the door (audit v2 #8a), as a professional would give it while joining.
+  const pro = await dispatchableProfessional({
+    serviceCode: "CLEAN_URGENT",
+    lat: 32.0853,
+    lng: 34.7818,
+    baseURL: PRODUCT,
+    vehicle: { vehicleHe: "יונדאי i20 לבנה", plateTail: "47" },
+  });
   await step("7-category", async (p) => {
     await p.mouse.wheel(0, -2000);
     await p.getByRole("button", { name: "ניקיון", exact: true }).click({ timeout: 5000 });

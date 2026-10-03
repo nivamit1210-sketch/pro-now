@@ -336,6 +336,43 @@ export const proBusinessSchema = z
   })
   .strict();
 
+/**
+ * THE PROFESSIONAL'S CAR (audit v2 #8a): what the customer looks for at
+ * the door, as in the demo's arrival screen ("מגיע ב… · ••• 47"). Both
+ * optional. The car is free text; of the plate, only its last two or three
+ * digits are ever kept — a full plate is refused, never trimmed, so a
+ * stored value is always exactly what the professional chose to share.
+ */
+export const PLATE_TAIL = /^\d{2,3}$/;
+/** Six or more digits in a row (a space, dot or dash between them allowed): a plate, not a model year. */
+const PLATE_LIKE = /\d(?:[\s.-]?\d){5,}/;
+export function looksLikePlate(text: string): boolean {
+  return PLATE_LIKE.test(text);
+}
+const emptyToNull = (v: string | null | undefined) => (v ? v : null);
+
+/** `PUT /api/v1/pro/application/vehicle`. Null or "" clears a field. */
+export const proVehicleSchema = z
+  .object({
+    vehicleHe: z
+      .string()
+      .trim()
+      .max(40)
+      .nullable()
+      .optional()
+      .transform(emptyToNull)
+      .refine((v) => v === null || !looksLikePlate(v), { message: "VEHICLE_TEXT_HAS_PLATE" }),
+    plateTail: z
+      .string()
+      .trim()
+      .nullable()
+      .optional()
+      .transform(emptyToNull)
+      .refine((v) => v === null || PLATE_TAIL.test(v), { message: "PLATE_TAIL_ONLY" }),
+  })
+  .strict();
+export type ProVehicleInput = z.input<typeof proVehicleSchema>;
+
 /** `PUT /api/v1/pro/application/shop`: the sign, the brand colour, an optional logo (sync item E). */
 export const proShopSchema = z
   .object({

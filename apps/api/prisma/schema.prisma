@@ -189,6 +189,13 @@ model ProfessionalProfile {
   shopBrandColor     String?
   shopLogoUploadId   String?
   shopLogoUpload     Upload?            @relation("ProfessionalShopLogo", fields: [shopLogoUploadId], references: [id], onDelete: SetNull)
+  /// Their car, as the customer looks for it at the door (audit v2 #8a; the
+  /// demo's arrival "מגיע ב… · ••• 47"). Free text, optional. Shown to a
+  /// customer only from assignment until the visit ends (routes/match.ts).
+  vehicleHe          String?
+  /// The last two or three digits of the plate, never more: the full plate
+  /// is refused, not trimmed (packages/validation proVehicleSchema). Optional.
+  vehiclePlateTail   String?
   verificationStatus VerificationStatus @default(DRAFT)
   presenceState      ProPresenceState   @default(OFFLINE)
   createdAt          DateTime           @default(now())

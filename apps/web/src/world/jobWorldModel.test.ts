@@ -27,6 +27,7 @@ const match: JobMatchView = {
     computedAt: new Date(nowMs).toISOString(),
   },
   price: { priceModel: "VISIT_QUOTE", currency: "ILS", visitFeeMinorUnits: 17900 },
+  vehicle: null,
 };
 
 describe("buildJobWorldModel", () => {

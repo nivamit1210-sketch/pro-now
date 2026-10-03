@@ -10,7 +10,7 @@ import {
   proIdentitySchema,
   proJoinSchema,
   proPortraitSchema,
-  proShopSchema,
+  proShopSchema, proVehicleSchema,
   proServicesSchema,
 } from "@pro-now/validation";
 import { ageOn, currentCheck, MINIMUM_AGE } from "../domain/identity-check.js";
@@ -126,6 +126,7 @@ export async function applicationView(db: PrismaClient, professionalId: string):
       legalName: pro.legalName,
       addressAs: pro.addressAs,
       dateOfBirth: pro.dateOfBirth ? pro.dateOfBirth.toISOString().slice(0, 10) : null,
+      vehicle: { vehicleHe: pro.vehicleHe, plateTail: pro.vehiclePlateTail },
       verificationStatus: pro.verificationStatus,
       shop: pro.shopName && pro.shopBrandColor ? { name: pro.shopName, brandColor: pro.shopBrandColor, logoUploadId: pro.shopLogoUploadId } : null,
       business: pro.businessProfile?.taxStatus
@@ -272,6 +273,24 @@ export default async function proOnboardingRoutes(app: FastifyInstance) {
     const body = proBusinessSchema.parse(req.body);
     const data = { tradingName: body.tradingName?.trim() || null, taxStatus: body.taxStatus };
     await app.prisma.businessProfile.upsert({ where: { professionalId: p.id }, update: data, create: { professionalId: p.id, ...data } });
+    return reply.send(await applicationView(app.prisma, p.id));
+  });
+
+  /**
+   * Their car (audit v2 #8a): asked in the details step, changed from the
+   * profile tab, never required. Of the plate only its last 2-3 digits are
+   * accepted — a full one is refused (VALIDATION_FAILED), not trimmed — and
+   * the database holds the same line. A customer is told it only while a
+   * visit with them is on (domain/vehicle.ts).
+   */
+  app.put("/v1/pro/application/vehicle", pro, async (req, reply) => {
+    const p = await professionalOf(app, req, reply);
+    if (!p) return;
+    const body = proVehicleSchema.parse(req.body);
+    await app.prisma.professionalProfile.update({
+      where: { id: p.id },
+      data: { vehicleHe: body.vehicleHe, vehiclePlateTail: body.plateTail },
+    });
     return reply.send(await applicationView(app.prisma, p.id));
   });
 

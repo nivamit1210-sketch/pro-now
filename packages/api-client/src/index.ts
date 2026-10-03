@@ -129,6 +129,9 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
       request<ProApplicationView>("POST", "/pro/application/documents", input),
     proSubmitIdentity: (input: { documentUploadId: string; selfieUploadIds: [string, string, string] }) =>
       request<ProApplicationView>("POST", "/pro/application/identity", input),
+    /** Their car, optional (audit v2 #8a): free text and only the plate's last 2-3 digits. */
+    proSetVehicle: (input: { vehicleHe: string | null; plateTail: string | null }) =>
+      request<ProApplicationView>("PUT", "/pro/application/vehicle", input),
     proSetBusiness: (input: { tradingName?: string | null; taxStatus: "EXEMPT" | "LICENSED" | "COMPANY" }) =>
       request<ProApplicationView>("PUT", "/pro/application/business", input),
     proSetShop: (input: { name: string; brandColor: string; logoUploadId?: string | null }) =>

@@ -63,6 +63,8 @@ export function OnSite() {
       stage={v.stage}
       minutesAway={v.etaSeconds === null ? null : Math.max(1, Math.round(v.etaSeconds / 60))}
       codeHe={v.doorCode}
+      // The car to look out for, as in the demo (audit v2 #8a); the server sends it only while the visit is on.
+      vehicleHe={v.professional.vehicleHe ?? null}
       width={width}
       height={height}
     />
