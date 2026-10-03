@@ -213,6 +213,8 @@ describe("the professional fixes and resends", () => {
     const price = await app.inject({ method: "PATCH", url: `/api/v1/pro/services/${svcId}/pricing`, headers: as(proJar), payload: { basePriceMinorUnits: 23000 } });
     expect(price.statusCode, price.body).toBe(200);
     expect(await db.fixRequest.count({ where: { professionalId: pro.id, status: "OPEN" } })).toBe(0);
+    const area = await app.inject({ method: "PUT", url: "/api/v1/pro/application/area", headers: as(proJar), payload: { lat: 32.08, lng: 34.78, radiusKm: 7 } });
+    expect(area.statusCode, area.body).toBe(200);
     const view = (await app.inject({ method: "GET", url: "/api/v1/pro/application", headers: as(proJar) })).json();
     expect(view.fixRequests.map((r: { status: string }) => r.status)).toEqual(["FIXED", "FIXED", "FIXED"]);
   });
@@ -225,6 +227,15 @@ describe("the professional fixes and resends", () => {
     expect(res.json().fixRequests).toEqual([]);
     expect(await db.reviewRound.count({ where: { professionalId: pro.id, status: "ANSWERED" } })).toBe(1);
     expect(await db.auditLog.count({ where: { action: "PRO_APPLICATION_SUBMITTED", targetId: pro.id } })).toBe(1);
+  });
+
+  it("the reviewer sees the round: fixed requests with their reasons, and what else changed", async () => {
+    const detail = (await app.inject({ method: "GET", url: `/api/v1/admin/professionals/${pro.id}`, headers: as(admin) })).json();
+    expect(detail.review.current).toMatchObject({ status: "ANSWERED" });
+    expect(detail.review.current.requests.find((r: { itemKey: string }) => r.itemKey === "DETAILS")).toMatchObject({ reasonHe: "השם בתעודה שונה", status: "FIXED" });
+    expect(detail.review.changedItemKeys).toEqual(expect.arrayContaining(["DETAILS", "DOCUMENT:TAX_FILE", `SERVICE:${svcId}`, "AREA"]));
+    expect(detail.review.draft).toEqual([]);
+    expect(detail.review.earlier).toEqual([]);
   });
 
   it("a change before the round is sent does not fix the draft mark (Review Focus 1)", async () => {
