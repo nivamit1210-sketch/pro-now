@@ -1,0 +1,118 @@
+import type { PrismaClient } from "@prisma/client";
+import { credentialTypeFor, documentInfoFor, type NotificationProvider } from "@pro-now/types";
+import type { UserEventBus } from "../../realtime/user-event-bus.js";
+import { CREDENTIAL_TYPE_HE, NOTICE_TEXT_HE, daysUntil, dueNotice, isCoveredByRenewal, type NoticeKind } from "./expiry.js";
+
+/**
+ * THE DAILY EXPIRY CHECK (docs/10 §Life after approval: the daily check).
+ * Every VERIFIED credential with a date, on a professional service that is
+ * neither DISABLED nor SUSPENDED: the one notice due (30 days, 7 days, on
+ * expiry), stored and pushed once, and EXPIRED set from the day itself.
+ *
+ * "Once" holds across overlapping runs: the notice row is unique per
+ * (credential, kind) and is written in the same transaction as the
+ * professional's notification, so the run that loses the race gets a
+ * unique violation, rolls back, and pushes nothing.
+ */
+export const DOCUMENTS_URL = "/pro/documents";
+const TITLE_HE = "תוקף מסמך";
+
+export interface ExpiryDeps {
+  prisma: PrismaClient;
+  push: NotificationProvider;
+  users: UserEventBus;
+  log: { warn(o: object, m: string): void };
+}
+
+const isUniqueViolation = (e: unknown) => (e as { code?: string } | null)?.code === "P2002";
+
+export async function runExpiryCheck(deps: ExpiryDeps, now: Date = new Date()): Promise<{ notices: number; expired: number }> {
+  const { prisma, push, users, log } = deps;
+  const candidates = await prisma.professionalCredential.findMany({
+    where: { status: "VERIFIED", expiresAt: { not: null } },
+    include: {
+      service: { select: { nameHe: true, requirements: { select: { requirement: true } } } },
+      professional: { select: { userId: true } },
+    },
+  });
+  if (candidates.length === 0) return { notices: 0, expired: 0 };
+
+  const professionalIds = [...new Set(candidates.map((c) => c.professionalId))];
+  // The service the credential serves must be live (not DISABLED/SUSPENDED).
+  const offered = await prisma.professionalService.findMany({
+    where: { professionalId: { in: professionalIds }, status: { notIn: ["DISABLED", "SUSPENDED"] } },
+    select: { professionalId: true, serviceId: true },
+  });
+  const live = new Set(offered.map((s) => `${s.professionalId}:${s.serviceId}`));
+  const due = candidates.filter((c) => live.has(`${c.professionalId}:${c.serviceId}`));
+
+  // Every credential of the same professionals, for renewal coverage.
+  const all = await prisma.professionalCredential.findMany({
+    where: { professionalId: { in: professionalIds } },
+    select: { id: true, professionalId: true, serviceId: true, type: true, status: true, expiresAt: true, noExpiry: true },
+  });
+  const sentRows = await prisma.credentialNotice.findMany({ where: { credentialId: { in: due.map((c) => c.id) } }, select: { credentialId: true, kind: true } });
+  const sentBy = new Map<string, Set<NoticeKind>>();
+  for (const r of sentRows) {
+    const s = sentBy.get(r.credentialId) ?? new Set<NoticeKind>();
+    s.add(r.kind as NoticeKind);
+    sentBy.set(r.credentialId, s);
+  }
+
+  let notices = 0;
+  let expired = 0;
+  for (const c of due) {
+    const expiresAt = c.expiresAt!;
+    const days = daysUntil(expiresAt, now);
+    const others = all.filter((o) => o.id !== c.id && o.professionalId === c.professionalId && o.serviceId === c.serviceId && o.type === c.type);
+    if (isCoveredByRenewal({ expiresAt }, others)) continue;
+
+    const kind = dueNotice(days, sentBy.get(c.id) ?? new Set());
+    let noticeFailed = false;
+    if (kind) {
+      try {
+        const requirement = c.service.requirements.find((r) => credentialTypeFor(r.requirement) === c.type)?.requirement;
+        const credentialHe = (requirement && documentInfoFor(requirement)?.nameHe) || CREDENTIAL_TYPE_HE[c.type] || "מסמך";
+        const body = NOTICE_TEXT_HE[kind](credentialHe, c.service.nameHe);
+        const userId = c.professional.userId;
+        let stored = true;
+        try {
+          await prisma.$transaction(async (tx) => {
+            await tx.credentialNotice.create({ data: { credentialId: c.id, kind } });
+            await tx.notification.create({ data: { userId, type: "CREDENTIAL_EXPIRY", title: TITLE_HE, body, data: { url: DOCUMENTS_URL } } });
+          });
+        } catch (e) {
+          // A unique violation aborts the transaction; caught out here it means another run stored it first.
+          if (!isUniqueViolation(e)) throw e;
+          stored = false;
+        }
+        if (stored) {
+          notices++;
+          users.publish(userId, { type: "NOTIFICATION", title: TITLE_HE, body, url: DOCUMENTS_URL });
+          void push
+            .sendPush({ userId, title: TITLE_HE, body, data: { url: DOCUMENTS_URL } })
+            .catch((err: unknown) => log.warn({ err: (err as Error)?.message, credentialId: c.id }, "credential expiry push failed"));
+        }
+      } catch (err) {
+        noticeFailed = true;
+        log.warn({ err: (err as Error)?.message, credentialId: c.id, kind }, "credential expiry notice failed");
+      }
+    }
+
+    /*
+     * After the notice, and only when it did not fail: a credential marked
+     * EXPIRED leaves the check, so a failed EXPIRED notice keeps it VERIFIED
+     * for tomorrow's retry. Dispatch does not wait for this status: it
+     * reads expiresAt itself (dispatch/credential-eligibility.ts).
+     */
+    if (days <= 0 && !noticeFailed) {
+      try {
+        const r = await prisma.professionalCredential.updateMany({ where: { id: c.id, status: "VERIFIED" }, data: { status: "EXPIRED" } });
+        expired += r.count;
+      } catch (err) {
+        log.warn({ err: (err as Error)?.message, credentialId: c.id }, "credential expiry status failed");
+      }
+    }
+  }
+  return { notices, expired };
+}

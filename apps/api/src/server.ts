@@ -16,6 +16,7 @@ import dispatchSweeperPlugin from "./plugins/dispatch-sweeper.js";
 import mediaCleanupPlugin from "./plugins/media-cleanup.js";
 import presenceSweeperPlugin from "./plugins/presence-sweeper.js";
 import notificationsPlugin from "./plugins/notifications.js";
+import credentialExpiryPlugin from "./plugins/credential-expiry.js";
 import authPlugin from "./plugins/auth.js";
 import webAppPlugin from "./plugins/web-app.js";
 
@@ -147,6 +148,7 @@ export async function buildServer(opts: { logger?: boolean } = {}) {
   await app.register(presenceSweeperPlugin);
   await app.register(authPlugin);
   await app.register(notificationsPlugin);
+  await app.register(credentialExpiryPlugin);
   await app.register(demoAuthRoutes);
 
   app.get("/health", async () => ({
