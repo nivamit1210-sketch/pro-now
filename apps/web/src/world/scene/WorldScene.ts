@@ -29,12 +29,22 @@ import {
 } from "./street";
 import { createPlayer, movePlayer, createContactShadow, type PlayerState } from "./player";
 import { createRoom } from "./shopRooms";
-import { paving, asphalt, plaster, neonGlow, glow } from "./textures";
+import { createShopFront, type ShopFront } from "./shopFront";
+import { paving, asphalt, plaster, neonGlow, glow, wordmark } from "./textures";
+import {
+  createVan,
+  cutout,
+  fleetSchedule,
+  fleetTrade,
+  imageAspect,
+  parkedLayout,
+  type ParkedSpot,
+  type Van,
+} from "./vans";
 import {
   WORLD_LIGHTING,
   aimSun,
   configureSunShadow,
-  createShadowCaster,
   shadowFocus,
   shadowForSprite,
   skyTexture,
@@ -66,10 +76,7 @@ const VEHICLE_BY_DEPARTMENT: Partial<Record<string, WorldAssetId>> = {
 const LAMP_SPACING = 31;
 const LAMP_HEIGHT = 4.2;
 const TREE_SPACING = 35;
-const FACADE_SCALE: [number, number] = [BAY_W(), 5.2];
-const FACADE_Y = 2.6;
 const NPC_COUNT = 14;
-const TRAFFIC_COUNT = 10;
 
 function BAY_W(): number {
   return 8.8;
@@ -143,15 +150,6 @@ interface NPC {
   textures: THREE.Texture[];
 }
 
-interface TrafficVehicle {
-  group: THREE.Group;
-  z: number;
-  speed: number;
-  lane: number;
-  headlight?: THREE.Sprite;
-  taillight?: THREE.Sprite;
-}
-
 type TickFn = (dt: number, elapsed: number) => void;
 
 function buildStreetGeometry(
@@ -162,6 +160,7 @@ function buildStreetGeometry(
 ): {
   lamps: THREE.Vector3[];
   emitters: LightEmitter[];
+  parked: ParkedSpot[];
 } {
   const day = isDaytime();
   const halfStreet = STREET_LENGTH / 2;
@@ -644,34 +643,23 @@ function buildStreetGeometry(
     }
   }
 
-  /* ---------- parked vehicles ---------- */
-  const parkedSpots = [
-    { z: 60, side: 1, type: "van" as const },
-    { z: 30, side: -1, type: "scooter" as const },
-    { z: -20, side: 1, type: "van" as const },
-    { z: -70, side: -1, type: "scooter" as const },
-    { z: -110, side: 1, type: "van" as const },
-  ];
-  for (const spot of parkedSpots) {
-    const assetId = `${spot.type}_side` as WorldAssetId;
-    const parkedTex = tryLoadTexture(loader, assetId);
-    if (parkedTex) {
-      const parkedSprite = new THREE.Sprite(
-        new THREE.SpriteMaterial({ map: parkedTex, transparent: true, depthWrite: false, alphaTest: 0.1 }),
-      );
-      const scaleX = spot.type === "van" ? 2.4 : 1.2;
-      const scaleY = spot.type === "van" ? 1.4 : 1.0;
-      parkedSprite.scale.set(scaleX, scaleY, 1);
-      parkedSprite.position.set(
-        spot.side * (KERB_X + 1.2),
-        scaleY / 2,
-        spot.z,
-      );
-      root.add(parkedSprite);
-    }
+  /* ---------- parked vehicles (the demo's: half up on the kerb, every 47 m) ---------- */
+  const parked: ParkedSpot[] = [];
+  for (const spot of parkedLayout()) {
+    const drawing = loader.load(worldAssetUrl(spot.id), (loaded) => {
+      const aspect = imageAspect(loaded);
+      if (aspect) vehicle.fit(aspect);
+    });
+    const vehicle = cutout(drawing, spot.height);
+    const stand = new THREE.Group();
+    stand.add(vehicle);
+    stand.position.set(spot.x, 0, spot.z);
+    stand.rotation.y = spot.yaw;
+    root.add(stand);
+    parked.push({ side: spot.side, z: spot.z });
   }
 
-  return { lamps, emitters };
+  return { lamps, emitters, parked };
 }
 
 function buildNPCs(
@@ -736,80 +724,63 @@ function buildNPCs(
   return npcs;
 }
 
+/**
+ * The street's traffic: the demo's PRO NOW fleet, each trade's van built from
+ * its drawings (vans.ts). Each van lends its headlight pool to the evening's
+ * light pool through `emitters`, and eases out round the parked vehicles.
+ */
 function buildTraffic(
   root: THREE.Group,
   loader: THREE.TextureLoader,
   ticking: TickFn[],
-): TrafficVehicle[] {
+  emitters: LightEmitter[],
+  parked: readonly ParkedSpot[],
+): Van[] {
   const day = isDaytime();
-  const halfStreet = STREET_LENGTH / 2;
-  const vehicles: TrafficVehicle[] = [];
-  const glowTex = glow();
-
-  const vehicleAssets: WorldAssetId[] = [
-    "pn_electric_side", "pn_appliance_side", "pn_clean_side",
-    "pn_beauty_side", "pn_tech_side", "pn_vet_side",
-    "pn_well_side", "pn_courier_side", "courier_scooter", "moving_van",
-  ];
-
-  for (let i = 0; i < TRAFFIC_COUNT; i++) {
-    const lane = i < TRAFFIC_COUNT / 2 ? -1 : 1;
-    const laneX = lane * (ROAD_HALF * 0.5);
-    const startZ = -halfStreet + (i / TRAFFIC_COUNT) * STREET_LENGTH;
-    const speed = 4.5 + Math.random() * 3;
-
-    const assetId = vehicleAssets[i % vehicleAssets.length]!;
-    const vehTex = tryLoadTexture(loader, assetId as string);
-    if (!vehTex) continue;
-
-    const group = new THREE.Group();
-    const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: vehTex, transparent: true, depthWrite: false, alphaTest: 0.1 }),
-    );
-    const isScooter = assetId === "courier_scooter";
-    sprite.scale.set(isScooter ? 1.2 : 2.4, isScooter ? 1.0 : 1.4, 1);
-    sprite.position.y = isScooter ? 0.5 : 0.7;
-    group.add(sprite);
-    group.position.set(laneX, 0, startZ);
-    root.add(group);
-
-    let headlight: THREE.Sprite | undefined;
-    let taillight: THREE.Sprite | undefined;
-    if (!day) {
-      headlight = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: glowTex, transparent: true, blending: THREE.AdditiveBlending,
-          depthWrite: false, opacity: 0.7, color: new THREE.Color("#ffeedd"),
-        }),
-      );
-      headlight.scale.set(1.2, 0.6, 1);
-      headlight.position.set(0, 0.5, lane * -1.4);
-      group.add(headlight);
-
-      taillight = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: glowTex, transparent: true, blending: THREE.AdditiveBlending,
-          depthWrite: false, opacity: 0.5, color: new THREE.Color("#ff3030"),
-        }),
-      );
-      taillight.scale.set(0.6, 0.3, 1);
-      taillight.position.set(0, 0.5, lane * 1.4);
-      group.add(taillight);
+  const textures = { wordmark: wordmark(), glow: glow() };
+  // One load per drawing, shared by every van of that trade; each van is laid
+  // out again when one of its drawings arrives.
+  const drawings = new Map<WorldAssetId, { texture: THREE.Texture; ready: Array<() => void> }>();
+  const drawing = (id: WorldAssetId, onReady: () => void): THREE.Texture => {
+    let entry = drawings.get(id);
+    if (!entry) {
+      const ready: Array<() => void> = [];
+      const texture = loader.load(worldAssetUrl(id), () => {
+        for (const f of ready) f();
+      });
+      entry = { texture, ready };
+      drawings.set(id, entry);
     }
+    entry.ready.push(onReady);
+    return entry.texture;
+  };
 
-    const veh: TrafficVehicle = { group, z: startZ, speed, lane, headlight, taillight };
-    vehicles.push(veh);
+  const vans: Van[] = [];
+  for (const slot of fleetSchedule()) {
+    const trade = fleetTrade(slot.z, slot.dir);
+    const sideId = `fleet_${trade}_side` in WORLD_ASSETS ? (`fleet_${trade}_side` as WorldAssetId) : "parked_van_side";
+    const refit = () => van.fit(imageAspect(side));
+    const side = drawing(sideId, refit);
+    const van: Van = createVan(
+      slot,
+      {
+        front: drawing(`fleet_${trade}_front` as WorldAssetId, refit),
+        back: drawing(`fleet_${trade}_back` as WorldAssetId, refit),
+        side,
+      },
+      textures,
+      { day },
+    );
+    root.add(van.group);
+    emitters.push(van.light);
+    vans.push(van);
   }
 
-  ticking.push((dt) => {
-    for (const veh of vehicles) {
-      veh.z = advanceAlongStreet(veh.z, -veh.lane * veh.speed, dt, halfStreet, 20);
-      const laneX = veh.lane * (ROAD_HALF * 0.5);
-      veh.group.position.set(laneX, 0, veh.z);
-    }
+  ticking.push((dt, elapsed) => {
+    for (const van of vans) van.tick(dt, elapsed, parked);
   });
 
-  return vehicles;
+  return vans;
 }
 
 function buildSky(scene: THREE.Scene, day: boolean): void {
@@ -951,9 +922,9 @@ export function createWorldScene({
   const sunFocus = new THREE.Vector3();
   const cameraDirection = new THREE.Vector3();
 
-  const { lamps, emitters } = buildStreetGeometry(root, scene, loader, ticking);
+  const { lamps, emitters, parked } = buildStreetGeometry(root, scene, loader, ticking);
   buildNPCs(root, loader, ticking);
-  buildTraffic(root, loader, ticking);
+  buildTraffic(root, loader, ticking, emitters, parked);
 
   const LAMP_TINT_RANGE = 14;
 
@@ -985,20 +956,22 @@ export function createWorldScene({
   };
 
   /* ---------- shop facades (prefer shop_* art over district_*) ---------- */
+  const shopGlow = glow();
+  const shopFronts: ShopFront[] = [];
   for (const shop of WORLD_SHOPS) {
     const shopArtId = `shop_${shop.shopId}` as WorldAssetId;
     const usesShopArt = shopArtId in WORLD_ASSETS;
     const facadeId = usesShopArt ? shopArtId : (shop.assetId as WorldAssetId);
-    const facade = createSprite(loader, facadeId, FACADE_SCALE, [shop.x, FACADE_Y, shop.z]);
-    // The shopfront's shadow is a building's: lined up with the street, not turned to the sun.
-    const facadeShadow = createShadowCaster(
-      (facade.material as THREE.SpriteMaterial).map,
-      FACADE_SCALE[0],
-      FACADE_SCALE[1],
-      [shop.x, FACADE_Y, shop.z],
-      frontageYaw(shop.side),
-    );
-    root.add(facade, facadeShadow);
+    // The drawing as a lit wall at its own proportions, dressed as the demo's
+    // (shopFront.ts); it is sized to the drawing once the drawing is in.
+    const drawing: THREE.Texture = loader.load(worldAssetUrl(facadeId), (loaded) => {
+      const image = loaded.image as { width?: number; height?: number } | undefined;
+      if (image?.width && image.height) front.fit(image.width / image.height);
+    });
+    drawing.colorSpace = THREE.SRGBColorSpace;
+    const front = createShopFront(shop, drawing, shopGlow);
+    shopFronts.push(front);
+    root.add(front.group);
 
     if (!day) {
       root.add(buildNeonHalo(shop.neonColour, new THREE.Vector3(shop.x, 3.8, shop.z), shop.side));
@@ -1169,6 +1142,8 @@ export function createWorldScene({
       if (!reducedMotion) for (const fn of ticking) fn(dt, elapsed);
 
       lendEveningLights(dt);
+      // A projecting sign seen edge-on fades rather than becoming a streak.
+      if (root.visible) for (const front of shopFronts) front.face(camera.position);
 
       // The shadow box rides a few metres ahead of the camera, as in the demo.
       camera.getWorldDirection(cameraDirection);

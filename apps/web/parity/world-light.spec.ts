@@ -17,6 +17,10 @@ import { finishFirstRun, signInByEmail, uniqueEmail } from "../e2e/helpers";
  * reports the mean colour of the SKY band (top 12%) and the GROUND band
  * (bottom 25%): the sky is what the lighting and sky catch-up changes, and
  * the ground is where the sun's shadows fall.
+ *
+ * The third shot is up at the first shop on the left (the shopfront's
+ * dressing): the same up-and-left drag in both, held until the product offers
+ * "היכנסו" and for a fixed spell in the demo, whose steps are slower here.
  */
 const DEMO = "http://127.0.0.1:4421";
 const PRODUCT = "http://localhost:4100";
@@ -103,8 +107,19 @@ async function openProduct(browser: Browser, at: Date): Promise<Page> {
   return page;
 }
 
-/** The opening view, then the street after a short walk; the page is closed after. */
-async function shots(page: Page, settleMs: number): Promise<[PNG, PNG]> {
+/** Drag up and to the left from the middle and hold, as the e2e walk to a shop does. */
+async function walkToShop(page: Page, product: boolean) {
+  const { width, height } = page.viewportSize()!;
+  await page.mouse.move(width / 2, height / 2);
+  await page.mouse.down();
+  await page.mouse.move(width / 2 - 60, height / 2 - 60, { steps: 4 });
+  if (product) await expect(page.getByRole("button", { name: "היכנסו" })).toBeVisible({ timeout: 15_000 });
+  else await page.waitForTimeout(12_000);
+  await page.mouse.up();
+}
+
+/** The opening view, the street after a short walk, then the first shop; the page is closed after. */
+async function shots(page: Page, settleMs: number, product: boolean): Promise<[PNG, PNG, PNG]> {
   const opening = await canvasShot(page);
   // The first push starts the flight down behind the walker. The demo's runs
   // on its capped frame step (about 20 s on software WebGL) and carries on
@@ -112,8 +127,11 @@ async function shots(page: Page, settleMs: number): Promise<[PNG, PNG]> {
   await walk(page, 1500);
   await page.waitForTimeout(settleMs);
   const street = await canvasShot(page);
+  await walkToShop(page, product);
+  await page.waitForTimeout(product ? 0 : settleMs / 2);
+  const shop = await canvasShot(page);
   await page.context().close();
-  return [opening, street];
+  return [opening, street, shop];
 }
 
 for (const [hour, at] of [
@@ -123,9 +141,10 @@ for (const [hour, at] of [
   test(`the world by ${hour} against the demo's city`, async ({ browser }) => {
     test.setTimeout(600_000);
     // One WebGL page at a time: two at once on a software renderer ran past the timeout.
-    const demo = await shots(await openDemo(browser, at), 25_000);
-    const product = await shots(await openProduct(browser, at), 0);
+    const demo = await shots(await openDemo(browser, at), 25_000, false);
+    const product = await shots(await openProduct(browser, at), 0, true);
     compare(`world-${hour}-1-opening`, demo[0], product[0]);
     compare(`world-${hour}-2-street`, demo[1], product[1]);
+    compare(`world-${hour}-3-shop`, demo[2], product[2]);
   });
 }

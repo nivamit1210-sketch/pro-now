@@ -91,3 +91,18 @@ export function glow(colour = "255,180,94"): THREE.Texture {
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
+
+/** "PRO NOW" in the brand's off-white on clear, for the vans' flanks (the demo's `wordmark`). */
+export function wordmark(fg = "#F7F3FA", w = 512, h = 160): THREE.Texture {
+  const [c, x] = canvas(w, h);
+  x.fillStyle = fg;
+  x.textAlign = "center";
+  x.textBaseline = "middle";
+  x.font = `800 ${Math.round(h * 0.46)}px "Helvetica Neue", Arial, sans-serif`;
+  x.letterSpacing = "4px";
+  x.fillText("PRO NOW", w / 2, h / 2);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}

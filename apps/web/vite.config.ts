@@ -67,8 +67,8 @@ export default defineConfig({
             handler: "StaleWhileRevalidate",
             options: {
               cacheName: "art",
-              // Room for every file under /world and /clips (about 140 with the
-              // street's walkers, traffic and props), with headroom, not more.
+              // Room for every file under /world and /clips (about 175 with the
+              // street's walkers, the fleet's vans and props), with headroom, not more.
               expiration: { maxEntries: 200 },
             },
           },

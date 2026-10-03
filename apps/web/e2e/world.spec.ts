@@ -151,6 +151,76 @@ test("at eight in the evening the lamps and shops light the street around you", 
   expect(luma, "the evening street is lit, not dark").toBeGreaterThan(58);
 });
 
+/** Share of a region (fractions of the shot) that is clear-day sky blue. */
+function skyShare(png: PNG, x0: number, x1: number, y0: number, y1: number): number {
+  let sky = 0;
+  let n = 0;
+  for (let y = Math.floor(png.height * y0); y < Math.floor(png.height * y1); y += 2) {
+    for (let x = Math.floor(png.width * x0); x < Math.floor(png.width * x1); x += 2) {
+      const i = (y * png.width + x) * 4;
+      const r = png.data[i]!;
+      const b = png.data[i + 2]!;
+      if (b > 150 && b > r + 80) sky++;
+      n++;
+    }
+  }
+  return sky / n;
+}
+
+test("at a shop the shopfront stands two storeys along the street, not a card turned to you", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signInByEmail(page, uniqueEmail("e2e-world-shopfront"));
+  await finishFirstRun(page);
+
+  await page.clock.setFixedTime(new Date("2026-10-02T12:00:00"));
+  await page.goto("/world");
+  const canvas = page.locator(".world-canvas__surface canvas");
+  await expect(canvas).toBeVisible();
+  await expect(page.getByText("נכנסים לעיר")).toBeHidden({ timeout: 30_000 });
+
+  // Up to the first shop, on the left, as the walk above.
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 - 60, box.y + box.height / 2 - 60, { steps: 4 });
+  await expect(page.getByRole("button", { name: "היכנסו" })).toBeVisible({ timeout: 15_000 });
+  await page.mouse.up();
+  await page.waitForTimeout(3000);
+
+  // Over the shop, upper left. The demo's facade (a bay wide, two storeys,
+  // with its cornice) fills it; the old 5.2 m card left it all sky (100%).
+  const share = skyShare(PNG.sync.read(await canvas.screenshot()), 0, 0.4, 0.05, 0.3);
+  console.log(`world sky over the first shop: ${(share * 100).toFixed(0)}%`);
+  expect(share, "the shopfront rises over the pavement").toBeLessThan(0.4);
+});
+
+test("the street's traffic is the trades' own vans, drawn from behind and in front", async ({ page }) => {
+  test.setTimeout(120_000);
+  await signInByEmail(page, uniqueEmail("e2e-world-vans"));
+  await finishFirstRun(page);
+
+  // Each van is built from its trade's rear and front drawings (and its flank),
+  // as the demo's; the old traffic was one side view per vehicle.
+  const drawn = new Map<string, Set<string>>();
+  page.on("response", (response) => {
+    const m = /\/world\/s\/pn_([a-z]+)_(front|back)\.webp$/.exec(new URL(response.url()).pathname);
+    if (!m || !response.ok()) return;
+    const views = drawn.get(m[1]!) ?? new Set<string>();
+    views.add(m[2]!);
+    drawn.set(m[1]!, views);
+  });
+
+  await page.goto("/world");
+  await expect(page.locator(".world-canvas__surface canvas")).toBeVisible();
+  // The arrival waits for the street's art, the vans' drawings with it.
+  await expect(page.getByText("נכנסים לעיר")).toBeHidden({ timeout: 30_000 });
+
+  const whole = [...drawn].filter(([, views]) => views.has("front") && views.has("back")).map(([trade]) => trade);
+  console.log(`world fleet drawn front and back: ${whole.sort().join(", ")}`);
+  // The demo's ten vans are eight trades.
+  expect(whole.length, "the fleet's trades, each with its rear and front").toBeGreaterThanOrEqual(8);
+});
+
 test.describe("arriving on a slow network", () => {
   // page.route cannot see what a service worker answers, so none for this one.
   test.use({ serviceWorkers: "block" });
