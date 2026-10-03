@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Navigate, useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "@pro-now/api-client";
 import type { ProApplicationView } from "@pro-now/types";
 import { PrimaryAction, customerDarkTheme, spacing, type as t } from "@pro-now/ui";
@@ -12,7 +12,7 @@ import { ErrorScreen, LoadingScreen } from "../../states";
 import { applicationKey } from "./ProJoin";
 import { ProOnline } from "./ProOnline";
 import { ProSignOut } from "./ProSignOut";
-import { APPROVAL_STATE_HE, approvalProgress } from "./approval";
+import { APPROVAL_STATE_HE, applicationPage, approvalProgress, fixLabelHe, fixLinkFor } from "./approval";
 import { tradeCharacterFor } from "../../tradeCharacter";
 
 /*
@@ -72,11 +72,11 @@ export function ProHome() {
   if (application.isPending) return <LoadingScreen />;
   if (application.isError) return <ErrorScreen offline={!navigator.onLine} onRetry={() => void application.refetch()} />;
   const view = application.data;
-  if (!view || !view.submitted) return <Navigate to="/pro/join" replace />;
+  const page = applicationPage(view);
+  // An application sent back for fixes is not "submitted" until resent, and stays here (docs/10 §Review loop).
+  if (!view || page === "join") return <Navigate to="/pro/join" replace />;
 
-  const accountApproved = view.profile.verificationStatus === "APPROVED";
-  const approved = view.services.filter((s) => s.status === "APPROVED");
-  const working = accountApproved && approved.length > 0;
+  const working = page === "working";
   if (working && !reviewOnly) {
     if (recalls(waitingKey(view.profile.id))) {
       return (
@@ -111,15 +111,23 @@ export function ApplicationStatus({ view, width, height }: { view: ProApplicatio
   const accountApproved = view.profile.verificationStatus === "APPROVED";
   const approved = view.services.filter((s) => s.status === "APPROVED");
   const working = accountApproved && approved.length > 0;
-  const progress = approvalProgress(view);
+  // The identity's reason is shown once: in the fix list when it is one of the requests.
+  const identityAsked = view.changesRequested && view.fixRequests.some((f) => f.itemKey === "IDENTITY");
+  const progress = approvalProgress(view).map((p, i) => (i === 0 && identityAsked ? { ...p, noteHe: undefined } : p));
   return (
     <ScrollView style={{ width, height, backgroundColor: colors.bg }} contentContainerStyle={styles.body}>
-      <Text style={styles.title}>{accountApproved && approved.length > 0 ? "אושרתם לעבודה" : "הבקשה בבדיקה"}</Text>
-      <Text style={styles.soft}>
-        {accountApproved && approved.length > 0
-          ? "השירותים המאושרים מקבלים קריאות כשאתם מחוברים. שירות שעדיין בבדיקה יתחיל לקבל כשיאושר."
-          : "בודקים את הפרטים, את המסמכים ואת כל שירות בנפרד. נעדכן כאן כשיש החלטה."}
-      </Text>
+      {view.changesRequested ? (
+        <FixRequests view={view} />
+      ) : (
+        <>
+          <Text style={styles.title}>{working ? "אושרתם לעבודה" : "הבקשה בבדיקה"}</Text>
+          <Text style={styles.soft}>
+            {working
+              ? "השירותים המאושרים מקבלים קריאות כשאתם מחוברים. שירות שעדיין בבדיקה יתחיל לקבל כשיאושר."
+              : "בודקים את הפרטים, את המסמכים ואת כל שירות בנפרד. נעדכן כאן כשיש החלטה."}
+          </Text>
+        </>
+      )}
       {working ? null : (
         <View style={styles.card} accessibilityLabel="מה נבדק">
           {progress.map((p) => (
@@ -153,6 +161,64 @@ export function ApplicationStatus({ view, width, height }: { view: ProApplicatio
       </Text>
       <ProSignOut />
     </ScrollView>
+  );
+}
+
+/**
+ * A round of fixes the reviewer sent (docs/10 §Review loop): how many are
+ * left, each with the reviewer's reason and the way to it, and the resend —
+ * refused by the server while any is open, so disabled here too.
+ */
+function FixRequests({ view }: { view: ProApplicationView }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [errorHe, setErrorHe] = useState<string | null>(null);
+  const open = view.fixRequests.filter((f) => f.status === "OPEN");
+  const title = open.length === 0 ? "הכול תוקן — אפשר לשלוח שוב" : open.length === 1 ? "צריך לתקן דבר אחד" : `צריך לתקן ${open.length} דברים`;
+  const resend = async () => {
+    if (busy) return;
+    setBusy(true);
+    setErrorHe(null);
+    try {
+      const result = await api.proSubmitApplication();
+      queryClient.setQueryData(applicationKey, result);
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "FIXES_OPEN") {
+        setErrorHe("עדיין יש דברים לתקן");
+        // The server knows better than this page what is still open.
+        void queryClient.invalidateQueries({ queryKey: applicationKey });
+      } else setErrorHe(e instanceof ApiError ? e.message : "השליחה לא עברה. נסו שוב.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.soft}>ביקשנו כמה תיקונים לפני שנמשיך. מה שכבר אושר נשאר מאושר.</Text>
+      <View style={styles.card} accessibilityLabel="מה לתקן">
+        {view.fixRequests.map((f) => (
+          <View key={f.itemKey} style={styles.fix}>
+            <Text style={styles.fixLabel}>{fixLabelHe(f.itemKey, view)}</Text>
+            <Text style={styles.soft}>{f.reasonHe}</Text>
+            {f.status === "OPEN" ? (
+              <Text style={styles.link} accessibilityRole="link" onPress={() => navigate(fixLinkFor(f.itemKey))}>
+                לתקן ›
+              </Text>
+            ) : (
+              <Text style={[styles.status, styles.good]}>תוקן ✓</Text>
+            )}
+          </View>
+        ))}
+      </View>
+      {errorHe ? (
+        <Text style={styles.alert} accessibilityRole="alert">
+          {errorHe}
+        </Text>
+      ) : null}
+      <PrimaryAction labelHe={busy ? "שולחים…" : "שליחה מחדש"} accessibilityLabelHe="שליחה מחדש" disabled={busy || open.length > 0} onPress={() => void resend()} />
+    </>
   );
 }
 
@@ -208,5 +274,8 @@ const styles = StyleSheet.create({
   active: { color: colors.actionText },
   section: { ...t.metaStrong, color: colors.textSecondary, textAlign: "right", writingDirection: "rtl" },
   momentFace: { width: 160, height: 160, borderRadius: 80, alignSelf: "center", marginBottom: spacing.md },
+  fix: { gap: spacing.xs, paddingVertical: spacing.xs },
+  fixLabel: { ...t.bodyStrong, color: colors.textPrimary, textAlign: "right", writingDirection: "rtl" },
+  alert: { ...t.metaStrong, color: colors.statusDanger, textAlign: "right", writingDirection: "rtl" },
   link: { ...t.metaStrong, color: colors.actionText, textAlign: "right", writingDirection: "rtl", paddingVertical: spacing.sm },
 });

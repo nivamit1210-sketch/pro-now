@@ -1,4 +1,4 @@
-import type { ProApplicationView } from "@pro-now/types";
+import { documentInfoFor, type ProApplicationView } from "@pro-now/types";
 
 /**
  * What the review after sending checks (Amit, 2026-09-29; the demo's
@@ -92,6 +92,55 @@ export function approvalProgress(view: ProApplicationView): ApprovalRow[] {
 
   const states = [documents, licences, reputation, working];
   return [identityRow(view, accountApproved), ...APPROVAL_STEPS_HE.map((labelHe, i) => ({ labelHe, state: states[i]! }))];
+}
+
+/**
+ * Which page the professional's home is (docs/10 §Review loop): the joining
+ * steps until the application is first sent; their page with its status —
+ * and, when sent back, the fixes — after that; the work screen once the
+ * account and at least one service are approved. An application sent back
+ * is not "submitted" again until it is resent, and must not fall back to
+ * the joining steps.
+ */
+export function applicationPage(view: ProApplicationView | null): "join" | "status" | "working" {
+  if (!view || (!view.submitted && !view.changesRequested)) return "join";
+  if (view.profile.verificationStatus === "APPROVED" && view.services.some((s) => s.status === "APPROVED")) return "working";
+  return "status";
+}
+
+const FIX_LABEL_HE: Readonly<Record<string, string>> = {
+  IDENTITY: "בדיקת הזהות",
+  DETAILS: "הפרטים",
+  AREA: "אזור העבודה",
+  PORTRAIT: "התמונה",
+  SHOP: "החנות",
+  "DOCUMENT:TAX_FILE": "תיק עוסק",
+};
+const UNKNOWN_FIX_HE = "פריט בבקשה";
+
+/** A requested fix's item, named as the professional knows it. */
+export function fixLabelHe(itemKey: string, view: ProApplicationView): string {
+  const fixed = FIX_LABEL_HE[itemKey];
+  if (fixed) return fixed;
+  const serviceName = (serviceId: string | undefined) => view.services.find((s) => s.serviceId === serviceId)?.nameHe;
+  const [kind, serviceId, ...rest] = itemKey.split(":");
+  if (kind === "SERVICE" && rest.length === 0) {
+    const name = serviceName(serviceId);
+    return name ? `${name} והמחיר` : UNKNOWN_FIX_HE;
+  }
+  if (kind === "CREDENTIAL" && rest.length > 0) {
+    const name = serviceName(serviceId);
+    return name ? `${documentInfoFor(rest.join(":"))?.nameHe ?? "מסמך"} · ${name}` : UNKNOWN_FIX_HE;
+  }
+  return UNKNOWN_FIX_HE;
+}
+
+/** The joining step where a requested fix is made. */
+export function fixLinkFor(itemKey: string): string {
+  if (itemKey === "IDENTITY" || itemKey.startsWith("DOCUMENT:") || itemKey.startsWith("CREDENTIAL:")) return "/pro/join?at=documents";
+  if (itemKey.startsWith("SERVICE:")) return "/pro/join?at=prices";
+  const step: Readonly<Record<string, string>> = { DETAILS: "details", AREA: "area", PORTRAIT: "portrait", SHOP: "shop" };
+  return `/pro/join?at=${step[itemKey] ?? "summary"}`;
 }
 
 /**

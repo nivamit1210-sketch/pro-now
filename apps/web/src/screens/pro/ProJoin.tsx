@@ -48,8 +48,21 @@ import { ACCOUNT_DOCS } from "./proPages";
 export const applicationKey = ["pro-application"] as const;
 
 const STEPS = ["פרטים", "מה אתם עושים", "אזור", "מסמכים", "מחירים", "החנות שלכם", "התמונה שלכם", "סיכום ושליחה"] as const;
-const SHOP_STEP = 5;
+const AREA_STEP = 2;
 const DOCUMENTS_STEP = 3;
+const PRICES_STEP = 4;
+const SHOP_STEP = 5;
+const PORTRAIT_STEP = 6;
+/** Where `at=` opens: their page's links (edit, the shop, a requested fix) land on one step. */
+const STEP_AT: Readonly<Record<string, number>> = {
+  details: 0,
+  area: AREA_STEP,
+  documents: DOCUMENTS_STEP,
+  prices: PRICES_STEP,
+  shop: SHOP_STEP,
+  portrait: PORTRAIT_STEP,
+  summary: STEPS.length - 1,
+};
 const RADII_KM = [5, 10, 15, 25, 40];
 const PRICE_FIELDS: Record<string, Array<{ key: "basePriceMinorUnits" | "minimumBillableMinutes" | "perKmMinorUnits"; labelHe: string; minutes?: boolean }>> = {
   VISIT_QUOTE: [{ key: "basePriceMinorUnits", labelHe: "דמי ביקור ואבחון (₪)" }],
@@ -110,7 +123,7 @@ export function ProJoin() {
   const [params] = useSearchParams();
   const at = params.get("at");
   // at=details (or nothing) opens the details step, where the date of birth is.
-  const [step, setStep] = useState(at === "summary" ? STEPS.length - 1 : at === "shop" ? SHOP_STEP : at === "documents" ? DOCUMENTS_STEP : 0);
+  const [step, setStep] = useState<number>((at ? STEP_AT[at] : undefined) ?? 0);
   /*
    * The four explanation slides, then the welcome — once, for someone who has
    * not started joining (the demo's order, docs/DEMO-SYNC.md, 2026-10-01 P1).
@@ -145,7 +158,14 @@ export function ProJoin() {
   const openServices = useQuery({ queryKey: ["pro-open-services"], queryFn: api.proOpenServices, enabled: Boolean(application.data) });
 
   const view = application.data ?? null;
-  const save = async (fn: () => Promise<ProApplicationView | unknown>, next?: number) => {
+  /*
+   * A step opened from their page (`at=`) to make a requested fix goes back
+   * to it once saved, where the fix shows as made (docs/10 §Review loop) —
+   * as the shop does from their page once sent.
+   */
+  const backToPage = (atKey: string) => at === atKey && Boolean(view?.changesRequested || (atKey === "shop" && view?.submitted));
+  const nextFrom = (atKey: string, n: number) => (backToPage(atKey) ? () => navigate("/pro") : n);
+  const save = async (fn: () => Promise<ProApplicationView | unknown>, next?: number | (() => void)) => {
     if (busy) return;
     setBusy(true);
     setErrorHe(null);
@@ -154,7 +174,8 @@ export function ProJoin() {
       const result = await fn();
       if (result && typeof result === "object" && "profile" in result) queryClient.setQueryData(applicationKey, result);
       else await queryClient.invalidateQueries({ queryKey: applicationKey });
-      if (next !== undefined) setStep(next);
+      if (typeof next === "function") next();
+      else if (next !== undefined) setStep(next);
     } catch (e) {
       if (e instanceof ApiError && e.code === "UNDER_MINIMUM_AGE") setUnderAge(true);
       else setErrorHe(e instanceof ApiError ? e.message : "משהו לא נשמר. נסו שוב.");
@@ -200,17 +221,17 @@ export function ProJoin() {
               await api.proJoin(details);
               await api.proSetBusiness(business);
               return api.proSetVehicle(vehicle);
-            }, 1)}
+            }, nextFrom("details", 1))}
           />
         );
       case 1: return view ? <Services view={view} open={openServices.data?.services ?? null} busy={busy} onSave={(ids) => save(() => api.proSetServices(ids), 2)} /> : null;
-      case 2: return view ? <Area view={view} busy={busy} onSave={(a) => save(() => api.proSetArea(a), 3)} /> : null;
-      case 3: return view ? <Documents view={view} busy={busy} save={save} onNext={() => setStep(4)} /> : null;
-      case 4: return view ? <Prices view={view} busy={busy} save={save} onNext={() => setStep(5)} /> : null;
+      case 2: return view ? <Area view={view} busy={busy} onSave={(a) => save(() => api.proSetArea(a), nextFrom("area", DOCUMENTS_STEP))} /> : null;
+      case 3: return view ? <Documents view={view} busy={busy} save={save} onNext={() => (backToPage("documents") ? navigate("/pro") : setStep(PRICES_STEP))} /> : null;
+      case 4: return view ? <Prices view={view} busy={busy} save={save} onNext={() => (backToPage("prices") ? navigate("/pro") : setStep(SHOP_STEP))} /> : null;
       case 5:
         // From their page ("לעצב את החנות"), done means back to it, as in the demo.
-        return view ? <Shop view={view} busy={busy} save={save} onNext={() => (at === "shop" && view.submitted ? navigate("/pro") : setStep(6))} /> : null;
-      case 6: return view ? <Portrait view={view} busy={busy} save={save} onNext={() => setStep(7)} /> : null;
+        return view ? <Shop view={view} busy={busy} save={save} onNext={() => (backToPage("shop") ? navigate("/pro") : setStep(PORTRAIT_STEP))} /> : null;
+      case 6: return view ? <Portrait view={view} busy={busy} save={save} onNext={() => (backToPage("portrait") ? navigate("/pro") : setStep(STEPS.length - 1))} /> : null;
       default:
         return view ? (
           <Send
@@ -738,7 +759,7 @@ function Send({ view, busy, onSubmit, onGoTo }: { view: ProApplicationView; busy
       ))}
       <Text style={styles.note}>נעדכן כאן כשיש החלטה. עד אז אפשר לערוך הכול.</Text>
       {/* Also after the first sending: a service added later waits as a draft until it is sent. */}
-      <PrimaryAction labelHe="שליחה לאישור PRO NOW" disabled={busy || view.missing.length > 0} onPress={onSubmit} />
+      <PrimaryAction labelHe={view.changesRequested ? "שליחה מחדש" : "שליחה לאישור PRO NOW"} disabled={busy || view.missing.length > 0} onPress={onSubmit} />
     </View>
   );
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProApplicationView } from "@pro-now/types";
 
-import { APPROVAL_STEPS_HE, IDENTITY_STEP_HE, approvalProgress, formatDateOfBirthHe, parseDateOfBirthHe } from "./approval";
+import { APPROVAL_STEPS_HE, IDENTITY_STEP_HE, applicationPage, approvalProgress, fixLabelHe, fixLinkFor, formatDateOfBirthHe, parseDateOfBirthHe } from "./approval";
 
 type Req = ProApplicationView["services"][number]["requirements"][number];
 function view(opts: {
@@ -13,6 +13,8 @@ function view(opts: {
   identity?: ProApplicationView["identity"];
   missing?: string[];
   dateOfBirth?: string | null;
+  fixRequests?: ProApplicationView["fixRequests"];
+  changesRequested?: boolean;
 }): ProApplicationView {
   const requirements: Req[] = (opts.credentials ?? []).map((status, i) => ({
     requirement: `LICENSE:${i}`,
@@ -30,8 +32,8 @@ function view(opts: {
     documents: (opts.documents ?? ["PENDING", "PENDING", "PENDING"]).map((status, i) => ({ kind: `K${i}`, status })),
     missing: opts.missing ?? [],
     submitted: opts.submitted ?? true,
-    fixRequests: [],
-    changesRequested: false,
+    fixRequests: opts.fixRequests ?? [],
+    changesRequested: opts.changesRequested ?? false,
   };
 }
 // The four review steps after the identity row.
@@ -111,6 +113,73 @@ describe("approvalProgress: the identity row says what the applicant must do", (
     const row = identityRow(view({ account: "APPROVED", identity: null, missing: ["IDENTITY"] }));
     expect(row.state).toBe("none");
     expect(row.action).toBeUndefined();
+  });
+});
+
+describe("applicationPage: which page the professional lands on", () => {
+  it("nobody joined yet, or a draft never sent: the joining steps", () => {
+    expect(applicationPage(null)).toBe("join");
+    expect(applicationPage(view({ submitted: false, account: "DRAFT" }))).toBe("join");
+  });
+
+  it("sent back for fixes (not submitted, changes requested): their page with the fixes, not the joining steps", () => {
+    expect(applicationPage(view({ submitted: false, account: "CHANGES_REQUESTED", changesRequested: true }))).toBe("status");
+  });
+
+  it("in review: the status page", () => {
+    expect(applicationPage(view({}))).toBe("status");
+  });
+
+  it("an approved account with an approved service: the work screen", () => {
+    expect(applicationPage(view({ account: "APPROVED", services: ["APPROVED"] }))).toBe("working");
+  });
+
+  it("an approved account whose services still wait: still the status page", () => {
+    expect(applicationPage(view({ account: "APPROVED", services: ["PENDING"] }))).toBe("status");
+  });
+});
+
+describe("fixLabelHe: each requested fix, named in the professional's words", () => {
+  const v = view({});
+  it("names the account's own items", () => {
+    expect(fixLabelHe("IDENTITY", v)).toBe("בדיקת הזהות");
+    expect(fixLabelHe("DETAILS", v)).toBe("הפרטים");
+    expect(fixLabelHe("AREA", v)).toBe("אזור העבודה");
+    expect(fixLabelHe("PORTRAIT", v)).toBe("התמונה");
+    expect(fixLabelHe("SHOP", v)).toBe("החנות");
+    expect(fixLabelHe("DOCUMENT:TAX_FILE", v)).toBe("תיק עוסק");
+  });
+
+  it("a service names the service and its price", () => {
+    expect(fixLabelHe("SERVICE:s0", v)).toBe("שירות 0 והמחיר");
+  });
+
+  it("a credential names the document and the service it is for", () => {
+    expect(fixLabelHe("CREDENTIAL:s0:LICENSE:ELECTRICIAN", v)).toBe("רישיון חשמלאי · שירות 0");
+    expect(fixLabelHe("CREDENTIAL:s0:LICENSE:UNKNOWN", v)).toBe("מסמך · שירות 0");
+  });
+
+  it("an unknown key, or a service no longer in the application, is still shown", () => {
+    expect(fixLabelHe("SOMETHING", v)).toBe("פריט בבקשה");
+    expect(fixLabelHe("SERVICE:gone", v)).toBe("פריט בבקשה");
+    expect(fixLabelHe("CREDENTIAL:gone:LICENSE:ELECTRICIAN", v)).toBe("פריט בבקשה");
+    expect(fixLabelHe("DOCUMENT:OTHER", v)).toBe("פריט בבקשה");
+  });
+});
+
+describe("fixLinkFor: the step where each fix is made", () => {
+  it("identity, documents and credentials: the documents step", () => {
+    expect(fixLinkFor("IDENTITY")).toBe("/pro/join?at=documents");
+    expect(fixLinkFor("DOCUMENT:TAX_FILE")).toBe("/pro/join?at=documents");
+    expect(fixLinkFor("CREDENTIAL:s0:LICENSE:ELECTRICIAN")).toBe("/pro/join?at=documents");
+  });
+
+  it("the other items: their own step", () => {
+    expect(fixLinkFor("DETAILS")).toBe("/pro/join?at=details");
+    expect(fixLinkFor("AREA")).toBe("/pro/join?at=area");
+    expect(fixLinkFor("PORTRAIT")).toBe("/pro/join?at=portrait");
+    expect(fixLinkFor("SHOP")).toBe("/pro/join?at=shop");
+    expect(fixLinkFor("SERVICE:s0")).toBe("/pro/join?at=prices");
   });
 });
 
