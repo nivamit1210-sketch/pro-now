@@ -99,6 +99,17 @@ test("the customer and the professional, two browsers, request to review", async
     await expect(p.getByRole("button", { name: "עריכת החנות והפרטים" })).toBeVisible();
     await expect(p.getByRole("button", { name: "יציאה מהחשבון" })).toBeVisible();
 
+    // Her car, changed from the profile tab (audit v2 #8a): never a full plate.
+    await expect(p.getByText("לא הוספתם רכב")).toBeVisible();
+    await p.getByRole("button", { name: "עריכת הרכב" }).click();
+    await p.getByRole("textbox", { name: "הרכב שלכם" }).fill("טויוטה יאריס אפורה");
+    const tail = p.getByRole("textbox", { name: "הספרות האחרונות של מספר הרכב" });
+    await tail.fill("1234567");
+    await expect(p.getByRole("button", { name: "שמירה" })).toBeDisabled();
+    await tail.fill("308");
+    await p.getByRole("button", { name: "שמירה" }).click();
+    await expect(p.getByText("טויוטה יאריס אפורה · ••• 308")).toBeVisible();
+
     // Her prices: kept by the server, and no field it cannot keep.
     await p.getByRole("tab", { name: "המשמרת" }).click();
     await p.getByRole("button", { name: /המחירים שלי/ }).click();

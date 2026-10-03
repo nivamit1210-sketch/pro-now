@@ -29,6 +29,7 @@ const matchWithEta = (etaSeconds: number | null, computedAtMs = 0): JobMatchView
           computedAt: new Date(computedAtMs).toISOString(),
         },
   price: { priceModel: "VISIT_QUOTE", currency: "ILS", visitFeeMinorUnits: 100 },
+  vehicle: null,
 });
 
 const input = (status: JobMatchView["status"], match: JobMatchView | null, nowMs = 0) => ({

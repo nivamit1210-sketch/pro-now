@@ -44,7 +44,17 @@ test("a professional joins, is reviewed, and is approved for one service", async
   await expect(page.getByRole("button", { name: "המשך" })).toBeDisabled();
   await page.getByRole("button", { name: "עוסק פטור" }).click();
   await page.getByRole("textbox", { name: "תאריך לידה" }).fill("14/05/1990");
+  // Her car, optional (audit v2 #8a): a full plate keeps "המשך" closed; the last digits are all that is kept.
+  await page.getByRole("textbox", { name: "הרכב שלכם" }).fill("קיה פיקנטו אדומה");
+  const plateTail = page.getByRole("textbox", { name: "הספרות האחרונות של מספר הרכב" });
+  await plateTail.fill("12-345-67");
+  await expect(page.getByText("רק 2 או 3 הספרות האחרונות של מספר הרכב, לא המספר המלא.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "המשך" })).toBeDisabled();
+  await plateTail.fill("67");
   await page.getByRole("button", { name: "המשך" }).click();
+  await expect(page.getByRole("textbox", { name: "במילים שלכם" })).toBeVisible();
+  const joined = (await (await page.request.get("/api/v1/pro/application")).json()) as { profile: { vehicle: unknown } };
+  expect(joined.profile.vehicle).toEqual({ vehicleHe: "קיה פיקנטו אדומה", plateTail: "67" });
 
   // 2 · in her own words; the matcher marks what fits.
   await page.getByRole("textbox", { name: "במילים שלכם" }).fill("אינסטלטורית, מטפלת בנזילות");

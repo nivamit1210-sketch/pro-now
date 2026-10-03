@@ -5,6 +5,7 @@ import { customerJob, notFound, requireRole } from "../auth/access.js";
 import { portraitForViewer } from "../domain/portrait.js";
 import { currentCheck, identityBadge } from "../domain/identity-check.js";
 import { addressAsView } from "../domain/address-as.js";
+import { vehicleForCustomer } from "../domain/vehicle.js";
 import { jobServiceNameHe } from "../domain/job/service-name.js";
 
 /**
@@ -89,6 +90,8 @@ export default async function onSiteRoutes(app: FastifyInstance) {
             addressAs: addressAsView(pro.addressAs),
             // A sandbox check is not a verification (see routes/match.ts).
             verifications: [identityBadge(currentCheck(pro.identityChecks))].filter((b): b is NonNullable<typeof b> => b !== null),
+            // The car to look for out of the window, as in the demo's "מגיע ב…"; no plate digits on a shared link.
+            vehicleHe: vehicleForCustomer(job.status, pro)?.vehicleHe ?? null,
           }
         : null,
       etaSeconds: pro ? (job.offers[0]?.etaSecondsSnapshot ?? null) : null,

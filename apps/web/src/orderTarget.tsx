@@ -57,5 +57,13 @@ export function resolveAddress<T extends { id: string }>(addresses: readonly T[]
   return addresses.find((a) => a.id === chosenId) ?? addresses[0] ?? null;
 }
 
+/**
+ * What the order's "לאן" line says (the demo's AddressLine): the saved
+ * address as written, else its label; null asks for one ("בחירה").
+ */
+export function orderAddressHe(address: { formatted: string; label?: string | null } | null): string | null {
+  return address ? address.formatted.trim() || address.label?.trim() || null : null;
+}
+
 /** An Israeli mobile number: the person at home gets a link on their phone. */
 export const IL_MOBILE = /^(\+972-?|0)5\d-?\d{3}-?\d{4}$/;

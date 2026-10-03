@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 
 import type { IntakeAnswer, IntakeQuestion, ServiceIntake } from "@pro-now/types";
 
+import { AddressLine } from "../components/AddressLine";
 import { BackButton } from "../components/BackButton";
 import { customerDarkTheme, depth, elevation, radii, scale, spacing, tabular, tint, type } from "../theme";
 import { Mark, type MarkName, ShieldCheckMark } from "../components/marks";
@@ -73,6 +74,10 @@ export interface FaultVoice {
 }
 
 export interface DescribeFaultBodyProps {
+  /** Where this order goes (undefined: the line is not shown; null: none chosen yet). */
+  orderAddressHe?: string | null;
+  orderForHe?: string | null;
+  onChangeAddress?: () => void;
   serviceNameHe: string;
   mark: MarkName;
   /** Symptoms already chosen on the service page, shown back for confirmation. */
@@ -158,6 +163,9 @@ export interface DescribeFaultBodyProps {
 }
 
 export function DescribeFaultBody({
+  orderAddressHe,
+  orderForHe = null,
+  onChangeAddress,
   serviceNameHe,
   mark,
   symptomsHe,
@@ -273,6 +281,7 @@ export function DescribeFaultBody({
               </Text>
             </View>
           </View>
+          {orderAddressHe !== undefined ? <AddressLine addressHe={orderAddressHe} forHe={orderForHe} onChange={onChangeAddress} /> : null}
         </View>
 
         {symptomsHe.length > 0 ? (

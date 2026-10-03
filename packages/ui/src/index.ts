@@ -63,6 +63,7 @@ export * from "./components/NavGlyph";
 export * from "./components/RtlRow";
 export * from "./components/LiveField";
 export * from "./components/CommandChrome";
+export * from "./components/AddressLine";
 export * from "./components/MatchReveal";
 export * from "./components/livingmap";
 export * from "./components/ProWorld";

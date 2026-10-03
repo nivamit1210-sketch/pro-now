@@ -5,7 +5,7 @@ import { agoHe, blockedReasonHe, earningsPropsFor, eligibilityFor, pricingRowsFo
 
 function application(over: Partial<ProApplicationView> = {}): ProApplicationView {
   return {
-    profile: { id: "p", displayName: "דנה", legalName: "דנה לוי", addressAs: "F", dateOfBirth: "1990-05-14", verificationStatus: "APPROVED", business: null, shop: null, portrait: null },
+    profile: { id: "p", displayName: "דנה", legalName: "דנה לוי", addressAs: "F", dateOfBirth: "1990-05-14", vehicle: { vehicleHe: null, plateTail: null }, verificationStatus: "APPROVED", business: null, shop: null, portrait: null },
     services: [
       {
         id: "ps1", serviceId: "s1", code: "HOME_ELECT_FAULT", nameHe: "תקלה חשמלית", priceModel: "VISIT_QUOTE", status: "APPROVED", priced: true,

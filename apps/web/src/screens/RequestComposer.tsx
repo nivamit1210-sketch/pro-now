@@ -13,7 +13,7 @@ import {
 import { api } from "../api";
 import { composeDescription, detailsNoteHe, livePriceHe, priceRows } from "../order";
 import { MediaUploadError, sendErrorHe } from "../sendErrors";
-import { resolveAddress, useOrderTarget } from "../orderTarget";
+import { orderAddressHe, resolveAddress, useOrderTarget } from "../orderTarget";
 import { mediaUploadInputs } from "../request-media";
 import { resolveServiceId, ServiceCatalogueMismatchError, ServiceNotOpenError } from "../serviceResolver";
 import { useWebMediaCapture } from "../useWebMediaCapture";
@@ -44,7 +44,6 @@ export function RequestComposer({ serviceId, media, onBack, onOpenAddresses, onS
    */
   const { target } = useOrderTarget();
   const address = resolveAddress(addresses.data?.addresses ?? [], target.addressId);
-  const [needsAddress, setNeedsAddress] = useState(false);
   const [text, setText] = useState(initialText);
   /*
    * AS IN THE DEMO: no problem questions before calling (Amit, 2026-09-29) —
@@ -86,9 +85,9 @@ export function RequestComposer({ serviceId, media, onBack, onOpenAddresses, onS
   const send = useCallback((withoutMedia = false) => {
     void (async () => {
       if (sending) return;
+      // No address yet: ask where to send the professional first; back returns here with everything kept (the demo).
       if (!address) {
-        setErrorHe("עוד אין כתובת שמורה. הוסיפו כתובת כדי שנדע לאן לשלוח את המקצוען.");
-        setNeedsAddress(true);
+        onOpenAddresses();
         return;
       }
       setSending(true);
@@ -137,7 +136,7 @@ export function RequestComposer({ serviceId, media, onBack, onOpenAddresses, onS
         setSending(false);
       }
     })();
-  }, [address, destinationHe, idempotencyKey, media.photos, media.voice, needsDestination, onSent, pickedIds, sending, serviceId, target.onSite, text]);
+  }, [address, destinationHe, idempotencyKey, media.photos, media.voice, needsDestination, onOpenAddresses, onSent, pickedIds, sending, serviceId, target.onSite, text]);
 
   if (addresses.isPending) return <LoadingScreen />;
   if (addresses.isError) return <ErrorScreen offline={!navigator.onLine} onRetry={() => void addresses.refetch()} />;
@@ -145,11 +144,6 @@ export function RequestComposer({ serviceId, media, onBack, onOpenAddresses, onS
   return (
     <View style={[styles.screen, { width, height, backgroundColor: customerDarkTheme.colors.bg }]}>
       {errorHe ? <Text accessibilityRole="alert" style={styles.error}>{errorHe}</Text> : null}
-      {needsAddress && !address ? (
-        <Pressable onPress={onOpenAddresses} accessibilityRole="button" style={styles.sendWithout}>
-          <Text style={styles.sendWithoutText}>הוספת כתובת</Text>
-        </Pressable>
-      ) : null}
       {uploadFailed && !sending ? (
         <Pressable onPress={() => send(true)} accessibilityRole="button" style={styles.sendWithout}>
           <Text style={styles.sendWithoutText}>שליחת הקריאה בלי הקבצים</Text>
@@ -160,6 +154,10 @@ export function RequestComposer({ serviceId, media, onBack, onOpenAddresses, onS
       <View style={styles.formArea} onLayout={(e) => setFormH(Math.round(e.nativeEvent.layout.height))}>
         {formH > 0 ? (
           <DescribeFaultBody
+            // Where it goes, while ordering (the demo's AddressLine): "לאן · address · שינוי".
+            orderAddressHe={orderAddressHe(address)}
+            orderForHe={target.onSite?.name ?? null}
+            onChangeAddress={onOpenAddresses}
             serviceNameHe={serviceNameHe}
             mark={mark}
             symptomsHe={[]}

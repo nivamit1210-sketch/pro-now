@@ -20,7 +20,7 @@ function view(opts: {
     credential: status ? { id: `c${i}`, status, number: null } : null,
   }));
   return {
-    profile: { id: "p", displayName: "דנה", legalName: "דנה לוי", addressAs: "F", dateOfBirth: opts.dateOfBirth === undefined ? "1990-05-14" : opts.dateOfBirth, verificationStatus: opts.account ?? "SERVICE_REVIEW", business: null, shop: null, portrait: null },
+    profile: { id: "p", displayName: "דנה", legalName: "דנה לוי", addressAs: "F", dateOfBirth: opts.dateOfBirth === undefined ? "1990-05-14" : opts.dateOfBirth, vehicle: { vehicleHe: null, plateTail: null }, verificationStatus: opts.account ?? "SERVICE_REVIEW", business: null, shop: null, portrait: null },
     services: (opts.services ?? ["PENDING"]).map((status, i) => ({
       id: `ps${i}`, serviceId: `s${i}`, code: `S${i}`, nameHe: `שירות ${i}`, priceModel: "VISIT_QUOTE", status, priced: true,
       requirements: i === 0 ? requirements : [],
