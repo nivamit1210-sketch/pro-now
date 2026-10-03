@@ -4,7 +4,7 @@ import type { PrismaClient } from "@prisma/client";
 import { credentialTypeFor } from "@pro-now/types";
 
 import { startApp } from "./harness.js";
-import { uniqueEmail } from "./auth-helpers.js";
+import { signInByEmail, uniqueEmail, type CookieJar } from "./auth-helpers.js";
 import { createPrisma } from "../../src/db/prisma-client.js";
 import { dispatchablePro, takeOffline } from "./pro-helpers.js";
 
@@ -13,6 +13,9 @@ import { dispatchablePro, takeOffline } from "./pro-helpers.js";
  * a warning at 30 days, at 7 days and on expiry, each once, and an expired
  * credential marked EXPIRED.
  */
+const ADMIN = uniqueEmail("exp-admin");
+process.env.ADMIN_EMAILS = ADMIN;
+let admin: CookieJar;
 let app: FastifyInstance;
 let db: PrismaClient;
 let svcId: string;
@@ -31,6 +34,7 @@ const notices = (userId: string) =>
 
 beforeAll(async () => {
   app = await startApp();
+  admin = await signInByEmail(app, ADMIN);
   db = createPrisma();
   const open = await db.marketActivation.findMany({
     where: { providerOnboardingEnabled: true, service: { priceModel: "VISIT_QUOTE" } },
@@ -122,5 +126,45 @@ describe("the daily credential expiry check", () => {
     await app.checkCredentialExpiryNow();
     expect(await notices(pro.userId)).toHaveLength(0);
     expect((await db.professionalCredential.findUniqueOrThrow({ where: { id: credentialId } })).status).toBe("EXPIRED");
+  });
+});
+
+describe("the admin lists of credentials to review", () => {
+  const get = async (path: string) => {
+    const res = await app.inject({ method: "GET", url: `/api/v1/admin/credentials/${path}`, headers: { cookie: admin.header(), origin: "http://localhost:4000" } });
+    expect(res.statusCode, res.body).toBe(200);
+    return res.json();
+  };
+  const ids = (rows: Array<{ credentialId: string }>) => rows.map((r) => r.credentialId);
+
+  it("sorts each credential into expiring, expired or undated; 'no expiry' is in none; a renewal is listed with the date it replaces", async () => {
+    const soon = await proWithCredentialExpiringIn(10);
+    const past = await proWithCredentialExpiringIn(-3);
+    const undated = await proWithCredentialExpiringIn(1);
+    await db.professionalCredential.update({ where: { id: undated.credentialId }, data: { expiresAt: null } });
+    const forever = await proWithCredentialExpiringIn(1);
+    await db.professionalCredential.update({ where: { id: forever.credentialId }, data: { expiresAt: null, noExpiry: true } });
+
+    const lists = await get("expiry");
+    expect(ids(lists.expiring)).toContain(soon.credentialId);
+    expect(ids(lists.expired)).toContain(past.credentialId);
+    expect(ids(lists.undated)).toContain(undated.credentialId);
+    expect(ids(lists.expiring)).not.toContain(past.credentialId);
+    expect(ids(lists.expired)).not.toContain(soon.credentialId);
+    for (const l of [lists.expiring, lists.expired, lists.undated]) expect(ids(l)).not.toContain(forever.credentialId);
+    const row = lists.expiring.find((r: { credentialId: string }) => r.credentialId === soon.credentialId);
+    expect(row).toEqual(expect.objectContaining({ professionalId: soon.pro.id, displayName: expect.any(String), serviceNameHe: expect.any(String), type: expect.any(String) }));
+    expect(lists.undated.find((r: { credentialId: string }) => r.credentialId === undated.credentialId).expiresAt).toBeNull();
+
+    // After the daily run the past one is EXPIRED and still listed as expired.
+    await app.checkCredentialExpiryNow();
+    expect(ids((await get("expiry")).expired)).toContain(past.credentialId);
+
+    const old = await db.professionalCredential.findUniqueOrThrow({ where: { id: soon.credentialId } });
+    const renewal = await db.professionalCredential.create({ data: { professionalId: soon.pro.id, serviceId: old.serviceId, type: old.type, status: "PENDING" } });
+    const { renewals } = await get("renewals");
+    const r = renewals.find((x: { credentialId: string }) => x.credentialId === renewal.id);
+    expect(r).toEqual(expect.objectContaining({ professionalId: soon.pro.id, replacesExpiresAt: old.expiresAt!.toISOString() }));
+    expect(renewals.map((x: { credentialId: string }) => x.credentialId)).not.toContain(soon.credentialId);
   });
 });

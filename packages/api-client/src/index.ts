@@ -202,6 +202,9 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
       market: () => request<{ activations: AdminActivationRow[] }>("GET", "/admin/market"),
       changeMarket: (id: string, input: { customerVisible?: boolean; providerOnboardingEnabled?: boolean; dispatchEnabled?: boolean; reason: string }) =>
         request<AdminActivationRow>("PATCH", `/admin/market/${encodeURIComponent(id)}`, input),
+      credentialExpiry: () =>
+        request<{ expiring: AdminCredentialRow[]; expired: AdminCredentialRow[]; undated: AdminCredentialRow[] }>("GET", "/admin/credentials/expiry"),
+      credentialRenewals: () => request<{ renewals: AdminCredentialRenewalRow[] }>("GET", "/admin/credentials/renewals"),
       matchFeedback: () => request<{ feedback: AdminFeedbackRow[] }>("GET", "/admin/match-feedback"),
       usage: () => request<AdminUsageView>("GET", "/admin/usage"),
       supportTickets: (status: "OPEN" | "HANDLED" = "OPEN") =>
@@ -350,6 +353,8 @@ export interface AdminActivationRow {
   providerOnboardingEnabled: boolean;
   dispatchEnabled: boolean;
 }
+export interface AdminCredentialRow { credentialId: string; professionalId: string; displayName: string; serviceNameHe: string; type: string; expiresAt: string | null }
+export interface AdminCredentialRenewalRow { credentialId: string; professionalId: string; displayName: string; serviceNameHe: string; type: string; replacesExpiresAt: string | null }
 export interface AdminFeedbackRow { id: string; text: string; suggested: string[]; chosen: string | null; confidence: string; missed: boolean; at: string }
 export interface AdminUsageView {
   users: number;
