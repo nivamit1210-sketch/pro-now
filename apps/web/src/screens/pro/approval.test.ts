@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProApplicationView } from "@pro-now/types";
 
-import { APPROVAL_STEPS_HE, IDENTITY_STEP_HE, applicationPage, approvalProgress, fixLabelHe, fixLinkFor, formatDateOfBirthHe, parseDateOfBirthHe } from "./approval";
+import { APPROVAL_STEPS_HE, IDENTITY_STEP_HE, applicationPage, approvalProgress, fixLabelHe, fixLinkFor, formatDateOfBirthHe, parseDateOfBirthHe, resendErrorHe, saveInOrder } from "./approval";
 
 type Req = ProApplicationView["services"][number]["requirements"][number];
 function view(opts: {
@@ -195,5 +195,33 @@ describe("date of birth, as typed in Israel (DD/MM/YYYY)", () => {
   it("shows the server's date back the way it is typed", () => {
     expect(formatDateOfBirthHe("1990-05-14")).toBe("14/05/1990");
     expect(formatDateOfBirthHe(null)).toBe("");
+  });
+});
+
+describe("resendErrorHe (docs/10 §Review loop)", () => {
+  it("says the resend's refusals in the professional's words, and nothing for other codes", () => {
+    expect(resendErrorHe("FIXES_OPEN")).toBe("עדיין יש דברים לתקן");
+    expect(resendErrorHe("APPLICATION_INCOMPLETE")).toBe("חסרים עוד פרטים בבקשה");
+    expect(resendErrorHe("SOMETHING_ELSE")).toBeNull();
+    expect(resendErrorHe(undefined)).toBeNull();
+  });
+});
+
+describe("saveInOrder", () => {
+  it("runs every save and reports success when all succeed", async () => {
+    const ran: number[] = [];
+    expect(await saveInOrder([1, 2, 3].map((n) => async () => { ran.push(n); return true; }))).toBe(true);
+    expect(ran).toEqual([1, 2, 3]);
+  });
+
+  it("stops at the first failed save and reports failure, so the step does not move on", async () => {
+    const ran: number[] = [];
+    const ok = await saveInOrder([
+      async () => { ran.push(1); return true; },
+      async () => { ran.push(2); return false; },
+      async () => { ran.push(3); return true; },
+    ]);
+    expect(ok).toBe(false);
+    expect(ran).toEqual([1, 2]);
   });
 });

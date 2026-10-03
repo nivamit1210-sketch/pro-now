@@ -162,3 +162,16 @@ export function formatDateOfBirthHe(iso: string | null | undefined): string {
   const m = iso ? /^(\d{4})-(\d{2})-(\d{2})/.exec(iso) : null;
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 }
+
+/** The resend's refusals (docs/10 §Review loop), in the professional's words; null for anything else. */
+export function resendErrorHe(code: string | undefined): string | null {
+  if (code === "FIXES_OPEN") return "עדיין יש דברים לתקן";
+  if (code === "APPLICATION_INCOMPLETE") return "חסרים עוד פרטים בבקשה";
+  return null;
+}
+
+/** Saves one after another; stops at the first that fails, so a step moves on only when everything was saved. */
+export async function saveInOrder(saves: Array<() => Promise<boolean>>): Promise<boolean> {
+  for (const s of saves) if (!(await s())) return false;
+  return true;
+}

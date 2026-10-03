@@ -12,7 +12,7 @@ import { ErrorScreen, LoadingScreen } from "../../states";
 import { applicationKey } from "./ProJoin";
 import { ProOnline } from "./ProOnline";
 import { ProSignOut } from "./ProSignOut";
-import { APPROVAL_STATE_HE, applicationPage, approvalProgress, fixLabelHe, fixLinkFor } from "./approval";
+import { APPROVAL_STATE_HE, applicationPage, approvalProgress, fixLabelHe, fixLinkFor, resendErrorHe } from "./approval";
 import { tradeCharacterFor } from "../../tradeCharacter";
 
 /*
@@ -184,9 +184,10 @@ function FixRequests({ view }: { view: ProApplicationView }) {
       const result = await api.proSubmitApplication();
       queryClient.setQueryData(applicationKey, result);
     } catch (e) {
-      if (e instanceof ApiError && e.code === "FIXES_OPEN") {
-        setErrorHe("עדיין יש דברים לתקן");
-        // The server knows better than this page what is still open.
+      const known = e instanceof ApiError ? resendErrorHe(e.code) : null;
+      if (known) {
+        setErrorHe(known);
+        // The server knows better than this page what is still open or missing.
         void queryClient.invalidateQueries({ queryKey: applicationKey });
       } else setErrorHe(e instanceof ApiError ? e.message : "השליחה לא עברה. נסו שוב.");
     } finally {

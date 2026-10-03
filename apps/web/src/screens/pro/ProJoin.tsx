@@ -24,7 +24,7 @@ import { worldSources } from "../../art/worldSources";
 import { tradeCharacterFor, tradeShopFor } from "../../tradeCharacter";
 import { IdentityCheck } from "../../identity/IdentityCheck";
 import { ErrorScreen, LoadingScreen } from "../../states";
-import { APPROVAL_STEPS_HE, formatDateOfBirthHe, parseDateOfBirthHe } from "./approval";
+import { APPROVAL_STEPS_HE, formatDateOfBirthHe, parseDateOfBirthHe, resendErrorHe, saveInOrder } from "./approval";
 import { ProSignOut } from "./ProSignOut";
 import { VehicleFields } from "./ProVehicle";
 import { vehicleInput, vehicleLineHe, vehicleProblemsHe, type VehicleDraft } from "./vehicle";
@@ -165,8 +165,9 @@ export function ProJoin() {
    */
   const backToPage = (atKey: string) => at === atKey && Boolean(view?.changesRequested || (atKey === "shop" && view?.submitted));
   const nextFrom = (atKey: string, n: number) => (backToPage(atKey) ? () => navigate("/pro") : n);
-  const save = async (fn: () => Promise<ProApplicationView | unknown>, next?: number | (() => void)) => {
-    if (busy) return;
+  /** True once saved; on a refusal the error stays on screen and the step does not move on. */
+  const save = async (fn: () => Promise<ProApplicationView | unknown>, next?: number | (() => void)): Promise<boolean> => {
+    if (busy) return false;
     setBusy(true);
     setErrorHe(null);
     setUnderAge(false);
@@ -176,9 +177,11 @@ export function ProJoin() {
       else await queryClient.invalidateQueries({ queryKey: applicationKey });
       if (typeof next === "function") next();
       else if (next !== undefined) setStep(next);
+      return true;
     } catch (e) {
       if (e instanceof ApiError && e.code === "UNDER_MINIMUM_AGE") setUnderAge(true);
-      else setErrorHe(e instanceof ApiError ? e.message : "משהו לא נשמר. נסו שוב.");
+      else setErrorHe((e instanceof ApiError && resendErrorHe(e.code)) || (e instanceof ApiError ? e.message : "משהו לא נשמר. נסו שוב."));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -243,6 +246,7 @@ export function ProJoin() {
               return sent;
             })}
             onGoTo={setStep}
+            onFixes={() => navigate("/pro")}
           />
         ) : null;
     }
@@ -429,7 +433,7 @@ function Area({ view, busy, onSave }: { view: ProApplicationView; busy: boolean;
   );
 }
 
-function Documents({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<void>; onNext: () => void }) {
+function Documents({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<boolean>; onNext: () => void }) {
   const queryClient = useQueryClient();
   const [numbers, setNumbers] = useState<Record<string, string>>({});
   const has = (kind: string) => view.documents.some((d) => d.kind === kind && d.status !== "REJECTED");
@@ -504,9 +508,10 @@ function Documents({ view, busy, save, onNext }: { view: ProApplicationView; bus
   );
 }
 
-function Prices({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<void>; onNext: () => void }) {
+function Prices({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<boolean>; onNext: () => void }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const saveAll = async () => {
+    const saves: Array<() => Promise<boolean>> = [];
     for (const s of view.services) {
       const fields = PRICE_FIELDS[s.priceModel] ?? [];
       const body: Record<string, number> = {};
@@ -517,9 +522,10 @@ function Prices({ view, busy, save, onNext }: { view: ProApplicationView; busy: 
         if (!Number.isFinite(n)) continue;
         body[f.key] = f.minutes ? Math.round(n) : Math.round(n * 100);
       }
-      if (Object.keys(body).length > 0) await save(() => api.proSetPricing(s.serviceId, body));
+      if (Object.keys(body).length > 0) saves.push(() => save(() => api.proSetPricing(s.serviceId, body)));
     }
-    onNext();
+    // A refused price keeps them here with its error, not on their page as if it were saved.
+    if (await saveInOrder(saves)) onNext();
   };
   return (
     <View style={styles.section}>
@@ -557,7 +563,7 @@ const BRAND_SWATCHES = [
  * it then opens with these defaults, to be designed from their page later.
  * Customers see the shop when the street arrives (D2).
  */
-function Shop({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<void>; onNext: () => void }) {
+function Shop({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<boolean>; onNext: () => void }) {
   const p = view.profile;
   // Until they type their own, the sign reads the business name, else their name (the demo's rule).
   const [name, setName] = useState(p.shop?.name ?? (p.business?.tradingName || p.displayName).slice(0, 22));
@@ -631,7 +637,7 @@ function Shop({ view, busy, save, onNext }: { view: ProApplicationView; busy: bo
  * Required: "המשך" waits for one of the two. The customer they are sent to
  * sees it (D1, Dvir 2026-09-30), and so does the admin.
  */
-function Portrait({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<void>; onNext: () => void }) {
+function Portrait({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<boolean>; onNext: () => void }) {
   const chosen = view.profile.portrait?.kind ?? null;
   const [preview, setPreview] = useState<string | null>(null);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
@@ -695,7 +701,9 @@ const TAX_HE: Record<string, string> = { EXEMPT: "עוסק פטור", LICENSED: 
  * see them, each part with "עריכה" back to its step, what is still missing,
  * and what the review after sending checks.
  */
-function Send({ view, busy, onSubmit, onGoTo }: { view: ProApplicationView; busy: boolean; onSubmit: () => void; onGoTo: (step: number) => void }) {
+function Send({ view, busy, onSubmit, onGoTo, onFixes }: { view: ProApplicationView; busy: boolean; onSubmit: () => void; onGoTo: (step: number) => void; onFixes: () => void }) {
+  // Sent back for fixes (docs/10 §Review loop): the resend waits until every request is fixed, as the server insists.
+  const fixesOpen = view.changesRequested && view.fixRequests.some((f) => f.status === "OPEN");
   const stepOf = (code: string) =>
     code === "ADDRESS_AS" || code === "TAX_STATUS" || code === "DATE_OF_BIRTH" ? 0 : code === "SERVICES" ? 1 : code === "AREA" ? 2 : code.startsWith("PRICE") ? 4 : code === "PORTRAIT" ? 6 : 3;
   const p = view.profile;
@@ -759,7 +767,13 @@ function Send({ view, busy, onSubmit, onGoTo }: { view: ProApplicationView; busy
       ))}
       <Text style={styles.note}>נעדכן כאן כשיש החלטה. עד אז אפשר לערוך הכול.</Text>
       {/* Also after the first sending: a service added later waits as a draft until it is sent. */}
-      <PrimaryAction labelHe={view.changesRequested ? "שליחה מחדש" : "שליחה לאישור PRO NOW"} disabled={busy || view.missing.length > 0} onPress={onSubmit} />
+      {fixesOpen ? (
+        <Pressable onPress={onFixes} accessibilityRole="link" style={styles.listRow}>
+          <Text style={styles.listText}>עדיין יש דברים לתקן</Text>
+          <Text style={styles.tag}>למה שצריך לתקן ›</Text>
+        </Pressable>
+      ) : null}
+      <PrimaryAction labelHe={view.changesRequested ? "שליחה מחדש" : "שליחה לאישור PRO NOW"} disabled={busy || view.missing.length > 0 || fixesOpen} onPress={onSubmit} />
     </View>
   );
 }

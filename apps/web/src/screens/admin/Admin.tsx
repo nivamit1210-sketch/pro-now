@@ -81,10 +81,11 @@ const ERROR_HE: Record<string, string> = {
   IDENTITY_NOT_VERIFIED: "קודם צריך לאשר את הזהות.",
   UNDER_MINIMUM_AGE: "לפי תאריך הלידה, מתחת לגיל 18.",
   DATE_OF_BIRTH_MISSING: "חסר תאריך לידה בפרטים.",
-  FIXES_PENDING: "יש בקשות תיקון פתוחות — שלחו או בטלו אותן קודם.",
+  FIXES_PENDING: "יש בקשות תיקון פתוחות, או שהבקשה עוד אצל המקצוען — קודם שלחו, בטלו או חכו לשליחה מחדש.",
+  IDENTITY_NOT_OPEN: "הזהות כבר הוכרעה — אי אפשר לבקש צילום מחדש.",
   NOTHING_MARKED: "לא סומן שום דבר לתיקון.",
   NOT_IN_REVIEW: "הבקשה לא בבדיקה כרגע.",
-  ALREADY_SENT: "הבקשה כבר נשלחה למקצוען.",
+  ALREADY_SENT: "הבקשה כבר תוקנה או נסגרה.",
 };
 
 /** An action that needs a reason when it refuses; errors shown in place. */
@@ -158,6 +159,7 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
     <FixMark
       labelHe={fixLabelHe(itemKey, a)}
       draft={v.review.draft.find((d) => d.itemKey === itemKey) ?? null}
+      changed={v.review.changedItemKeys.includes(itemKey)}
       busy={busy}
       onMark={() => markFix(itemKey)}
       onCancel={(markId) => decide(() => api.admin.cancelFix(markId))}
@@ -183,6 +185,9 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
       <Field label="סיבה (חובה לסירוב ולבקשת תיקון, נשמרת ביומן)" value={reason} onChange={setReason} />
 
       {v.review.current?.status === "ANSWERED" ? <ReturnedRound review={v.review} application={a} /> : null}
+      {v.review.current?.status === "SENT" ? (
+        <SentRound current={v.review.current} application={a} busy={busy} onCancel={(requestId) => decide(() => api.admin.cancelFix(requestId))} />
+      ) : null}
 
       <Text style={styles.section}>פרטי הבקשה</Text>
       <View style={styles.row}>
@@ -279,16 +284,18 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
 
 type Review = AdminProfessionalView["review"];
 
-/** An item's "ask to fix": the mark with its reason once made, and its cancel while a draft. */
-function FixMark({ labelHe, draft, busy, onMark, onCancel }: {
+/** An item's "ask to fix": the mark with its reason once made, and its cancel while a draft; "השתנה" if the professional changed it since the last ask. */
+function FixMark({ labelHe, draft, changed, busy, onMark, onCancel }: {
   labelHe: string;
   draft: Review["draft"][number] | null;
+  changed: boolean;
   busy: boolean;
   onMark: () => unknown;
   onCancel: (markId: string) => unknown;
 }) {
   return (
     <>
+      {changed ? <Text style={styles.tag}>השתנה</Text> : null}
       {draft ? <Text style={styles.marked}>לתיקון: {draft.reasonHe}</Text> : null}
       <View style={styles.actions}>
         <Action labelHe="בקשת תיקון" accessibilityLabelHe={`בקשת תיקון · ${labelHe}`} quiet disabled={busy} onPress={onMark} />
@@ -299,6 +306,41 @@ function FixMark({ labelHe, draft, busy, onMark, onCancel }: {
 }
 
 const REQUEST_STATUS_HE: Record<string, string> = { FIXED: "תוקן ✓", CANCELLED: "בוטל", OPEN: "לא תוקן" };
+
+/**
+ * A round still with the professional (docs/10 §Review loop): each request
+ * and what became of it; an open one can be taken back — the way out of a
+ * request the professional cannot answer.
+ */
+function SentRound({ current, application, busy, onCancel }: {
+  current: NonNullable<Review["current"]>;
+  application: AdminProfessionalView["application"];
+  busy: boolean;
+  onCancel: (requestId: string) => unknown;
+}) {
+  return (
+    <View style={styles.round}>
+      <Text style={styles.section}>נשלח לתיקון</Text>
+      {current.requests.map((r) => {
+        const labelHe = fixLabelHe(r.itemKey, application);
+        return (
+          <View key={r.itemKey} style={styles.roundLine}>
+            <View style={styles.line}>
+              <Text style={styles.rowTitle}>{labelHe}</Text>
+              <Text style={[styles.rowSub, r.status === "FIXED" && styles.good]}>{REQUEST_STATUS_HE[r.status] ?? r.status}</Text>
+            </View>
+            <Text style={styles.rowSub}>{r.reasonHe}</Text>
+            {r.status === "OPEN" ? (
+              <View style={styles.actions}>
+                <Action labelHe="ביטול הבקשה" accessibilityLabelHe={`ביטול הבקשה · ${labelHe}`} quiet disabled={busy} onPress={() => onCancel(r.id)} />
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 /**
  * An application back from a round of fixes (docs/10 §Review loop): each
