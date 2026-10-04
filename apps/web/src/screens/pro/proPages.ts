@@ -124,7 +124,7 @@ function daysLeft(expiresAt: string | null, now: Date): number | null {
 }
 
 function requirementActionHe(state: VerificationStep["state"], note: ReturnType<typeof expiryNoteHe>, renewalPending: boolean, daysUntil: number | null): string | null {
-  if (renewalPending && (state === "VERIFIED" || state === "EXPIRED")) return "החידוש התקבל ונבדק";
+  if (renewalPending && (state === "VERIFIED" || state === "EXPIRED")) return "החידוש התקבל ונמצא בבדיקה";
   if (state === "VERIFIED" && note.soon && daysUntil !== null)
     return daysUntil === 1 ? "יפוג מחר — אפשר להעלות חידוש" : `יפוג בעוד ${daysUntil} ימים — אפשר להעלות חידוש`;
   return ACTION_HE[state] ?? null;
@@ -143,6 +143,13 @@ export function renewableStepIds(view: ProApplicationView, now: Date = new Date(
     const verified = e.credential.status === "VERIFIED";
     if ((verified && (note.soon || note.expired)) || e.credential.status === "EXPIRED") ids.add(`req:${requirement}`);
   }
+  return ids;
+}
+
+/** The steps whose renewal is already with the reviewers: an EXPIRED one among them takes no upload either. */
+export function renewalPendingStepIds(view: ProApplicationView): Set<string> {
+  const ids = new Set<string>();
+  for (const [requirement, e] of requirementEntries(view)) if (e.credential && e.renewalPending) ids.add(`req:${requirement}`);
   return ids;
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProApplicationView } from "@pro-now/types";
 
-import { APPROVAL_STEPS_HE, IDENTITY_STEP_HE, applicationPage, approvalProgress, fixLabelHe, fixLinkFor, formatDateOfBirthHe, parseDateOfBirthHe, resendErrorHe, saveInOrder } from "./approval";
+import { APPROVAL_STEPS_HE, IDENTITY_STEP_HE, applicationPage, approvalProgress, fixLabelHe, fixLinkFor, formatDateOfBirthHe, parseDateOfBirthHe, parseStaffDateHe, resendErrorHe, saveInOrder } from "./approval";
 
 type Req = ProApplicationView["services"][number]["requirements"][number];
 function view(opts: {
@@ -224,5 +224,17 @@ describe("saveInOrder", () => {
     ]);
     expect(ok).toBe(false);
     expect(ran).toEqual([1, 2]);
+  });
+});
+
+describe("the date staff type", () => {
+  it("takes DD/MM/YYYY and YYYY-MM-DD, nothing else", () => {
+    expect(parseStaffDateHe("14/05/1990")).toBe("1990-05-14");
+    expect(parseStaffDateHe("1990-05-14")).toBe("1990-05-14");
+    expect(parseStaffDateHe(" 1990-05-14 ")).toBe("1990-05-14");
+    expect(parseStaffDateHe("1990-02-31")).toBeNull();
+    expect(parseStaffDateHe("31/02/1990")).toBeNull();
+    expect(parseStaffDateHe("14 May 1990")).toBeNull();
+    expect(parseStaffDateHe("")).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProApplicationView, ProEarningsView, ProPublicProfileView, ProServiceEligibilityView } from "@pro-now/types";
 
-import { agoHe, blockedReasonHe, earningsPropsFor, eligibilityFor, expiryNoteHe, pricingRowsFor, proPageFromPath, publicProfilePropsFor, renewableStepIds, verificationStepsFor } from "./proPages";
+import { agoHe, blockedReasonHe, earningsPropsFor, eligibilityFor, expiryNoteHe, pricingRowsFor, proPageFromPath, publicProfilePropsFor, renewableStepIds, renewalPendingStepIds, verificationStepsFor } from "./proPages";
 
 function application(over: Partial<ProApplicationView> = {}): ProApplicationView {
   return {
@@ -162,8 +162,15 @@ describe("המסמכים שלי — expiring, renewed and expired documents", ()
   });
   it("a renewal already sent: says it is being checked, and offers no second one", () => {
     const view = withLicence({ status: "VERIFIED", expiresAt: inDays(10) }, true);
-    expect(licence(view).actionHe).toBe("החידוש התקבל ונבדק");
+    expect(licence(view).actionHe).toBe("החידוש התקבל ונמצא בבדיקה");
     expect(renewableStepIds(view, now).size).toBe(0);
+  });
+  it("expired with a renewal waiting: the checking words, no second upload, and the step is marked as waiting", () => {
+    const view = withLicence({ status: "EXPIRED", expiresAt: inDays(-1) }, true);
+    expect(licence(view)).toMatchObject({ state: "EXPIRED", actionHe: "החידוש התקבל ונמצא בבדיקה" });
+    expect(renewableStepIds(view, now).size).toBe(0);
+    expect(renewalPendingStepIds(view).has("req:LICENSE:ELECTRICIAN")).toBe(true);
+    expect(renewalPendingStepIds(withLicence({ status: "EXPIRED", expiresAt: inDays(-1) })).size).toBe(0);
   });
   it("expired: the expired state, its own words, and renewable", () => {
     const view = withLicence({ status: "EXPIRED", expiresAt: inDays(-1) });

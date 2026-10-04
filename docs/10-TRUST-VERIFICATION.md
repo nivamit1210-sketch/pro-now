@@ -370,9 +370,10 @@ check; piece 2: the review loop).
 
 Built 2026-10-04. As built: the `EXPIRED` status is written after the notice
 succeeds (a failed `EXPIRED` notice leaves the credential `VERIFIED` and is
-retried the next day), and every `VERIFIED` credential past its date becomes
+retried by the next run), and every `VERIFIED` credential from its expiry day becomes
 `EXPIRED`, even when a renewal covers it or its service is disabled (only the
-notice is skipped); the admin list `expiring` leaves out credentials a valid
+notice is skipped); a new date or `noExpiry` on a credential starts its
+notices over; notices state the real days left; the admin list `expiring` leaves out credentials a valid
 renewal covers; notifications keep their link in `data.url`.
 
 **Why.**
@@ -389,7 +390,7 @@ renewal covers; notifications keep their link in `data.url`.
   the inbox plus a push.
 - **Legal name and date of birth are locked** once identity is verified.
   Only staff can change them, audited.
-- **How the warnings run:** a daily check plus a log of notices sent.
+- **How the warnings run:** an hourly check plus a log of notices sent.
 
 ### Expiry dates become explicit
 Verifying a credential of type `LICENSE`, `CERTIFICATE` or `INSURANCE`
@@ -400,11 +401,12 @@ certificate). The server refuses a verification with neither
 the credential, so "no date because none applies" differs from "no date
 because nobody entered one".
 
-### The daily check
+### The hourly check
 - **What runs:** a scheduled job (the pattern of `plugins/media-cleanup.ts`
-  and the sweeps; the first run soon after start, then once a day). It
-  covers every `VERIFIED` credential with an `expiresAt`, on a professional
-  service that is `APPROVED` or `PENDING`.
+  and the sweeps; the first run soon after start, then every hour: notices are once-only, so it is cheap). It
+  marks every `VERIFIED` credential from its expiry day `EXPIRED`; it sends
+  notices for those on a professional service that is `APPROVED` or
+  `PENDING`, of an account that is `APPROVED` or `LIMITED`.
 - **Days are counted by Israel's calendar** (Asia/Jerusalem): "in 30 days"
   and "expired" are calendar days there.
 - **Which notice is due:**
@@ -418,12 +420,16 @@ because nobody entered one".
 - **No notice when:**
   - another `VERIFIED` credential of the same type for the same service is
     current past that date (a renewal covers it);
-  - the professional service is `DISABLED` or `SUSPENDED`.
+  - the professional service is `DRAFT`, `DISABLED` or `SUSPENDED`, or the
+    account is not `APPROVED` or `LIMITED` (suspended, refused, erased).
+
+  Deciding a credential with a new `expiresAt` or `noExpiry` deletes its
+  notices, so the new date is warned about afresh; the same date keeps them.
 - **The notices:**
-  - `WARN_30`: "<credential> ל<service> יפוג בעוד 30 יום — אפשר להעלות את
-    החידוש כבר עכשיו"
-  - `WARN_7`: "<credential> ל<service> יפוג בעוד שבוע"
-  - `EXPIRED`: "<credential> ל<service> פג — השירות לא מקבל קריאות עד
+  - `WARN_30` and `WARN_7`: "תוקף <credential> ל<service> יפוג בעוד N ימים
+    — אפשר להעלות את החידוש כבר עכשיו", N the real days left; one day left
+    is "יפוג מחר" (zero days is `EXPIRED`)
+  - `EXPIRED`: "תוקף <credential> ל<service> פג — השירות לא מקבל קריאות עד
     שהחידוש יאושר"
 
   Each goes to the inbox (notification `type: "CREDENTIAL_EXPIRY"`) and to
@@ -495,7 +501,7 @@ properly affects dispatch.
 - **Integration (real Postgres):**
   - verification refused without an expiry or `noExpiry`, or with a past
     date;
-  - the daily check sends each notice once and sets `EXPIRED` on the day;
+  - the hourly check sends each notice once and sets `EXPIRED` on the day;
   - a repeated or overlapping run stores and pushes nothing twice;
   - a renewal stops further notices;
   - `IDENTITY_LOCKED` for the professional; the admin correction is allowed,

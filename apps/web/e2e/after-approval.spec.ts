@@ -31,10 +31,10 @@ test("a professional renews a licence that expires in 5 days; the admin verifies
     const chooser = p.waitForEvent("filechooser");
     await p.getByRole("button", { name: "העלאת חידוש" }).click();
     await (await chooser).setFiles({ name: "renewal.jpg", mimeType: "image/jpeg", buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]) });
-    await expect(p.getByText("החידוש התקבל ונבדק")).toBeVisible({ timeout: 20_000 });
+    await expect(p.getByText("החידוש התקבל ונמצא בבדיקה")).toBeVisible({ timeout: 20_000 });
 
     await p.goto("/pro/documents");
-    await expect(p.getByText(/החידוש התקבל ונבדק/)).toBeVisible();
+    await expect(p.getByText(/החידוש התקבל ונמצא בבדיקה/)).toBeVisible();
 
     // The admin finds it under the renewals, and verifies the new document with a date a year ahead.
     const a = await adminCtx.newPage();
@@ -53,7 +53,7 @@ test("a professional renews a licence that expires in 5 days; the admin verifies
 
     const nextYear = new Date(Date.now() + 365 * 86400_000).toISOString().slice(0, 10);
     await a.getByRole("textbox", { name: /בתוקף עד/ }).fill(nextYear);
-    await a.getByRole("button", { name: /^אימות · .*PENDING$/ }).click();
+    await a.getByRole("button", { name: /^אימות · .*PENDING · בתוקף עד \d{2}\/\d{2}\/\d{4}$/ }).click();
     const [y, m, d] = nextYear.split("-");
     await expect(a.getByText(new RegExp(`VERIFIED · בתוקף עד ${d}/${m}/${y}`)).first()).toBeVisible();
 
@@ -96,7 +96,14 @@ test("staff correct a verified legal name with a reason, and it shows under rece
   await page.getByRole("button", { name: "שמירת התיקון" }).click();
   await expect(page.getByRole("alert")).toContainText("לתיקון צריך לכתוב סיבה");
   await page.getByRole("textbox", { name: /^סיבה/ }).fill("טעות הקלדה בשם");
+  // A date that is not one is refused in place, and nothing is sent.
+  await page.getByRole("textbox", { name: /^תאריך לידה/ }).fill("31/02/1990");
+  await page.getByRole("button", { name: "שמירת התיקון" }).click();
+  await expect(page.getByText("תאריך לא תקין — DD/MM/YYYY")).toBeVisible();
+  await page.getByRole("textbox", { name: /^תאריך לידה/ }).fill("14/05/1990");
   await page.getByRole("button", { name: "שמירת התיקון" }).click();
   await expect(page.getByText("שם/תאריך לידה תוקנו על ידי צוות")).toBeVisible();
   await expect(page.getByText(`${displayName} · ${displayName} לוי`)).toBeVisible();
+  // The reason was for that correction only.
+  await expect(page.getByRole("textbox", { name: /^סיבה/ })).toHaveValue("");
 });

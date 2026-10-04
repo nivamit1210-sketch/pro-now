@@ -456,9 +456,9 @@ function Area({ view, busy, onSave }: { view: ProApplicationView; busy: boolean;
 function credentialNoteHe(r: ProApplicationView["services"][number]["requirements"][number], checkHe: string | undefined): string {
   const c = r.credential;
   if (!c) return checkHe ?? "צילום או PDF של המסמך";
+  if (r.renewalPending && (c.status === "VERIFIED" || c.status === "EXPIRED")) return "החידוש התקבל ונמצא בבדיקה";
   if (c.status === "EXPIRED") return "פג תוקף — צריך להעלות מסמך בתוקף.";
   if (c.status === "VERIFIED") {
-    if (r.renewalPending) return "החידוש התקבל ונבדק";
     const note = expiryNoteHe(c.expiresAt, c.noExpiry, new Date());
     return `✓ אושר${note.validUntilHe ? ` · ${note.validUntilHe}` : ""}`;
   }

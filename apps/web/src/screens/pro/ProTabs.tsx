@@ -11,7 +11,7 @@ import { applicationKey } from "./ProJoin";
 import { ProSignOut } from "./ProSignOut";
 import { VehicleFields } from "./ProVehicle";
 import { vehicleInput, vehicleLineHe, vehicleProblemsHe, type VehicleDraft } from "./vehicle";
-import { earningsPropsFor, eligibilityFor, pricingRowsFor, publicProfilePropsFor, renewableStepIds, verificationStepsFor } from "./proPages";
+import { earningsPropsFor, eligibilityFor, pricingRowsFor, publicProfilePropsFor, renewableStepIds, renewalPendingStepIds, verificationStepsFor } from "./proPages";
 
 type Size = { width: number; height: number };
 
@@ -58,12 +58,13 @@ export function ProDocumentsTab({ width, height }: Size) {
   if (open) {
     // A verified document within 30 days of its date, or past it, takes a renewal (docs/10 §Renewal).
     const renewable = renewableStepIds(application.data).has(open.id);
+    const renewalWaiting = renewalPendingStepIds(application.data).has(open.id);
     return (
       <View style={{ width, height }}>
         <ProVerificationStepBody
           step={open}
           // Uploading happens where it did when joining; the admin reviews it there.
-          onSubmit={renewable || (open.state !== "VERIFIED" && open.state !== "IN_REVIEW") ? () => navigate("/pro/join?at=documents") : undefined}
+          onSubmit={renewable || (open.state !== "VERIFIED" && open.state !== "IN_REVIEW" && !(open.state === "EXPIRED" && renewalWaiting)) ? () => navigate("/pro/join?at=documents") : undefined}
           submitLabelHe={renewable ? "העלאת חידוש" : undefined}
           onBack={() => setOpenId(null)}
           width={width}

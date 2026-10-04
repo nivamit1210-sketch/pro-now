@@ -157,6 +157,13 @@ export function parseDateOfBirthHe(text: string): string | null {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+/** What staff type into a date field: DD/MM/YYYY (as the professional does) or YYYY-MM-DD; a real calendar date or null. */
+export function parseStaffDateHe(text: string): string | null {
+  const iso = /^\s*(\d{4})-(\d{2})-(\d{2})\s*$/.exec(text);
+  if (iso) return parseDateOfBirthHe(`${iso[3]}/${iso[2]}/${iso[1]}`);
+  return parseDateOfBirthHe(text);
+}
+
 /** The server's YYYY-MM-DD shown back as DD/MM/YYYY. */
 export function formatDateOfBirthHe(iso: string | null | undefined): string {
   const m = iso ? /^(\d{4})-(\d{2})-(\d{2})/.exec(iso) : null;

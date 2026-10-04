@@ -29,7 +29,8 @@ is 403 for anyone not in `ADMIN_EMAILS`, and every admin mutation writes an
   verified renewal covers), "פג תוקף" and "אומת בלי תאריך תפוגה" (to fill in a
   date or `ללא תוקף`), plus "חידושים לבדיקה": pending renewals of approved
   professionals, ordered by when the credential they replace expires.
-  Verifying a credential needs a date or `ללא תוקף`. A daily check
+  Verifying a credential needs a date or `ללא תוקף` (the two exclude each
+  other, and both clear after each decision). An hourly check
   (first run a minute after start) warns the professional 30 and 7 days ahead
   and on expiry, and sets `EXPIRED`.
 - **After approval:** legal name and date of birth are locked once identity is

@@ -8,7 +8,7 @@ import { customerDarkTheme, spacing, type as t } from "@pro-now/ui";
 import { api, useMe } from "../../api";
 import { useFrame } from "../../frame";
 import { ErrorScreen, LoadingScreen } from "../../states";
-import { fixLabelHe } from "../pro/approval";
+import { fixLabelHe, formatDateOfBirthHe, parseStaffDateHe } from "../pro/approval";
 
 /**
  * THE ADMIN (docs/21 W8, inside the web app per D7).
@@ -115,8 +115,9 @@ function Queue() {
   const list = useQuery({ queryKey: ["admin", "applications"], queryFn: api.admin.applications });
   const renewals = useQuery({ queryKey: ["admin", "renewals"], queryFn: api.admin.credentialRenewals });
   const [openId, setOpenId] = useState<string | null>(null);
-  if (list.isPending || renewals.isPending) return <LoadingScreen />;
-  if (list.isError || renewals.isError) return <ErrorScreen offline={!navigator.onLine} onRetry={() => { void list.refetch(); void renewals.refetch(); }} />;
+  // The joining applications are the queue; a failed renewals query costs only its own section.
+  if (list.isPending) return <LoadingScreen />;
+  if (list.isError) return <ErrorScreen offline={!navigator.onLine} onRetry={() => { void list.refetch(); void renewals.refetch(); }} />;
   if (openId) {
     return (
       <Application
@@ -130,7 +131,7 @@ function Queue() {
       />
     );
   }
-  const rows = renewals.data.renewals;
+  const rows = renewals.data?.renewals ?? [];
   return (
     <View style={styles.list}>
       {list.data.applications.length === 0 ? <Text style={styles.soft}>אין בקשות שמחכות להחלטה.</Text> : null}
@@ -141,7 +142,14 @@ function Queue() {
           <Text style={styles.rowSub}>{a.services.map((s) => s.nameHe).join(" · ")}</Text>
         </Pressable>
       ))}
-      <Text style={styles.section}>חידושים לבדיקה ({rows.length})</Text>
+      <Text style={styles.section}>חידושים לבדיקה{renewals.isSuccess ? ` (${rows.length})` : ""}</Text>
+      {renewals.isPending ? <Text style={styles.soft}>טוען חידושים…</Text> : null}
+      {renewals.isError ? (
+        <View style={styles.row}>
+          <Text accessibilityRole="alert" style={styles.error}>לא הצלחנו לטעון את החידושים לבדיקה.</Text>
+          <Action labelHe="נסו שוב" quiet onPress={() => void renewals.refetch()} />
+        </View>
+      ) : null}
       {rows.map((r) => (
         <Pressable key={r.credentialId} onPress={() => setOpenId(r.professionalId)} accessibilityRole="button" style={styles.row}>
           <Text style={styles.rowTitle}>
@@ -192,6 +200,11 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
   const [noExpiry, setNoExpiry] = useState(false);
   const { busy, errorHe, run } = useAct();
   const decide = (fn: () => Promise<unknown>) => run(async () => { await fn(); await queryClient.invalidateQueries({ queryKey: key }); });
+  // The expiry choice is for one decision: after it succeeds, both start clean again.
+  const decideCredential = (credentialId: string, body: Parameters<typeof api.admin.decideCredential>[1]) =>
+    decide(async () => { await api.admin.decideCredential(credentialId, body); setExpires(""); setNoExpiry(false); });
+  const expiryDay = parseStaffDateHe(expires);
+  const expiryChoiceHe = noExpiry ? " · ללא תוקף" : expiryDay ? ` · בתוקף עד ${formatDateOfBirthHe(expiryDay)}` : "";
   if (view.isPending) return <LoadingScreen />;
   if (view.isError) return <ErrorScreen offline={!navigator.onLine} onRetry={() => void view.refetch()} />;
   const v = view.data;
@@ -277,7 +290,7 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
         </>
       ) : null}
 
-      {v.identity ? <IdentityBlock id={id} identity={v.identity} busy={busy} reason={reason} decide={decide} run={run} fixAction={fixMark("IDENTITY")} onCorrected={() => queryClient.invalidateQueries({ queryKey: key })} /> : null}
+      {v.identity ? <IdentityBlock id={id} identity={v.identity} busy={busy} reason={reason} decide={decide} run={run} fixAction={fixMark("IDENTITY")} onCorrected={() => { setReason(""); return queryClient.invalidateQueries({ queryKey: key }); }} /> : null}
 
       <Text style={styles.section}>החשבון והמסמכים</Text>
       {v.documents.map((d) => (
@@ -300,9 +313,9 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
       </View>
 
       <Text style={styles.section}>רישיונות ותעודות</Text>
-      <Field label="בתוקף עד (YYYY-MM-DD, לאישור רישיון)" value={expires} onChange={setExpires} />
+      <Field label="בתוקף עד (YYYY-MM-DD, לאישור רישיון)" value={expires} onChange={(v) => { setExpires(v); if (v.trim()) setNoExpiry(false); }} />
       <View style={styles.actions}>
-        <Chip labelHe="ללא תוקף" on={noExpiry} onPress={() => setNoExpiry(!noExpiry)} />
+        <Chip labelHe="ללא תוקף" on={noExpiry} onPress={() => { const on = !noExpiry; setNoExpiry(on); if (on) setExpires(""); }} />
       </View>
       {v.credentials.map((c) => {
         const itemKey = credentialKey(c.id);
@@ -315,11 +328,11 @@ function Application({ id, onBack }: { id: string; onBack: () => void }) {
           <View style={styles.actions}>
             <Action
               labelHe="אימות"
-              accessibilityLabelHe={`אימות · ${c.serviceNameHe} · ${credentialTypeHe(c.type)} · ${c.status}`}
+              accessibilityLabelHe={`אימות · ${c.serviceNameHe} · ${credentialTypeHe(c.type)} · ${c.status}${expiryChoiceHe}`}
               disabled={busy}
-              onPress={() => decide(() => api.admin.decideCredential(c.id, { approve: true, ...(noExpiry ? { noExpiry: true } : /^\d{4}-\d{2}-\d{2}$/.test(expires) ? { expiresAt: new Date(expires).toISOString() } : {}) }))}
+              onPress={() => decideCredential(c.id, { approve: true, ...(noExpiry ? { noExpiry: true } : expiryDay ? { expiresAt: new Date(expiryDay).toISOString() } : {}) })}
             />
-            <Action labelHe="סירוב" danger disabled={busy} onPress={() => { const r = refusal(); return r ? decide(() => api.admin.decideCredential(c.id, r)) : run(async () => { throw new Error(needReason); }); }} />
+            <Action labelHe="סירוב" danger disabled={busy} onPress={() => { const r = refusal(); return r ? decideCredential(c.id, r) : run(async () => { throw new Error(needReason); }); }} />
           </View>
           {itemKey ? fixMark(itemKey) : null}
         </View>
@@ -482,7 +495,8 @@ function IdentityBlock({ id, identity: idn, busy, reason, decide, run, fixAction
 }) {
   const [correcting, setCorrecting] = useState(false);
   const [legalName, setLegalName] = useState(idn.declared.legalName);
-  const [birth, setBirth] = useState(idn.declared.dateOfBirth ?? "");
+  const [birth, setBirth] = useState(formatDateOfBirthHe(idn.declared.dateOfBirth));
+  const [birthErrorHe, setBirthErrorHe] = useState<string | null>(null);
   const photos: Array<[string, string | null]> = [
     ["תעודת זהות", idn.photos.idCard],
     ["פנים · ישר", idn.photos.straight],
@@ -531,7 +545,8 @@ function IdentityBlock({ id, identity: idn, busy, reason, decide, run, fixAction
           {correcting ? (
             <>
               <Field label="שם מלא כפי שבתעודה" value={legalName} onChange={setLegalName} />
-              <Field label="תאריך לידה (YYYY-MM-DD)" value={birth} onChange={setBirth} />
+              <Field label="תאריך לידה (DD/MM/YYYY)" value={birth} onChange={(v) => { setBirth(v); setBirthErrorHe(null); }} />
+              {birthErrorHe ? <Text style={styles.error} accessibilityRole="alert">{birthErrorHe}</Text> : null}
               <Action
                 labelHe="שמירת התיקון"
                 disabled={busy}
@@ -540,7 +555,11 @@ function IdentityBlock({ id, identity: idn, busy, reason, decide, run, fixAction
                   if (r.length < 3) return run(async () => { throw new Error("לתיקון צריך לכתוב סיבה"); });
                   const input: { legalName?: string; dateOfBirth?: string; reason: string } = { reason: r };
                   if (legalName.trim() && legalName.trim() !== idn.declared.legalName) input.legalName = legalName.trim();
-                  if (/^\d{4}-\d{2}-\d{2}$/.test(birth) && birth !== idn.declared.dateOfBirth) input.dateOfBirth = birth;
+                  if (birth.trim()) {
+                    const day = parseStaffDateHe(birth);
+                    if (!day) return setBirthErrorHe("תאריך לא תקין — DD/MM/YYYY");
+                    if (day !== idn.declared.dateOfBirth) input.dateOfBirth = day;
+                  }
                   return run(async () => {
                     await api.admin.correctIdentityDetails(id, input);
                     setCorrecting(false);
