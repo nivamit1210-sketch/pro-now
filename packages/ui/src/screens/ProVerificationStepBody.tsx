@@ -89,6 +89,8 @@ export interface ProVerificationStepBodyProps {
    * Absent, the screen says the provider is not connected yet.
    */
   destinationHe?: string | null;
+  /** The button's words. Absent: "הגשה מחדש" for a rejected or expired step, else "הגשת מסמך". */
+  submitLabelHe?: string;
   onBack?: () => void;
   width?: number;
   height?: number;
@@ -98,6 +100,7 @@ export function ProVerificationStepBody({
   step,
   onSubmit,
   destinationHe = null,
+  submitLabelHe,
   onBack,
   width = 390,
   height = 780,
@@ -170,9 +173,8 @@ export function ProVerificationStepBody({
             style={styles.cta}
           >
             <Text style={styles.ctaText}>
-              {step.state === "EXPIRED" || step.state === "REJECTED"
-                ? "הגשה מחדש"
-                : "הגשת מסמך"}
+              {submitLabelHe ??
+                (step.state === "EXPIRED" || step.state === "REJECTED" ? "הגשה מחדש" : "הגשת מסמך")}
             </Text>
           </Pressable>
         ) : null}

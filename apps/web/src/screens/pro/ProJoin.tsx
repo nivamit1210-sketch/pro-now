@@ -28,7 +28,7 @@ import { APPROVAL_STEPS_HE, formatDateOfBirthHe, parseDateOfBirthHe, resendError
 import { ProSignOut } from "./ProSignOut";
 import { VehicleFields } from "./ProVehicle";
 import { vehicleInput, vehicleLineHe, vehicleProblemsHe, type VehicleDraft } from "./vehicle";
-import { ACCOUNT_DOCS } from "./proPages";
+import { ACCOUNT_DOCS, expiryNoteHe, renewableStepIds } from "./proPages";
 
 /**
  * JOINING AS A PROFESSIONAL (docs/21 W7), in the demo's order and words
@@ -180,6 +180,7 @@ export function ProJoin() {
       return true;
     } catch (e) {
       if (e instanceof ApiError && e.code === "UNDER_MINIMUM_AGE") setUnderAge(true);
+      else if (e instanceof ApiError && e.code === "IDENTITY_LOCKED") setErrorHe(IDENTITY_LOCKED_HE);
       else setErrorHe((e instanceof ApiError && resendErrorHe(e.code)) || (e instanceof ApiError ? e.message : "משהו לא נשמר. נסו שוב."));
       return false;
     } finally {
@@ -279,6 +280,9 @@ const TAX_STATUS_HE: ReadonlyArray<readonly [TaxStatus, string]> = [
   ["COMPANY", "חברה בע״מ"],
 ];
 
+/** After the identity check, the name and date of birth are what the ID card said; staff correct them (docs/10 §Edits after approval). */
+const IDENTITY_LOCKED_HE = "לשינוי שם או תאריך לידה — פנו ל־PRO NOW";
+
 function Details({
   view,
   busy,
@@ -297,6 +301,8 @@ function Details({
     vehicle: { vehicleHe: string | null; plateTail: string | null };
   }) => void;
 }) {
+  // Read-only once a person matched them with the ID card; the server refuses a change anyway.
+  const identityLocked = view?.identity?.status === "VERIFIED";
   const [displayName, setDisplayName] = useState(view?.profile.displayName ?? "");
   const [legalName, setLegalName] = useState(view?.profile.legalName ?? "");
   const [addressAs, setAddressAs] = useState<"M" | "F" | null>((view?.profile.addressAs as "M" | "F" | null) ?? null);
@@ -319,25 +325,37 @@ function Details({
       <Text style={styles.title}>ברוכים הבאים ל־PRO NOW</Text>
       <Text style={styles.soft}>עבודה מגיעה רק אחרי ש־PRO NOW מאשרת את הפרטים, המסמכים וכל שירות בנפרד. זה לוקח כמה דקות.</Text>
       <Field label="השם שהלקוחות יראו" value={displayName} onChange={setDisplayName} max={40} />
-      <Field label="שם מלא כפי שבתעודה" value={legalName} onChange={setLegalName} max={80} />
-      <View style={{ gap: 4 }}>
-        <Text style={styles.label}>תאריך לידה</Text>
-        <TextInput
-          value={birthText}
-          onChangeText={setBirthText}
-          accessibilityLabel="תאריך לידה"
-          placeholder="יום/חודש/שנה"
-          placeholderTextColor={colors.textSecondary}
-          style={styles.input}
-          maxLength={10}
-          inputMode="numeric"
-        />
-        {underAge ? (
-          <Text accessibilityRole="alert" style={styles.error}>ההצטרפות לבעלי מקצוע מגיל 18.</Text>
-        ) : birthText.trim().length >= 8 && !dateOfBirth ? (
-          <Text style={styles.note}>למשל 14/05/1990</Text>
-        ) : null}
-      </View>
+      {identityLocked ? (
+        <View style={{ gap: 4 }}>
+          <Text style={styles.label}>שם מלא כפי שבתעודה</Text>
+          <Text style={styles.listText}>{legalName}</Text>
+          <Text style={styles.label}>תאריך לידה</Text>
+          <Text style={styles.listText}>{birthText}</Text>
+          <Text style={styles.note}>{IDENTITY_LOCKED_HE}</Text>
+        </View>
+      ) : (
+        <>
+          <Field label="שם מלא כפי שבתעודה" value={legalName} onChange={setLegalName} max={80} />
+          <View style={{ gap: 4 }}>
+            <Text style={styles.label}>תאריך לידה</Text>
+            <TextInput
+              value={birthText}
+              onChangeText={setBirthText}
+              accessibilityLabel="תאריך לידה"
+              placeholder="יום/חודש/שנה"
+              placeholderTextColor={colors.textSecondary}
+              style={styles.input}
+              maxLength={10}
+              inputMode="numeric"
+            />
+            {underAge ? (
+              <Text accessibilityRole="alert" style={styles.error}>ההצטרפות לבעלי מקצוע מגיל 18.</Text>
+            ) : birthText.trim().length >= 8 && !dateOfBirth ? (
+              <Text style={styles.note}>למשל 14/05/1990</Text>
+            ) : null}
+          </View>
+        </>
+      )}
       <Text style={styles.label}>איך לפנות אליכם?</Text>
       <View style={styles.row}>
         {([["M", "בלשון זכר"], ["F", "בלשון נקבה"]] as const).map(([k, he]) => (
@@ -359,9 +377,10 @@ function Details({
           ok &&
           onSave({
             displayName: displayName.trim(),
-            legalName: legalName.trim(),
+            // Locked: the stored values, unchanged (an unchanged re-save is fine).
+            legalName: identityLocked && view ? view.profile.legalName : legalName.trim(),
             addressAs,
-            dateOfBirth,
+            dateOfBirth: identityLocked && view?.profile.dateOfBirth ? view.profile.dateOfBirth : dateOfBirth,
             business: { tradingName: tradingName.trim() || null, taxStatus },
             vehicle: vehicleInput(vehicle),
           })
@@ -433,11 +452,25 @@ function Area({ view, busy, onSave }: { view: ProApplicationView; busy: boolean;
   );
 }
 
+/** What a requirement's row says about its document: the server's status, never "waiting" for one it already approved. */
+function credentialNoteHe(r: ProApplicationView["services"][number]["requirements"][number], checkHe: string | undefined): string {
+  const c = r.credential;
+  if (!c) return checkHe ?? "צילום או PDF של המסמך";
+  if (c.status === "EXPIRED") return "פג תוקף — צריך להעלות מסמך בתוקף.";
+  if (c.status === "VERIFIED") {
+    if (r.renewalPending) return "החידוש התקבל ונבדק";
+    const note = expiryNoteHe(c.expiresAt, c.noExpiry, new Date());
+    return `✓ אושר${note.validUntilHe ? ` · ${note.validUntilHe}` : ""}`;
+  }
+  return "✓ הועלה · ממתין לבדיקה";
+}
+
 function Documents({ view, busy, save, onNext }: { view: ProApplicationView; busy: boolean; save: (fn: () => Promise<unknown>) => Promise<boolean>; onNext: () => void }) {
   const queryClient = useQueryClient();
   const [numbers, setNumbers] = useState<Record<string, string>>({});
   const has = (kind: string) => view.documents.some((d) => d.kind === kind && d.status !== "REJECTED");
   const credentialRows = view.services.flatMap((s) => s.requirements.map((r) => ({ service: s, r })));
+  const renewable = renewableStepIds(view);
   const accountMissing = view.missing.filter((m) => m === "IDENTITY" || m.startsWith("DOCUMENT:") || m.startsWith("CREDENTIAL:"));
   return (
     <View style={styles.section}>
@@ -481,10 +514,10 @@ function Documents({ view, busy, save, onNext }: { view: ProApplicationView; bus
                 style={styles.input}
                 maxLength={40}
               />
-              <Text style={styles.note}>{r.credential ? "✓ הועלה · ממתין לבדיקה" : info?.checkHe ?? "צילום או PDF של המסמך"}</Text>
+              <Text style={styles.note}>{credentialNoteHe(r, info?.checkHe)}</Text>
             </View>
             <Chip
-              labelHe={r.credential ? "להחליף" : "העלאה"}
+              labelHe={r.credential ? (renewable.has(`req:${r.requirement}`) ? "העלאת חידוש" : "להחליף") : "העלאה"}
               on={false}
               onPress={() => void (async () => {
                 const file = await pickFile("image/*,application/pdf");

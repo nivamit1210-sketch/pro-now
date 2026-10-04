@@ -76,12 +76,82 @@ function identityStep(identity: ProApplicationView["identity"]): VerificationSte
   return { id: "identity", titleHe: "זהות", explainHe: "תעודת הזהות ושלוש תמונות פנים. אדם מצוות PRO NOW בודק אותן.", state, actionHe, gatesServicesHe: [] };
 }
 
+type RequirementCredential = ProApplicationView["services"][number]["requirements"][number]["credential"];
+
+/**
+ * Each requirement once. When several services share one, the first
+ * requirement that has a credential speaks for it — its renewal flag with it.
+ */
+function requirementEntries(view: ProApplicationView): Map<string, { credential: RequirementCredential; renewalPending: boolean; mandatoryFor: string[] }> {
+  const byRequirement = new Map<string, { credential: RequirementCredential; renewalPending: boolean; mandatoryFor: string[] }>();
+  for (const s of view.services) {
+    for (const r of s.requirements) {
+      const entry = byRequirement.get(r.requirement) ?? { credential: r.credential, renewalPending: r.renewalPending, mandatoryFor: [] };
+      if (entry.credential === null && r.credential) {
+        entry.credential = r.credential;
+        entry.renewalPending = r.renewalPending;
+      }
+      if (r.mandatory) entry.mandatoryFor.push(s.nameHe);
+      byRequirement.set(r.requirement, entry);
+    }
+  }
+  return byRequirement;
+}
+
+const ISRAEL_DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", year: "numeric" });
+
+/** The Israel calendar day of an instant, as DD/MM/YYYY and as a day number to count with. */
+function israelDay(at: Date): { he: string; dayNumber: number } {
+  const parts = ISRAEL_DAY.formatToParts(at);
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const [d, m, y] = [get("day"), get("month"), get("year")];
+  return { he: `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`, dayNumber: Date.UTC(y, m - 1, d) / 86_400_000 };
+}
+
+/**
+ * Until when a document holds, in the Israel calendar (docs/10 §Renewal):
+ * soon is the last 30 days, expired is from its own day on.
+ */
+export function expiryNoteHe(expiresAt: string | null, noExpiry: boolean, now: Date): { validUntilHe: string | null; soon: boolean; expired: boolean } {
+  if (noExpiry) return { validUntilHe: "ללא תוקף", soon: false, expired: false };
+  if (!expiresAt) return { validUntilHe: null, soon: false, expired: false };
+  const days = daysLeft(expiresAt, now)!;
+  return { validUntilHe: `בתוקף עד ${israelDay(new Date(expiresAt)).he}`, soon: days > 0 && days <= 30, expired: days <= 0 };
+}
+
+function daysLeft(expiresAt: string | null, now: Date): number | null {
+  return expiresAt ? israelDay(new Date(expiresAt)).dayNumber - israelDay(now).dayNumber : null;
+}
+
+function requirementActionHe(state: VerificationStep["state"], note: ReturnType<typeof expiryNoteHe>, renewalPending: boolean, daysUntil: number | null): string | null {
+  if (renewalPending && (state === "VERIFIED" || state === "EXPIRED")) return "החידוש התקבל ונבדק";
+  if (state === "VERIFIED" && note.soon && daysUntil !== null)
+    return daysUntil === 1 ? "יפוג מחר — אפשר להעלות חידוש" : `יפוג בעוד ${daysUntil} ימים — אפשר להעלות חידוש`;
+  return ACTION_HE[state] ?? null;
+}
+
+/**
+ * The steps that may take a renewal now: expiring within 30 days or expired,
+ * with no renewal already waiting. Kept beside the steps, not on them, so the
+ * design system's step stays as it is.
+ */
+export function renewableStepIds(view: ProApplicationView, now: Date = new Date()): Set<string> {
+  const ids = new Set<string>();
+  for (const [requirement, e] of requirementEntries(view)) {
+    if (!e.credential || e.renewalPending) continue;
+    const note = expiryNoteHe(e.credential.expiresAt, e.credential.noExpiry, now);
+    const verified = e.credential.status === "VERIFIED";
+    if ((verified && (note.soon || note.expired)) || e.credential.status === "EXPIRED") ids.add(`req:${requirement}`);
+  }
+  return ids;
+}
+
 /**
  * "המסמכים שלי": the identity check, the account documents, then each service requirement once,
  * with the services it holds back. Every state is the server's; a document
  * the server has never seen is "not started", never assumed.
  */
-export function verificationStepsFor(view: ProApplicationView): VerificationStep[] {
+export function verificationStepsFor(view: ProApplicationView, now: Date = new Date()): VerificationStep[] {
   const account = ACCOUNT_DOCS.map((d): VerificationStep => {
     const doc = view.documents.find((x) => x.kind === d.kind && x.status !== "REJECTED") ?? view.documents.find((x) => x.kind === d.kind);
     const state = stepState(doc?.status);
@@ -95,25 +165,18 @@ export function verificationStepsFor(view: ProApplicationView): VerificationStep
     };
   });
 
-  const byRequirement = new Map<string, { status: string | null; mandatoryFor: string[] }>();
-  for (const s of view.services) {
-    for (const r of s.requirements) {
-      const entry = byRequirement.get(r.requirement) ?? { status: r.credential?.status ?? null, mandatoryFor: [] };
-      if (entry.status === null && r.credential) entry.status = r.credential.status;
-      if (r.mandatory) entry.mandatoryFor.push(s.nameHe);
-      byRequirement.set(r.requirement, entry);
-    }
-  }
-  const credentials = [...byRequirement.entries()].map(([requirement, e]): VerificationStep => {
+  const credentials = [...requirementEntries(view).entries()].map(([requirement, e]): VerificationStep => {
     const info = documentInfoFor(requirement);
-    const state = stepState(e.status);
+    const state = stepState(e.credential?.status);
+    const note = expiryNoteHe(e.credential?.expiresAt ?? null, e.credential?.noExpiry ?? false, now);
     return {
       id: `req:${requirement}`,
       titleHe: info?.nameHe ?? "מסמך",
       explainHe: info?.checkHe ?? "",
       state,
-      actionHe: ACTION_HE[state] ?? null,
+      actionHe: requirementActionHe(state, note, e.renewalPending, daysLeft(e.credential?.expiresAt ?? null, now)),
       gatesServicesHe: [...new Set(e.mandatoryFor)],
+      validUntilHe: note.validUntilHe,
     };
   });
   // An account approved before the identity check existed is not asked for

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProApplicationView, ProEarningsView, ProPublicProfileView, ProServiceEligibilityView } from "@pro-now/types";
 
-import { agoHe, blockedReasonHe, earningsPropsFor, eligibilityFor, pricingRowsFor, proPageFromPath, publicProfilePropsFor, verificationStepsFor } from "./proPages";
+import { agoHe, blockedReasonHe, earningsPropsFor, eligibilityFor, expiryNoteHe, pricingRowsFor, proPageFromPath, publicProfilePropsFor, renewableStepIds, verificationStepsFor } from "./proPages";
 
 function application(over: Partial<ProApplicationView> = {}): ProApplicationView {
   return {
@@ -111,6 +111,69 @@ describe("המסמכים שלי — the server's states, never assumed", () => {
     expect(licence[0]!.gatesServicesHe).toEqual(["תקלה חשמלית", "התקנת גוף תאורה"]);
     // Recommended, not the law: it holds nothing back.
     expect(steps.find((s) => s.id === "req:INSURANCE:LIABILITY")?.gatesServicesHe).toEqual([]);
+  });
+});
+
+describe("a document's expiry, in the Israel calendar", () => {
+  const now = new Date("2026-10-03T09:00:00Z");
+  const inDays = (n: number) => new Date(now.getTime() + n * 86_400_000).toISOString();
+
+  it("one without expiry says so", () => {
+    expect(expiryNoteHe(null, true, now)).toEqual({ validUntilHe: "ללא תוקף", soon: false, expired: false });
+  });
+  it("no date on file: nothing to say", () => {
+    expect(expiryNoteHe(null, false, now)).toEqual({ validUntilHe: null, soon: false, expired: false });
+  });
+  it("10 days ahead is soon", () => {
+    expect(expiryNoteHe(inDays(10), false, now)).toEqual({ validUntilHe: "בתוקף עד 13/10/2026", soon: true, expired: false });
+  });
+  it("40 days ahead is not soon", () => {
+    expect(expiryNoteHe(inDays(40), false, now)).toEqual({ validUntilHe: "בתוקף עד 12/11/2026", soon: false, expired: false });
+  });
+  it("yesterday is expired", () => {
+    expect(expiryNoteHe(inDays(-1), false, now)).toMatchObject({ soon: false, expired: true });
+  });
+  it("just after midnight in Israel is the Israel day", () => {
+    expect(expiryNoteHe("2026-10-02T21:30:00Z", false, new Date("2026-09-01T09:00:00Z")).validUntilHe).toBe("בתוקף עד 03/10/2026");
+  });
+});
+
+describe("המסמכים שלי — expiring, renewed and expired documents", () => {
+  const now = new Date("2026-10-03T09:00:00Z");
+  const inDays = (n: number) => new Date(now.getTime() + n * 86_400_000).toISOString();
+  const withLicence = (credential: { status: string; expiresAt: string | null }, renewalPending = false) =>
+    application({
+      services: [
+        {
+          id: "ps1", serviceId: "s1", code: "HOME_ELECT_FAULT", nameHe: "תקלה חשמלית", priceModel: "VISIT_QUOTE", status: "APPROVED", priced: true,
+          requirements: [{ requirement: "LICENSE:ELECTRICIAN", mandatory: true, credential: { id: "c1", number: "123", noExpiry: false, ...credential }, renewalPending }],
+        },
+      ],
+    });
+  const licence = (view: ProApplicationView) => verificationStepsFor(view, now).find((s) => s.id === "req:LICENSE:ELECTRICIAN")!;
+
+  it("expiring in 10 days: verified, dated, and offers the renewal", () => {
+    const view = withLicence({ status: "VERIFIED", expiresAt: inDays(10) });
+    expect(licence(view)).toMatchObject({ state: "VERIFIED", validUntilHe: "בתוקף עד 13/10/2026", actionHe: "יפוג בעוד 10 ימים — אפשר להעלות חידוש" });
+    expect(renewableStepIds(view, now).has("req:LICENSE:ELECTRICIAN")).toBe(true);
+  });
+  it("expiring tomorrow says מחר", () => {
+    expect(licence(withLicence({ status: "VERIFIED", expiresAt: inDays(1) })).actionHe).toBe("יפוג מחר — אפשר להעלות חידוש");
+  });
+  it("a renewal already sent: says it is being checked, and offers no second one", () => {
+    const view = withLicence({ status: "VERIFIED", expiresAt: inDays(10) }, true);
+    expect(licence(view).actionHe).toBe("החידוש התקבל ונבדק");
+    expect(renewableStepIds(view, now).size).toBe(0);
+  });
+  it("expired: the expired state, its own words, and renewable", () => {
+    const view = withLicence({ status: "EXPIRED", expiresAt: inDays(-1) });
+    expect(licence(view)).toMatchObject({ state: "EXPIRED", actionHe: "פג תוקף — צריך להעלות מסמך בתוקף." });
+    expect(renewableStepIds(view, now).has("req:LICENSE:ELECTRICIAN")).toBe(true);
+  });
+  it("far from expiry: dated, nothing to do, not renewable", () => {
+    const view = withLicence({ status: "VERIFIED", expiresAt: inDays(200) });
+    expect(licence(view)).toMatchObject({ state: "VERIFIED", actionHe: null });
+    expect(renewableStepIds(view, now).size).toBe(0);
   });
 });
 
