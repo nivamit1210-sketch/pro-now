@@ -41,8 +41,12 @@ export function isCoveredByRenewal(
 
 export const CREDENTIAL_TYPE_HE: Record<string, string> = { LICENSE: "רישיון", INSURANCE: "ביטוח", CERTIFICATE: "תעודה" };
 
-export const NOTICE_TEXT_HE: Record<NoticeKind, (credentialHe: string, serviceHe: string) => string> = {
-  WARN_30: (c, s) => `${c} ל${s} יפוג בעוד 30 יום — אפשר להעלות את החידוש כבר עכשיו`,
-  WARN_7: (c, s) => `${c} ל${s} יפוג בעוד שבוע`,
-  EXPIRED: (c, s) => `${c} ל${s} פג — השירות לא מקבל קריאות עד שהחידוש יאושר`,
+/** The real days left, never a rounded promise: 1 is "tomorrow"; 0 is the EXPIRED notice. */
+const WARN_HE = (c: string, s: string, daysLeft: number) =>
+  `תוקף ${c} ל${s} יפוג ${daysLeft === 1 ? "מחר" : `בעוד ${daysLeft} ימים`} — אפשר להעלות את החידוש כבר עכשיו`;
+
+export const NOTICE_TEXT_HE: Record<NoticeKind, (credentialHe: string, serviceHe: string, daysLeft: number) => string> = {
+  WARN_30: WARN_HE,
+  WARN_7: WARN_HE,
+  EXPIRED: (c, s) => `תוקף ${c} ל${s} פג — השירות לא מקבל קריאות עד שהחידוש יאושר`,
 };

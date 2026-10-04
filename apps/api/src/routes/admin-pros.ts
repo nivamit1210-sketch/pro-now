@@ -142,6 +142,10 @@ export default async function adminProsRoutes(app: FastifyInstance) {
     await app.prisma.$transaction(async (tx) => {
       await lockProfessional(tx, credential.professionalId);
       await tx.professionalCredential.update({ where: { id }, data: after });
+      // A new date (or "no expiry") starts the warnings over; the same date keeps what was sent.
+      if (after.noExpiry !== credential.noExpiry || (after.expiresAt?.getTime() ?? null) !== (credential.expiresAt?.getTime() ?? null)) {
+        await tx.credentialNotice.deleteMany({ where: { credentialId: id } });
+      }
       await cancelMarksFor(tx, credential.professionalId, (k) => {
         const p = parseItem(k);
         return p?.kind === "CREDENTIAL" && p.serviceId === credential.serviceId && credentialTypeFor(p.requirement) === credential.type;

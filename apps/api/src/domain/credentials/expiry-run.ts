@@ -4,11 +4,12 @@ import type { UserEventBus } from "../../realtime/user-event-bus.js";
 import { CREDENTIAL_TYPE_HE, NOTICE_TEXT_HE, daysUntil, dueNotice, isCoveredByRenewal, type NoticeKind } from "./expiry.js";
 
 /**
- * THE DAILY EXPIRY CHECK (docs/10 §Life after approval: the daily check).
+ * THE EXPIRY CHECK, run hourly (docs/10 §Life after approval).
  * Every VERIFIED credential with a date becomes EXPIRED from the day
  * itself, whatever else holds. The notice due (30 days, 7 days, on expiry)
  * is stored and pushed once, and only when the professional service is
- * neither DISABLED nor SUSPENDED and no verified renewal covers the date.
+ * APPROVED or PENDING, the account is APPROVED or LIMITED, and no verified
+ * renewal covers the date.
  *
  * "Once" holds across overlapping runs: the notice row is unique per
  * (credential, kind) and is written in the same transaction as the
@@ -25,6 +26,7 @@ export interface ExpiryDeps {
   log: { warn(o: object, m: string): void };
 }
 
+const GOOD_STANDING: ReadonlySet<string> = new Set(["APPROVED", "LIMITED"]);
 const isUniqueViolation = (e: unknown) => (e as { code?: string } | null)?.code === "P2002";
 
 export async function runExpiryCheck(deps: ExpiryDeps, now: Date = new Date()): Promise<{ notices: number; expired: number }> {
@@ -33,15 +35,16 @@ export async function runExpiryCheck(deps: ExpiryDeps, now: Date = new Date()): 
     where: { status: "VERIFIED", expiresAt: { not: null } },
     include: {
       service: { select: { nameHe: true, requirements: { select: { requirement: true } } } },
-      professional: { select: { userId: true } },
+      professional: { select: { userId: true, verificationStatus: true } },
     },
   });
   if (candidates.length === 0) return { notices: 0, expired: 0 };
 
   const professionalIds = [...new Set(candidates.map((c) => c.professionalId))];
-  // Notices go only where the service is live (not DISABLED/SUSPENDED).
+  // Notices go only where the service is offered (APPROVED, or PENDING its review: docs/10),
+  // and only to accounts in good standing (APPROVED or LIMITED: none to suspended, refused or erased ones).
   const offered = await prisma.professionalService.findMany({
-    where: { professionalId: { in: professionalIds }, status: { notIn: ["DISABLED", "SUSPENDED"] } },
+    where: { professionalId: { in: professionalIds }, status: { in: ["APPROVED", "PENDING"] } },
     select: { professionalId: true, serviceId: true },
   });
   const live = new Set(offered.map((s) => `${s.professionalId}:${s.serviceId}`));
@@ -66,7 +69,7 @@ export async function runExpiryCheck(deps: ExpiryDeps, now: Date = new Date()): 
     const days = daysUntil(expiresAt, now);
     const others = all.filter((o) => o.id !== c.id && o.professionalId === c.professionalId && o.serviceId === c.serviceId && o.type === c.type);
     // Coverage and the service's status gate the notice only, never the EXPIRED status below.
-    const notify = live.has(`${c.professionalId}:${c.serviceId}`) && !isCoveredByRenewal({ expiresAt }, others);
+    const notify = GOOD_STANDING.has(c.professional.verificationStatus) && live.has(`${c.professionalId}:${c.serviceId}`) && !isCoveredByRenewal({ expiresAt }, others);
 
     const kind = notify ? dueNotice(days, sentBy.get(c.id) ?? new Set()) : null;
     let noticeFailed = false;
@@ -74,7 +77,7 @@ export async function runExpiryCheck(deps: ExpiryDeps, now: Date = new Date()): 
       try {
         const requirement = c.service.requirements.find((r) => credentialTypeFor(r.requirement) === c.type)?.requirement;
         const credentialHe = (requirement && documentInfoFor(requirement)?.nameHe) || CREDENTIAL_TYPE_HE[c.type] || "מסמך";
-        const body = NOTICE_TEXT_HE[kind](credentialHe, c.service.nameHe);
+        const body = NOTICE_TEXT_HE[kind](credentialHe, c.service.nameHe, days);
         const userId = c.professional.userId;
         let stored = true;
         try {
@@ -103,7 +106,7 @@ export async function runExpiryCheck(deps: ExpiryDeps, now: Date = new Date()): 
     /*
      * After the notice, and only when it did not fail: a credential marked
      * EXPIRED leaves the check, so a failed EXPIRED notice keeps it VERIFIED
-     * for tomorrow's retry. Dispatch does not wait for this status: it
+     * for the next run's retry. Dispatch does not wait for this status: it
      * reads expiresAt itself (dispatch/credential-eligibility.ts).
      */
     if (days <= 0 && !noticeFailed) {

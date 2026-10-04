@@ -77,7 +77,7 @@ export async function applicationView(db: PrismaClient, professionalId: string):
     include: {
       services: { include: { service: { include: { requirements: true } } }, orderBy: { createdAt: "asc" } },
       documents: true,
-      credentials: true,
+      credentials: { orderBy: { createdAt: "asc" } },
       businessProfile: true,
       identityChecks: true,
     },
@@ -108,7 +108,9 @@ export async function applicationView(db: PrismaClient, professionalId: string):
         const sameType = pro.credentials.filter((c) => c.serviceId === ps.serviceId && c.type === type);
         const now = new Date();
         const current = sameType.find((c) => c.status === "VERIFIED" && (c.noExpiry || (c.expiresAt !== null && c.expiresAt > now)));
-        const credential = current ?? [...sameType].reverse().find((c) => c.status !== "REJECTED") ?? null;
+        // Not the newest row: an EXPIRED credential can be updated after its renewal was created. A decided one (EXPIRED...) shows; the pending renewal is the flag.
+        const live = [...sameType].reverse().filter((c) => c.status !== "REJECTED");
+        const credential = current ?? live.find((c) => c.status !== "PENDING") ?? live[0] ?? null;
         const renewalPending = sameType.some((c) => c.status === "PENDING" && c.id !== credential?.id);
         if (r.mandatory && !credential) missing.push(`CREDENTIAL:${ps.service.code}:${r.requirement}`);
         return {

@@ -4,12 +4,12 @@ import type { FastifyInstance } from "fastify";
 import { runExpiryCheck } from "../domain/credentials/expiry-run.js";
 
 /**
- * The daily credential expiry check (docs/10 §Life after approval): the
- * first run a minute after start, then once a day. After notifications
+ * The hourly credential expiry check (docs/10 §Life after approval): the
+ * first run a minute after start, then every hour (cheap: notices are once-only). After notifications
  * (it uses app.push and app.userEvents).
  */
 const FIRST_RUN_MS = 60_000;
-const EVERY_MS = 24 * 60 * 60 * 1000;
+const EVERY_MS = 60 * 60 * 1000;
 
 export default fp(async function credentialExpiry(app: FastifyInstance) {
   const check = (now?: Date) => runExpiryCheck({ prisma: app.prisma, push: app.push, users: app.userEvents, log: app.log }, now);

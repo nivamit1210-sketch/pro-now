@@ -61,7 +61,7 @@ describe("the daily credential expiry check", () => {
     await app.checkCredentialExpiryNow();
     const n = await notices(pro.userId);
     expect(n).toHaveLength(1);
-    expect(n[0]!.body).toMatch(/יפוג בעוד 30 יום — אפשר להעלות את החידוש כבר עכשיו$/);
+    expect(n[0]!.body).toMatch(/יפוג בעוד 30 ימים — אפשר להעלות את החידוש כבר עכשיו$/);
     expect(n[0]!.data).toEqual({ url: "/pro/documents" });
     expect(await db.credentialNotice.findMany({ where: { credentialId } })).toEqual([expect.objectContaining({ kind: "WARN_30" })]);
   });
@@ -118,6 +118,54 @@ describe("the daily credential expiry check", () => {
     await app.checkCredentialExpiryNow();
     expect(await notices(pro.userId)).toHaveLength(0);
     expect((await db.professionalCredential.findUniqueOrThrow({ where: { id: credentialId } })).status).toBe("EXPIRED");
+  });
+
+  it("a DRAFT service and a SUSPENDED account get no notice; the credential still becomes EXPIRED", async () => {
+    const a = await proWithCredentialExpiringIn(-1);
+    await db.professionalService.updateMany({ where: { professionalId: a.pro.id }, data: { status: "DRAFT" } });
+    const b = await proWithCredentialExpiringIn(-1);
+    await db.professionalProfile.update({ where: { id: b.pro.id }, data: { verificationStatus: "SUSPENDED" } });
+    await app.checkCredentialExpiryNow();
+    expect(await notices(a.pro.userId)).toHaveLength(0);
+    expect(await notices(b.pro.userId)).toHaveLength(0);
+    expect((await db.professionalCredential.findUniqueOrThrow({ where: { id: a.credentialId } })).status).toBe("EXPIRED");
+    expect((await db.professionalCredential.findUniqueOrThrow({ where: { id: b.credentialId } })).status).toBe("EXPIRED");
+  });
+
+  it("re-dating a credential resets its notices: a WARN_7 already sent, then a date 20 days out gets a fresh WARN_30", async () => {
+    const { pro, credentialId } = await proWithCredentialExpiringIn(5);
+    await app.checkCredentialExpiryNow();
+    expect((await db.credentialNotice.findMany({ where: { credentialId } })).map((n) => n.kind)).toEqual(["WARN_7"]);
+    const decide = (payload: object) =>
+      app.inject({ method: "POST", url: `/api/v1/admin/credentials/${credentialId}/decision`, headers: { cookie: admin.header(), origin: "http://localhost:4000" }, payload });
+    const res = await decide({ approve: true, expiresAt: new Date(Date.now() + 20 * DAY).toISOString() });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(await db.credentialNotice.count({ where: { credentialId } })).toBe(0);
+    await app.checkCredentialExpiryNow();
+    expect((await db.credentialNotice.findMany({ where: { credentialId } })).map((n) => n.kind)).toEqual(["WARN_30"]);
+    expect(await notices(pro.userId)).toHaveLength(2);
+    // The same date again changes nothing, so its notice stands.
+    const same = (await db.professionalCredential.findUniqueOrThrow({ where: { id: credentialId } })).expiresAt!;
+    expect((await decide({ approve: true, expiresAt: same.toISOString() })).statusCode).toBe(200);
+    expect(await db.credentialNotice.count({ where: { credentialId } })).toBe(1);
+  });
+
+  it("the application shows the EXPIRED credential with renewalPending when a renewal was uploaded before the expiry was recorded", async () => {
+    const email = uniqueEmail("exp-view");
+    const p = await dispatchablePro(db, email, svcId, 31.25, 34.79);
+    created.push(p.id);
+    const old = await db.professionalCredential.findFirstOrThrow({ where: { professionalId: p.id } });
+    await db.professionalCredential.update({ where: { id: old.id }, data: { expiresAt: new Date(Date.now() - 2 * DAY) } });
+    const renewal = await db.professionalCredential.create({ data: { professionalId: p.id, serviceId: old.serviceId, type: old.type, status: "PENDING" } });
+    await app.checkCredentialExpiryNow(); // writes EXPIRED to the older row, after the renewal exists
+    const jar = await signInByEmail(app, email);
+    const view = (await app.inject({ method: "GET", url: "/api/v1/pro/application", headers: { cookie: jar.header(), origin: "http://localhost:4000" } })).json();
+    const reqs = view.services.flatMap((s: { requirements: Array<{ credential: { id: string; status: string } | null; renewalPending: boolean }> }) => s.requirements);
+    const row = reqs.find((r: { credential: { id: string } | null }) => r.credential?.id === old.id);
+    expect(row, JSON.stringify(reqs)).toBeTruthy();
+    expect(row.credential.status).toBe("EXPIRED");
+    expect(row.renewalPending).toBe(true);
+    expect(reqs.some((r: { credential: { id: string } | null }) => r.credential?.id === renewal.id)).toBe(false);
   });
 
   it("a disabled service's credential past its date is marked EXPIRED, with no notice", async () => {

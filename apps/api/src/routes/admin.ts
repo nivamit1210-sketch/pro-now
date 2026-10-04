@@ -33,7 +33,7 @@ export default async function adminRoutes(app: FastifyInstance) {
         user: { select: { email: true, createdAt: true } },
         documents: { include: { upload: true } },
         portraitUpload: true,
-        credentials: { include: { service: { select: { nameHe: true } } } },
+        credentials: { include: { service: { select: { nameHe: true } } }, orderBy: { createdAt: "asc" } },
         identityChecks: true,
       },
     });
