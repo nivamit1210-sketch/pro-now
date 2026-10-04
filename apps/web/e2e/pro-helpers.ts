@@ -177,3 +177,48 @@ export async function pendingApplicant(serviceCode: string, displayName: string)
     await db.$disconnect();
   }
 }
+
+/**
+ * An approved professional whose first licence runs out in `days` days
+ * (docs/10 §Life after approval): verified identity and date of birth, the
+ * service approved, every document current except that licence. The
+ * professional signs in themselves, as a person does.
+ */
+export async function approvedProWithExpiringCredential(days: number, serviceCode = "HOME_PLUMB_LEAK") {
+  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+  try {
+    const service = await db.service.findUniqueOrThrow({ where: { code: serviceCode }, include: { requirements: true } });
+    const email = uniqueEmail("e2e-renewal");
+    const displayName = `שרה${Date.now() % 100000}`;
+    const user = await db.user.create({ data: { email, emailVerified: true, name: displayName } });
+    await db.userRole.create({ data: { userId: user.id, role: "PROFESSIONAL" } });
+    const profile = await db.professionalProfile.create({
+      data: { userId: user.id, legalName: `${displayName} כהן`, displayName, addressAs: "F", verificationStatus: "APPROVED", dateOfBirth: new Date("1988-04-12"), portraitKind: "CHARACTER" },
+    });
+    await db.businessProfile.create({ data: { professionalId: profile.id, taxStatus: "EXEMPT" } });
+    await db.serviceArea.create({ data: { professionalId: profile.id, centerLat: 32.08, centerLng: 34.78, radiusMeters: 10_000 } });
+    await db.identityVerification.create({
+      data: { professionalId: profile.id, vendorName: "sandbox-identity", isSandbox: true, status: "VERIFIED", method: "MANUAL", decidedAt: new Date(), photosDeletedAt: new Date() },
+    });
+    const taxUpload = await db.upload.create({ data: { ownerId: user.id, kind: "DOCUMENT", mime: "image/jpeg", bytes: 10, status: "READY", storageKey: `e2e/${profile.id}/TAX_FILE.jpg` } });
+    await db.professionalDocument.create({ data: { professionalId: profile.id, kind: "TAX_FILE", storageRef: taxUpload.storageKey, uploadId: taxUpload.id, status: "VERIFIED" } });
+    await db.professionalService.create({ data: { professionalId: profile.id, serviceId: service.id, status: "APPROVED", basePriceMinorUnits: 18000 } });
+    let first = true;
+    for (const r of service.requirements) {
+      const type = credentialTypeFor(r.requirement);
+      if (!type) continue;
+      const u = await db.upload.create({ data: { ownerId: user.id, kind: "DOCUMENT", mime: "image/jpeg", bytes: 10, status: "READY", storageKey: `e2e/${profile.id}/${type}.jpg` } });
+      await db.professionalCredential.create({
+        data: {
+          professionalId: profile.id, serviceId: service.id, type, number: "88888", issuer: "e2e", documentRef: u.id, status: "VERIFIED",
+          // Only the first one runs out; the rest hold for a year.
+          expiresAt: new Date(Date.now() + (first ? days : 365) * 86400_000 + 3600_000),
+        },
+      });
+      first = false;
+    }
+    return { email, displayName, professionalId: profile.id };
+  } finally {
+    await db.$disconnect();
+  }
+}

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { requireRole } from "../auth/access.js";
-import { daysUntil } from "../domain/credentials/expiry.js";
+import { daysUntil, isCoveredByRenewal } from "../domain/credentials/expiry.js";
 
 /**
  * WHICH CREDENTIALS NEED STAFF (docs/10 §Life after approval, §Renewal, §Staff
@@ -31,8 +31,11 @@ export default async function adminCredentialsRoutes(app: FastifyInstance) {
     const now = new Date();
     const all = await load(["VERIFIED", "EXPIRED"]);
     const verified = all.filter((c) => c.status === "VERIFIED");
+    // A credential another verified one of the same type and service outlasts is covered by that renewal (docs/10 §Notices), as the warnings skip it.
+    const covered = (c: Loaded & { expiresAt: Date }) =>
+      isCoveredByRenewal(c, verified.filter((o) => o.id !== c.id && o.professionalId === c.professionalId && o.serviceId === c.serviceId && o.type === c.type));
     const expiring = verified
-      .filter((c) => c.expiresAt && daysUntil(c.expiresAt, now) >= 0 && daysUntil(c.expiresAt, now) <= EXPIRING_DAYS)
+      .filter((c) => c.expiresAt && daysUntil(c.expiresAt, now) >= 0 && daysUntil(c.expiresAt, now) <= EXPIRING_DAYS && !covered({ ...c, expiresAt: c.expiresAt }))
       .sort((a, b) => time(a) - time(b));
     const expired = all
       .filter((c) => c.status === "EXPIRED" || (c.expiresAt && daysUntil(c.expiresAt, now) < 0))
