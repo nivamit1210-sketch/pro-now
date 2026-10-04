@@ -368,6 +368,13 @@ the professional's profile as piece 1, and re-read inside the transaction.
 Approved by Dvir on 2026-10-03. This is piece 3 of 3 (piece 1: the identity
 check; piece 2: the review loop).
 
+Built 2026-10-04. As built: the `EXPIRED` status is written after the notice
+succeeds (a failed `EXPIRED` notice leaves the credential `VERIFIED` and is
+retried the next day), and every `VERIFIED` credential past its date becomes
+`EXPIRED`, even when a renewal covers it or its service is disabled (only the
+notice is skipped); the admin list `expiring` leaves out credentials a valid
+renewal covers; notifications keep their link in `data.url`.
+
 **Why.**
 - Dispatch already stops a service whose required credential is past its
   expiry date (`domain/dispatch/credential-eligibility.ts`). But nobody was

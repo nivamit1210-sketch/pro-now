@@ -126,6 +126,7 @@ Screenshots go to `qa/out/`.
   shipped except the items open in `docs/DEMO-SYNC.md`. No money moves in the
   app (D1): the customer pays the professional directly.
 - **Review loop, 2026-10-03:** a reviewer marks items to fix with reasons and sends them as one round; the professional fixes and resends (`docs/10 §Review loop`).
+- **Life after approval, 2026-10-04:** explicit credential expiry, a daily warning check (30 / 7 days and on expiry), renewals, locked name and date of birth with a staff correction, and "שינויים אחרונים" (`docs/10 §Life after approval`).
 - **Rules worth knowing by heart:** each pro sets their own visit fee (no floor
   or ceiling); an approved quote includes the visit fee; repairs are charged
   only the visit-and-diagnosis fee, price-list work is held and released after

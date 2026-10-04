@@ -49,7 +49,7 @@ GET  /v1/pro/services                 (per-service eligibility with the named mi
 PATCH /v1/pro/services/:id/pricing
 GET  /v1/pro/earnings                 (last 7 days; with IN_APP_PAYMENTS=off, from each job's SETTLED_OUTSIDE_APP receipt: paidDirectly, gross only)
 GET  /v1/pro/verification
-POST /v1/pro/join                     (now requires dateOfBirth YYYY-MM-DD; under 18 → 422 UNDER_MINIMUM_AGE and the role is not granted)
+POST /v1/pro/join                     (now requires dateOfBirth YYYY-MM-DD; under 18 → 422 UNDER_MINIMUM_AGE and the role is not granted; 409 IDENTITY_LOCKED when the current identity check is VERIFIED and `legalName` or `dateOfBirth` differs from the stored value: only staff change them, via PATCH …/identity-details)
 POST /v1/pro/application/identity { documentUploadId, selfieUploadIds: [straight, right, left] }
                                       (422 UPLOAD_NOT_READY, 409 IDENTITY_ALREADY_VERIFIED | IDENTITY_REJECTED (a refusal is final); a retake supersedes an undecided check and deletes its photos except any the new check reuses; serialized by a row lock on the profile)
 POST /v1/admin/identity/:id/decision { action: APPROVE|REJECT, reason? }
@@ -60,6 +60,12 @@ POST /v1/admin/professionals/:id/fix-requests { itemKey, reasonHe (3-500) }
 DELETE /v1/admin/fix-requests/:id     (ADMIN, audited FIX_REQUEST_CANCELLED with afterJson { status: CANCELLED }; 204; any request of the draft round, or an OPEN one of a SENT round; 404 FIX_REQUEST_NOT_FOUND, 409 ALREADY_SENT for a FIXED/CANCELLED request or an ANSWERED/CLOSED round)
 POST /v1/admin/professionals/:id/review-round/send
                                       (ADMIN, audited REVIEW_ROUND_SENT; 200 { roundId, count }; round SENT, account CHANGES_REQUESTED, one inbox notice, push after commit; an IDENTITY request whose check is no longer MANUAL_REVIEW/PENDING is cancelled, not sent, and left out of `count`; 404 PROFESSIONAL_NOT_FOUND, 409 NOTHING_MARKED (also when that IDENTITY request was all; nothing changes) | NOT_IN_REVIEW)
+POST /v1/admin/credentials/:id/decision { approve, reason?, expiresAt? | noExpiry? }
+                                      (approving needs exactly one of `expiresAt` (ISO datetime) or `noExpiry: true`: 422 EXPIRY_REQUIRED | EXPIRY_IN_PAST (the Israel day is not after today); both together is a 400; also works on an already VERIFIED credential to fill in a missing date; audited CREDENTIAL_VERIFIED | CREDENTIAL_REJECTED)
+GET  /v1/admin/credentials/expiry     (ADMIN, read-only, approved professionals only: { expiring (VERIFIED, 0-30 Israel days left, not covered by a verified renewal of the same type and service, soonest first), expired (EXPIRED or past date, latest first, at most 100), undated (VERIFIED with neither `expiresAt` nor `noExpiry`) }; rows { credentialId, professionalId, displayName, serviceNameHe, type, expiresAt })
+GET  /v1/admin/credentials/renewals   (ADMIN: { renewals } PENDING credentials that replace a VERIFIED or EXPIRED one of the same type and service, soonest-replaced first; rows add `replacesExpiresAt`)
+PATCH /v1/admin/professionals/:id/identity-details { legalName?, dateOfBirth? YYYY-MM-DD, reason (3-500) }
+                                      (ADMIN, audited PRO_IDENTITY_DETAILS_CORRECTED with before and after; one of the two fields required; returns the application view; 400 VALIDATION_ERROR, 404 PROFESSIONAL_NOT_FOUND, 422 UNDER_MINIMUM_AGE; the professional gets a PRO_DETAILS_CORRECTED notice)
 POST /v1/admin/professionals/:id/decision (approve) answers 409 FIXES_PENDING while items are marked or the account is CHANGES_REQUESTED; refusing cancels open requests and closes a sent round as CLOSED
 GET  /v1/admin/pro-applications       (each queue item gains `returned: boolean`: its latest sent round is ANSWERED)
 POST /v1/pro/application/submit       (409 FIXES_OPEN { open: [itemKey] } while a request is open; success closes the round as ANSWERED)
@@ -151,6 +157,18 @@ ownership for ADMIN.
 - The professional's application view adds `fixRequests: [{ itemKey,
   reasonHe, status }]` (the current round) and `changesRequested: boolean`
   (account status `CHANGES_REQUESTED`).
+- Each service requirement's `credential` gains `expiresAt` (ISO or null) and
+  `noExpiry`; the requirement gains `renewalPending` (another PENDING
+  credential of that type exists). The shown credential is the VERIFIED one
+  still current, else the latest not rejected.
+- `GET /v1/admin/professionals/:id` gains `recentChanges: [{ at, action,
+  itemKey, byStaff }]`: the last 30 days (at most 50, newest first) of
+  `PRO_APPLICATION_ITEM_CHANGED` and `PRO_IDENTITY_DETAILS_CORRECTED`; its
+  credentials carry `noExpiry`.
+- Notification types added: `CREDENTIAL_EXPIRY` (to the credential's owner;
+  `data.url` is `/pro/documents`), `PRO_DETAILS_CORRECTED` (to the
+  professional; `/pro`), `STAFF_TAX_STATUS_CHANGED` (to every ADMIN user when
+  an APPROVED professional changes a non-null tax status; `/admin`).
 
 ## API security
 Every object access is authorized to the acting user (no IDOR). Admin

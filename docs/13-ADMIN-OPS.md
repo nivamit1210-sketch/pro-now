@@ -24,6 +24,18 @@ is 403 for anyone not in `ADMIN_EMAILS`, and every admin mutation writes an
   reject (reason required); a retake is the `IDENTITY` mark below. The photos are deleted
   after the decision commits; the decision record stays. Account approval
   stays blocked until a `VERIFIED` check and age 18.
+- **Credential expiry** (docs/10 §Life after approval): the `תוקף` tab holds
+  three lists: "פג בקרוב" (within 30 days, soonest first, without those a
+  verified renewal covers), "פג תוקף" and "אומת בלי תאריך תפוגה" (to fill in a
+  date or `ללא תוקף`), plus "חידושים לבדיקה": pending renewals of approved
+  professionals, ordered by when the credential they replace expires.
+  Verifying a credential needs a date or `ללא תוקף`. A daily check
+  (first run a minute after start) warns the professional 30 and 7 days ahead
+  and on expiry, and sets `EXPIRED`.
+- **After approval:** legal name and date of birth are locked once identity is
+  verified; staff correct them with a reason (audited, the professional is
+  told). A tax-status change on an approved account puts an inbox notice to
+  every ADMIN user. The professional's page shows "שינויים אחרונים" (30 days).
 - **Job inspector** with the full `job_events` timeline. It is what turns
   "I waited half an hour and nobody came" into an answer:
   ```

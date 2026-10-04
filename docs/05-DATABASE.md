@@ -33,8 +33,16 @@ payout_accounts, payouts, ledger_entries, reviews, review_dimensions,
 external_reputation_sources, professional_external_profiles,
 external_rating_snapshots, chat_threads, chat_messages, notifications,
 refunds, disputes, support_tickets, risk_signals, risk_actions,
-blocked_relationships, admin_users, admin_roles, audit_logs, app_config,
+blocked_relationships, admin_users, admin_roles, audit_logs, credential_notices, app_config,
 market_activations, street_names, geocode_cache`.
+
+## Credential expiry
+`professional_credentials.noExpiry` (boolean, default false): "no date
+because none applies", against a null `expiresAt` that means nobody entered
+one. `credential_notices` (`id`, `credentialId`, `kind` WARN_30 | WARN_7 |
+EXPIRED, `sentAt`; unique on `(credentialId, kind)`) makes each expiry notice
+once-only; the notice row and the inbox notification commit together
+(migration `20261003b_credential_expiry`; docs/10 §Life after approval).
 
 ## Identity check
 `identity_verifications` holds one row per attempt (the unique on
