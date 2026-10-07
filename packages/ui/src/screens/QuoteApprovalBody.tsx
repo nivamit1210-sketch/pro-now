@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { formatMoney, money, paymentPromiseHe, type QuoteView } from "@pro-now/types";
 
@@ -92,6 +92,20 @@ export interface QuoteApprovalBodyProps {
   onApprove?: (versionHash: string) => void;
   onDecline?: () => void;
   onAskQuestion?: () => void;
+  /** Photos of the fault, taken by the professional on site for this quote. */
+  photos?: readonly string[];
+  /**
+   * The call was ordered for someone else (Amit, 2026-10-01): the quote
+   * comes to the person who ordered — only they approve and pay — and
+   * the person at home neither haggles nor pays. The name of who is at home.
+   */
+  forOnSiteHe?: string | null;
+  /**
+   * No money moves through the app (docs/21 §5 D1): approving decides the
+   * price, and the amount is paid to the professional directly. The card
+   * hold the approval would otherwise promise is not said.
+   */
+  paidDirectly?: boolean;
   /** A message this professional recorded about THIS quote. */
   voiceNote?: {
     seconds: number;
@@ -142,6 +156,9 @@ export function QuoteApprovalBody({
   onDecline,
   onAskQuestion,
   voiceNote = null,
+  photos = [],
+  forOnSiteHe = null,
+  paidDirectly = false,
   onBack,
   width = 390,
   height = 780,
@@ -173,7 +190,7 @@ export function QuoteApprovalBody({
       {onBack ? <BackButton onPress={onBack} tone="light" /> : null}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         {/* ------------------------------------------------------------
-            WHO, THEN HOW MUCH. In that order, and nothing between them.
+            WHO — then what was found, what it buys, and only then how much.
             ------------------------------------------------------------ */}
         <View style={styles.head}>
           <View style={styles.proRow}>
@@ -185,16 +202,99 @@ export function QuoteApprovalBody({
               ringColor={colors.trust}
             />
             <Text style={styles.who} numberOfLines={2}>
-              {professionalDisplayName} בדק את {serviceNameHe}
+              {forOnSiteHe ? `${professionalDisplayName} בדק אצל ${forOnSiteHe} · ${serviceNameHe}` : `${professionalDisplayName} בדק את ${serviceNameHe}`}
             </Text>
           </View>
+        </View>
 
+        {/* WHAT HE FOUND, FIRST (Amit, 2026-10-01): the photos, his voice and his words —
+            then what he will do, and only then the sum. A price on its own is not a quote. */}
+        {photos.length > 0 || voiceNote || quote.notes ? <Text style={styles.sectionTitle}>מה נמצא בבדיקה</Text> : null}
+        {/* What he saw, in his photos — so the decision can be made from far away. */}
+        {photos.length > 0 ? (
+          <View style={styles.photoRow}>
+            {photos.map((u) => (
+              <Image key={u} source={{ uri: u }} style={styles.photo} accessibilityLabel="תמונה של התקלה" />
+            ))}
+          </View>
+        ) : null}
+
+        {/*
+          * A MESSAGE IN HIS OWN VOICE, when there is one. A quote is a
+          * number a stranger arrived at in your kitchen; thirty seconds of
+          * him explaining it does more for trust than any line item can.
+          * Only a real recording for THIS job — VoiceNote has no stock
+          * variant, on purpose.
+          */}
+        {voiceNote ? (
+          <View style={styles.block}>
+            <VoiceNote
+              kind="JOB_MESSAGE"
+              speakerNameHe={professionalDisplayName}
+              speakerPhotoUri={professionalPhotoUrl}
+              transcriptHe={voiceNote.transcriptHe}
+              seconds={voiceNote.seconds}
+              playing={voiceNote.playing}
+              onTogglePlay={voiceNote.onTogglePlay}
+              tone="light"
+              width={width - spacing.lg * 2}
+            />
+          </View>
+        ) : null}
+
+        {quote.notes ? (
+          <View style={styles.block}>
+            <Text style={styles.notes}>{quote.notes}</Text>
+          </View>
+        ) : null}
+
+        <Text style={styles.sectionTitle}>מה כלול במחיר</Text>
+        {/* ---------------- What it is made of ---------------- */}
+        {/*
+          * ON THE SURFACE, NOT IN CARDS. A line item has no independent
+          * state and cannot be selected, opened or moved, so by §4 it is
+          * not a card — it is a row with a hairline above it. Four cards
+          * stacked here also made the total look like a fifth card rather
+          * than like the answer.
+          */}
+        <View style={styles.block}>
+          {quote.lineItems.map((li, i) => {
+            const lineTotal = li.quantity * li.unitPriceMinorUnits;
+            return (
+              <View key={li.id} style={[styles.line, i > 0 && styles.lineDivided]}>
+                <Text style={styles.lineTotal}>{formatMoney(money(lineTotal, "ILS"))}</Text>
+                <View style={styles.lineText}>
+                  <Text style={styles.lineDesc} numberOfLines={2}>
+                    {li.description}
+                  </Text>
+                  <Text style={styles.lineMeta} numberOfLines={1}>
+                    {KIND_LABEL_HE[li.kind] ?? li.kind}
+                    {li.quantity !== 1
+                      ? ` · ${li.quantity} × ${formatMoney(money(li.unitPriceMinorUnits, "ILS"))}`
+                      : ""}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.totalBox}>
           <Text style={styles.total} numberOfLines={1}>
             {formatMoney(money(quote.totalMinorUnits, "ILS"))}
           </Text>
           <Text style={styles.totalNote}>
             {includesVisitFee ? "כולל מע״מ ודמי הביקור · הסכום הסופי לעבודה הזו" : "כולל מע״מ · הסכום הסופי לעבודה הזו"}
           </Text>
+          {forOnSiteHe ? (
+            <View style={styles.forOther}>
+              <Text style={styles.forOtherText}>
+                {paidDirectly
+                  ? `רק אצלך מאשרים את המחיר. אצל ${forOnSiteHe} לא מתמקחים — המקצוען מתחיל לעבוד רק אחרי האישור שלך, ואת הסכום שאישרת משלמים לו ישירות.`
+                  : `רק אצלך מאשרים ומשלמים. אצל ${forOnSiteHe} לא מתמקחים ולא משלמים כלום — המקצוען מתחיל לעבוד רק אחרי האישור שלך.`}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* ----------------------------------------------------------------
@@ -304,66 +404,6 @@ export function QuoteApprovalBody({
           </Surface>
         ) : null}
 
-        {/* ---------------- What it is made of ---------------- */}
-        {/*
-          * ON THE SURFACE, NOT IN CARDS. A line item has no independent
-          * state and cannot be selected, opened or moved, so by §4 it is
-          * not a card — it is a row with a hairline above it. Four cards
-          * stacked here also made the total look like a fifth card rather
-          * than like the answer.
-          */}
-        <View style={styles.block}>
-          {quote.lineItems.map((li, i) => {
-            const lineTotal = li.quantity * li.unitPriceMinorUnits;
-            return (
-              <View key={li.id} style={[styles.line, i > 0 && styles.lineDivided]}>
-                <Text style={styles.lineTotal}>{formatMoney(money(lineTotal, "ILS"))}</Text>
-                <View style={styles.lineText}>
-                  <Text style={styles.lineDesc} numberOfLines={2}>
-                    {li.description}
-                  </Text>
-                  <Text style={styles.lineMeta} numberOfLines={1}>
-                    {KIND_LABEL_HE[li.kind] ?? li.kind}
-                    {li.quantity !== 1
-                      ? ` · ${li.quantity} × ${formatMoney(money(li.unitPriceMinorUnits, "ILS"))}`
-                      : ""}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-
-        {quote.notes ? (
-          <View style={styles.block}>
-            <Text style={styles.notesLabel}>מה שהוא כתב</Text>
-            <Text style={styles.notes}>{quote.notes}</Text>
-          </View>
-        ) : null}
-
-        {/*
-          * A MESSAGE IN HIS OWN VOICE, when there is one. A quote is a
-          * number a stranger arrived at in your kitchen; thirty seconds of
-          * him explaining it does more for trust than any line item can.
-          * Only a real recording for THIS job — VoiceNote has no stock
-          * variant, on purpose.
-          */}
-        {voiceNote ? (
-          <View style={styles.block}>
-            <VoiceNote
-              kind="JOB_MESSAGE"
-              speakerNameHe={professionalDisplayName}
-              speakerPhotoUri={professionalPhotoUrl}
-              transcriptHe={voiceNote.transcriptHe}
-              seconds={voiceNote.seconds}
-              playing={voiceNote.playing}
-              onTogglePlay={voiceNote.onTogglePlay}
-              tone="light"
-              width={width - spacing.lg * 2}
-            />
-          </View>
-        ) : null}
-
         {/* Provenance, in the smallest type the system has. */}
         <Text style={styles.hashText} numberOfLines={2}>
           גרסה {quote.version} של ההצעה — האישור שלכם הוא לגרסה הזו בלבד. אם המקצוען ישנה משהו, תתבקשו לאשר שוב.
@@ -391,7 +431,9 @@ export function QuoteApprovalBody({
               Above the button, not in a sheet: this is the sentence that
               changes whether somebody presses.
               ---------------------------------------------------------- */}
-          <Text style={styles.holdNote}>{paymentPromiseHe("WAITING_QUOTE_APPROVAL", "customer")}</Text>
+          <Text style={styles.holdNote}>
+            {paidDirectly ? "באפליקציה לא עובר כסף: האישור קובע את המחיר, והתשלום ישירות לבעל המקצוע." : paymentPromiseHe("WAITING_QUOTE_APPROVAL", "customer")}
+          </Text>
           <Pressable
             onPress={() => onApprove?.(quote.versionHash)}
             accessibilityRole="button"
@@ -416,14 +458,21 @@ export function QuoteApprovalBody({
               אישור ההצעה · {formatMoney(money(quote.totalMinorUnits, "ILS"))}
             </Text>
           </Pressable>
-          <View style={styles.secondaryRow}>
-            <Pressable onPress={onAskQuestion} accessibilityRole="button" style={styles.secondary}>
-              <Text style={styles.secondaryLabel}>שאלה לבעל המקצוע</Text>
-            </Pressable>
-            <Pressable onPress={onDecline} accessibilityRole="button" style={styles.secondary}>
-              <Text style={[styles.secondaryLabel, { color: colors.statusDanger }]}>דחייה</Text>
-            </Pressable>
-          </View>
+          {/* Only what the host can do: a button with nothing behind it is a promise. */}
+          {onAskQuestion || onDecline ? (
+            <View style={styles.secondaryRow}>
+              {onAskQuestion ? (
+                <Pressable onPress={onAskQuestion} accessibilityRole="button" style={styles.secondary}>
+                  <Text style={styles.secondaryLabel}>שאלה לבעל המקצוע</Text>
+                </Pressable>
+              ) : null}
+              {onDecline ? (
+                <Pressable onPress={onDecline} accessibilityRole="button" style={styles.secondary}>
+                  <Text style={[styles.secondaryLabel, { color: colors.statusDanger }]}>דחייה</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -431,6 +480,12 @@ export function QuoteApprovalBody({
 }
 
 const styles = StyleSheet.create({
+  sectionTitle: { ...type.bodyStrong, color: colors.textPrimary, textAlign: "right", writingDirection: "rtl", paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  totalBox: { paddingHorizontal: spacing.lg, marginTop: spacing.md },
+  forOther: { marginTop: spacing.md, padding: spacing.md, borderRadius: radii.md, backgroundColor: tint.trust(0.12) },
+  forOtherText: { color: colors.textPrimary, fontSize: scale.meta, fontWeight: "700", textAlign: "right", writingDirection: "rtl", lineHeight: 20 },
+  photoRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: spacing.sm, paddingHorizontal: spacing.lg, marginTop: spacing.md },
+  photo: { width: 96, height: 96, borderRadius: radii.md },
   /*
    * NO PAGE BACKGROUND AND NO CORNERS. This body now renders inside
    * FocusSheet, which owns the surface, the radius and the shadow. A screen
@@ -543,6 +598,8 @@ const styles = StyleSheet.create({
   hashText: {
     ...type.caption,
     flex: 1,
+    // Inside the page's margins, like every other line (it ran to the edge in a sheet).
+    paddingHorizontal: spacing.lg,
     color: colors.textSecondary,
     textAlign: "right",
     writingDirection: "rtl",

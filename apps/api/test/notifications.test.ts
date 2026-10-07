@@ -40,6 +40,13 @@ describe("who hears what (policy)", () => {
     }
   });
 
+  it("the orderer's approval of a quote tells the professional to start; one approved on sending tells nobody", () => {
+    expect(deliveriesFor({ type: "QUOTE_APPROVED", actor: "CUSTOMER" }, ctx)).toEqual([
+      { userId: "pro", email: null, channels: ["inapp", "push"], titleHe: "המחיר אושר", bodyHe: "נזילה · אפשר להתחיל לעבוד", url: "/pro/jobs/j1" },
+    ]);
+    expect(deliveriesFor({ type: "QUOTE_APPROVED", actor: "SYSTEM" }, ctx)).toEqual([]);
+  });
+
   it("a customer's cancellation tells the professional; a job event nobody needs tells nobody", () => {
     expect(deliveriesFor({ type: "JOB_CANCELLED", actor: "CUSTOMER" }, ctx)[0]).toMatchObject({ userId: "pro", titleHe: "הלקוח ביטל את הקריאה" });
     expect(deliveriesFor({ type: "SERVICE_STARTED" }, ctx)).toEqual([]);

@@ -76,6 +76,8 @@ export interface QuoteView {
   notes: string | null;
   createdAt: string;
   lineItems: QuoteItemView[];
+  /** What the professional found, sent with the quote (ordered for someone else): open each at `/api/v1/media/:uploadId`. */
+  media?: Array<{ id: string; kind: "PHOTO" | "VOICE_NOTE" | string; uploadId: string | null }>;
 }
 
 // ---------------------------------------------------------------------
@@ -719,6 +721,15 @@ export interface CustomerJobResponse {
  */
 export interface OnSiteView {
   ordererNameHe: string;
+  /**
+   * The repair's price, by the person who ordered (Dvir, 2026-10-07): WAITING
+   * for their approval, or APPROVED by them; null before any quote. Never
+   * the amount: anyone holding the link can open this page. The person at
+   * home pays the professional directly (D1).
+   */
+  quote: "WAITING" | "APPROVED" | null;
+  /** No money moves through the app (D1): the person at home pays the professional directly. */
+  paidDirectly: boolean;
   onSiteNameHe: string;
   serviceNameHe: string;
   /** For drawing the trade's character when that is the professional's chosen face. */

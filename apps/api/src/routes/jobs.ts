@@ -147,7 +147,8 @@ export default async function jobsRoutes(app: FastifyInstance) {
       review: { select: { overallRating: true } },
       events: { orderBy: { createdAt: "asc" } },
       offers: true,
-      quotes: { include: { lineItems: true } },
+      // What the professional found, with the quote (ordered for someone else): the orderer opens it through /v1/media/:id.
+      quotes: { include: { lineItems: true, media: { select: { id: true, kind: true, uploadId: true }, orderBy: { createdAt: "asc" } } } },
     });
     if (!job) return notFound(reply, "JOB");
 

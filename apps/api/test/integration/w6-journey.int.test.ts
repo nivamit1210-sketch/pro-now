@@ -31,6 +31,17 @@ const as = (j: CookieJar, idem?: string) => ({
   origin: "http://localhost:4000",
   ...(idem ? { "idempotency-key": idem } : {}),
 });
+
+async function upload(jar: CookieJar): Promise<string> {
+  const body = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+  const prepared = await app.inject({ method: "POST", url: "/api/v1/uploads", headers: as(jar), payload: { kind: "PHOTO", mime: "image/jpeg", bytes: body.byteLength } });
+  expect(prepared.statusCode, prepared.body).toBe(201);
+  const { uploadUrl, upload: u } = prepared.json() as { uploadUrl: string; upload: { id: string } };
+  expect((await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": "image/jpeg" }, body })).status).toBe(200);
+  expect((await app.inject({ method: "POST", url: `/api/v1/uploads/${u.id}/complete`, headers: as(jar) })).statusCode).toBe(200);
+  return u.id;
+}
+
 const LAT = 32.0853;
 const LNG = 34.7818;
 
@@ -213,18 +224,57 @@ describe("ordered for someone else: the repair is quoted in the app", () => {
     expect(view).toMatchObject({ status: "DIAGNOSIS", priceModel: "VISIT_QUOTE", onSiteNameHe: "סבא יוסף" });
   });
 
-  it("the quote from the diagnosis is approved on sending while no money moves (D1)", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/v1/jobs/${jobId}/quotes`,
-      headers: as(pro),
-      payload: { lineItems: [{ description: "החלפת סיפון", quantity: 1, unitPriceMinorUnits: 22000, kind: "MATERIALS" }] },
-    });
+  const quoteFor = (payload: object) => app.inject({ method: "POST", url: `/api/v1/jobs/${jobId}/quotes`, headers: as(pro), payload });
+  const line = { description: "החלפת סיפון", quantity: 1, unitPriceMinorUnits: 22000, kind: "MATERIALS" };
+
+  it("a quote for someone else needs a photo of the fault and what was found, in words", async () => {
+    const bare = await quoteFor({ lineItems: [line] });
+    expect(bare.statusCode).toBe(422);
+    expect(bare.json().code).toBe("QUOTE_EVIDENCE_REQUIRED");
+    const photo = await upload(pro);
+    const wordless = await quoteFor({ lineItems: [line], mediaRefs: [photo] });
+    expect(wordless.json().code).toBe("QUOTE_EVIDENCE_REQUIRED");
+    // Someone else's upload is not this professional's evidence.
+    const theirs = await quoteFor({ lineItems: [line], notes: "הסיפון סדוק", mediaRefs: [await upload(customer)] });
+    expect(theirs.json().code).toBe("UPLOADS_NOT_READY");
+    expect(await db.quote.count({ where: { jobId } })).toBe(0);
+  });
+
+  let quote: { id: string; versionHash: string };
+  let photoId: string;
+  let onSitePage: string;
+  it("with them, the quote waits for the person who ordered: no money moves, and nobody at the door decides", async () => {
+    photoId = await upload(pro);
+    const res = await quoteFor({ lineItems: [line], notes: "הסיפון סדוק מתחת לכיור", mediaRefs: [photoId] });
     expect(res.statusCode, res.body).toBe(200);
-    expect(res.json()).toMatchObject({ autoApproved: true, quote: { status: "APPROVED" } });
+    expect(res.json()).not.toHaveProperty("autoApproved");
+    quote = res.json().quote;
+    const mine = (await app.inject({ method: "GET", url: `/api/v1/jobs/${jobId}`, headers: as(customer) })).json();
+    expect(mine.job.status).toBe("WAITING_QUOTE_APPROVAL");
+    // The orderer sees what was found, and may open the photo.
+    const sent = mine.job.quotes.find((q: { id: string }) => q.id === quote.id);
+    expect(sent).toMatchObject({ status: "SENT", notes: "הסיפון סדוק מתחת לכיור", media: [{ kind: "PHOTO", uploadId: photoId }] });
+    expect((await app.inject({ method: "GET", url: `/api/v1/media/${photoId}`, headers: as(customer) })).statusCode).toBe(302);
+    // The professional's view of the customer's attachments is unchanged: the quote's own media stay with the quote.
+    const proView = (await app.inject({ method: "GET", url: `/api/v1/pro/jobs/${jobId}`, headers: as(pro) })).json();
+    expect(proView.media).toEqual([]);
+    // The person at home is told it waits for the orderer, never the amount.
+    const minted = await app.inject({ method: "POST", url: `/api/v1/jobs/${jobId}/on-site-link`, headers: as(customer), payload: {} });
+    onSitePage = `/api/v1/on-site/${minted.json().url.split("/s/")[1]}`;
+    const page = await app.inject({ method: "GET", url: onSitePage });
+    expect(page.json().quote).toBe("WAITING");
+    expect(page.body).not.toMatch(/22000|220|MinorUnits/);
+  });
+
+  it("the orderer approves it once, even with two taps at the same moment", async () => {
+    const approve = (n: number) =>
+      app.inject({ method: "POST", url: `/api/v1/quotes/${quote.id}/approve`, headers: as(customer, `approve-${n}-${Date.now()}`), payload: { quoteVersionHash: quote.versionHash } });
+    const answers = (await Promise.all([approve(1), approve(2)])).map((r) => r.statusCode).sort();
+    expect(answers).toEqual([200, 409]);
     const job = (await app.inject({ method: "GET", url: `/api/v1/jobs/${jobId}`, headers: as(customer) })).json().job;
     expect(job.status).toBe("IN_PROGRESS");
-    expect(job.events.map((e: { type: string; actor: string }) => `${e.type}:${e.actor}`)).toContain("QUOTE_APPROVED:SYSTEM");
+    expect(job.events.filter((e: { type: string }) => e.type === "QUOTE_APPROVED").map((e: { actor: string }) => e.actor)).toEqual(["CUSTOMER"]);
+    expect((await app.inject({ method: "GET", url: onSitePage })).json().quote).toBe("APPROVED");
   });
 
   it("completion closes it at the approved quote", async () => {

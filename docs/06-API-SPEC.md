@@ -40,8 +40,8 @@ POST /v1/offers/:id/skip
 POST /v1/jobs/:id/en-route
 POST /v1/jobs/:id/arrive
 POST /v1/jobs/:id/start
-POST /v1/jobs/:id/quotes              (professional creates/sends a quote)
-POST /v1/quotes/:id/approve           (idempotent)
+POST /v1/jobs/:id/quotes              (professional creates/sends a quote; `mediaRefs` = their own ready uploads)
+POST /v1/quotes/:id/approve           (idempotent; once: a second approval answers 409 QUOTE_NOT_PENDING)
 POST /v1/jobs/:id/complete            (idempotent)
 POST /v1/jobs/:id/reviews
 GET  /v1/pro/status                   (presence, open shift + shiftStartedAt/shiftJobs, active job)
@@ -103,6 +103,17 @@ stores the key + response for replay.
   מתקרבת" in-app and by push. A partial unique index keeps it to one per job
   (`domain/notifications/nearby.ts`). It is what the on-the-way screen's
   "נקרא לכם כשהוא מתקרב" promises.
+  **Ordered for someone else, the price is the orderer's (2026-10-07):**
+  while no money moves (D1) a quote is approved on sending, except on a
+  job with someone at home. There `POST /v1/jobs/:id/quotes` needs a
+  photo of the fault in `mediaRefs` and the finding in `notes` (4+
+  characters), else 422 `QUOTE_EVIDENCE_REQUIRED`, and the job waits in
+  `WAITING_QUOTE_APPROVAL` for the orderer's `POST /v1/quotes/:id/approve`.
+  `GET /v1/jobs/:id` returns each quote's `media` (open at
+  `/v1/media/:uploadId`); the professional hears `QUOTE_APPROVED` ("המחיר
+  אושר"); `GET /v1/on-site/:token` says `quote: WAITING | APPROVED` and
+  `paidDirectly`, never the amount. The person at home pays the approved
+  amount directly.
 - Events are versioned with sequence IDs to support dedupe/resync on
   reconnect. No sensitive broadcast rooms. Push notifications (FCM/APNs)
   are a wake/fallback mechanism only — the socket + a resync-from-server

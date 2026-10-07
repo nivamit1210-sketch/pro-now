@@ -85,7 +85,7 @@ store; a separate worker process.
 ## 5. Decisions (also in `18-ROADMAP.md`)
 | # | Decision | State |
 |---|---|---|
-| D1 | How the professional is paid in the MVP | **Decided 2026-09-29: no money in the app; quote approved on sending** |
+| D1 | How the professional is paid in the MVP | **Decided 2026-09-29: no money in the app; quote approved on sending.** Except ordered for someone else (2026-10-07): the orderer approves it in the app, still paid directly |
 | D2 | AI model/vendor for understanding requests | open — keyword matcher + customer confirmation |
 | D3 | Retention for photos, voice, text, match feedback | **Decided: 4 days** (a setting) |
 | D4 | SMS vendor | open — the orderer shares the link |

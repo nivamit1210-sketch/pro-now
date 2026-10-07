@@ -63,6 +63,10 @@ export function deliveriesFor(event: { type: string; actor?: string; metadata?: 
       return [toCustomer(["inapp", "push"], `${pro} ${f(ctx, "הגיע", "הגיעה")}`, ctx.serviceNameHe)];
     case "QUOTE_SENT":
       return [toCustomer(["inapp", "push"], "התקבלה הצעת מחיר", `${ctx.serviceNameHe} · לצפייה בפרטים`)];
+    case "QUOTE_APPROVED":
+      // Only the orderer's own approval (ordered for someone else); one approved on sending (D1) tells nobody anything new.
+      if (event.actor !== "CUSTOMER" || !ctx.professional) return [];
+      return [{ userId: ctx.professional.userId, email: null, channels: ["inapp", "push"], titleHe: "המחיר אושר", bodyHe: `${ctx.serviceNameHe} · אפשר להתחיל לעבוד`, url: `/pro/jobs/${ctx.jobId}` }];
     case "SERVICE_COMPLETION_REQUESTED":
       return [toCustomer(["inapp", "push", "email"], "העבודה הסתיימה", `${pro} ${f(ctx, "סיים", "סיימה")} · נשאר רק לאשר`)];
     case "JOB_CANCELLED":

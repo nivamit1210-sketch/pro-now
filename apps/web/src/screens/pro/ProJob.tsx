@@ -21,6 +21,7 @@ import { useFrame } from "../../frame";
 import { ErrorScreen, LoadingScreen } from "../../states";
 import { useJobSocket } from "../../useJobSocket";
 import { proJobPlan } from "./jobPlan";
+import { useQuoteEvidence } from "./quoteEvidence";
 import { proStatusKey } from "./ProOnline";
 import { PRO_TAB_BAR_H, ProTabBar } from "./ProTabBar";
 import { SETTLED_STATES, settledView } from "./settled";
@@ -50,6 +51,7 @@ export function ProJob() {
   const [quoting, setQuoting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problemHe, setProblemHe] = useState<string | null>(null);
+  const evidence = useQuoteEvidence();
 
   const key = ["pro-job", id] as const;
   const job = useQuery({ queryKey: key, queryFn: () => api.proJob(id), refetchInterval: 20_000 });
@@ -139,16 +141,22 @@ export function ProJob() {
   }
 
   if (quoting) {
+    const orderer = proJobPlan(j).quoteGoesToHe;
     return (
       <ProQuoteBuilderBody
         serviceNameHe={j.serviceNameHe}
         customerTextHe={j.descriptionHe}
         paidDirectly
+        // Ordered for someone else: a photo of the fault and the finding in words go with the quote, to whoever ordered.
+        forOrderer={orderer && j.onSiteNameHe ? { ordererHe: orderer, onSiteHe: j.onSiteNameHe } : null}
+        onPickPhoto={orderer ? evidence.onPickPhoto : undefined}
+        voiceRecorder={orderer ? evidence.voiceRecorder : null}
         onSend={(draft) =>
           void act(async () => {
             await api.proSendQuote(j.jobId, {
               lineItems: draft.lines.map((l) => ({ description: l.description, quantity: l.quantity, unitPriceMinorUnits: l.unitPriceMinorUnits, kind: l.kind })),
               notes: draft.notesHe || undefined,
+              mediaRefs: await evidence.upload(draft.media),
             });
             setQuoting(false);
           })()

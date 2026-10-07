@@ -103,6 +103,9 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
     /** Who is coming, their ETA and their own price; 409 before anyone is assigned. */
     getJobMatch: (id: string) => request<JobMatchView>("GET", `/jobs/${encodeURIComponent(id)}/match`),
     cancelJob: (id: string) => request<{ ok: true }>("POST", `/jobs/${encodeURIComponent(id)}/cancel`, {}),
+    /** The orderer approves the exact version they saw (ordered for someone else); once, whatever the taps. */
+    approveQuote: (quoteId: string, quoteVersionHash: string, idempotencyKey: string) =>
+      request<{ ok: true }>("POST", `/quotes/${encodeURIComponent(quoteId)}/approve`, { quoteVersionHash }, { "Idempotency-Key": idempotencyKey }),
     confirmCompletion: (id: string) =>
       request<{ ok: true; status: string; receipt?: OutsideAppReceiptView }>(
         "POST",
@@ -172,7 +175,7 @@ export function createApiClient(config: ProNowApiClientConfig = {}) {
     proJob: (jobId: string) => request<ProJobDetailView>("GET", `/pro/jobs/${encodeURIComponent(jobId)}`),
     proStep: (jobId: string, step: "en-route" | "arrive" | "start" | "complete") =>
       request<{ ok: true; status: string }>("POST", `/jobs/${encodeURIComponent(jobId)}/${step}`, {}),
-    proSendQuote: (jobId: string, input: { lineItems: Array<{ description: string; quantity: number; unitPriceMinorUnits: number; kind: string }>; notes?: string }) =>
+    proSendQuote: (jobId: string, input: { lineItems: Array<{ description: string; quantity: number; unitPriceMinorUnits: number; kind: string }>; notes?: string; mediaRefs?: string[] }) =>
       request<{ quote: { id: string }; autoApproved?: boolean }>("POST", `/jobs/${encodeURIComponent(jobId)}/quotes`, input),
     // --- The admin (docs/21 W8). The server enforces ADMIN on every one. ---
     admin: {

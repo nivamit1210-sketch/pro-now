@@ -756,10 +756,16 @@ model JobMedia {
   storageRef String
   uploadId   String?
   upload     Upload?  @relation(fields: [uploadId], references: [id])
+  /// What the professional found, sent with a quote (ordered for someone
+  /// else: a photo of the fault and an optional voice note). Null: the
+  /// customer's own attachment from the request.
+  quoteId    String?
+  quote      Quote?   @relation(fields: [quoteId], references: [id])
   createdAt  DateTime @default(now())
 
   @@index([jobId])
   @@index([uploadId])
+  @@index([quoteId])
   @@map("job_media")
 }
 
@@ -821,6 +827,7 @@ model Quote {
   createdAt       DateTime @default(now())
 
   lineItems QuoteItem[]
+  media     JobMedia[]
 
   @@index([jobId, version])
   @@map("quotes")

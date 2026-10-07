@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { formatMoney, money } from "@pro-now/types";
 
@@ -103,6 +103,8 @@ export interface ProQuoteBuilderBodyProps {
    */
   agreedPriceNoteHe?: string | null;
   usualUpToMinorUnits?: number | null;
+  /** A quote already went to the customer: this one replaces it. */
+  updating?: boolean;
   usualSampleSize?: number;
   /**
    * The lines of the quote being REPLACED, when this is a new version.
@@ -118,16 +120,35 @@ export interface ProQuoteBuilderBodyProps {
   initialNotesHe?: string;
   /** Start with one amount field (priced-before-setting-off work); lines on request. */
   simple?: boolean;
-  onSend?: (draft: { lines: QuoteDraftLine[]; notesHe: string }) => void;
+  onSend?: (draft: { lines: QuoteDraftLine[]; notesHe: string; media?: QuoteMedia }) => void;
   /**
-   * No money moves through the app (docs/21 §5 D1): the quote is approved
-   * when sent and the customer pays the professional directly, so the
-   * screen must not promise that the customer will approve it here.
+   * No money moves through the app (docs/21 §5 D1): the customer pays the
+   * professional directly, so the screen must not promise a payment here.
    */
   paidDirectly?: boolean;
+  /**
+   * ORDERED FOR SOMEONE ELSE (Amit, 2026-10-01; Dvir, 2026-10-07).
+   *
+   * The son abroad ordered for his parents: the parents do not haggle at
+   * the door. So even a repair is quoted here, with a photo of the fault
+   * and what was found in words, and it goes to the person who ordered,
+   * who approves it in the app. The money still moves outside the app
+   * (D1): at home they pay the approved amount directly.
+   */
+  forOrderer?: { ordererHe: string; onSiteHe: string } | null;
+  /** The fault in pictures: the host's camera or picker. Resolves a URI, or null. */
+  onPickPhoto?: () => Promise<string | null>;
+  /** The fault in his own voice: the host's microphone. */
+  voiceRecorder?: { start: () => Promise<boolean>; stop: () => Promise<{ uri: string; seconds: number } | null> } | null;
   onBack?: () => void;
   width?: number;
   height?: number;
+}
+
+/** What he saw, sent with the quote: photos of the fault and a voice note explaining it. */
+export interface QuoteMedia {
+  photos: string[];
+  voice: { uri: string; seconds: number } | null;
 }
 
 /** A blank line, so "add" never produces a row with somebody else's number in it. */
@@ -143,16 +164,41 @@ export function ProQuoteBuilderBody({
   customerTextHe = null,
   agreedPriceNoteHe = null,
   usualUpToMinorUnits = null,
+  updating,
   usualSampleSize = 0,
   initialLines,
   initialNotesHe = "",
   simple = false,
   onSend,
-  paidDirectly = false,
   onBack,
+  paidDirectly = false,
+  forOrderer = null,
+  onPickPhoto,
+  voiceRecorder = null,
   width = 390,
   height = 780,
 }: ProQuoteBuilderBodyProps) {
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [voice, setVoice] = useState<{ uri: string; seconds: number } | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [micBlocked, setMicBlocked] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
+  useEffect(() => {
+    if (!recording) return;
+    setRecSeconds(0);
+    const t = setInterval(() => setRecSeconds((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [recording]);
+  const toggleRecord = async () => {
+    if (!voiceRecorder) return;
+    if (recording) {
+      setRecording(false);
+      const v = await voiceRecorder.stop();
+      if (v) setVoice(v);
+    } else if (await voiceRecorder.start()) { setMicBlocked(false); setRecording(true); }
+    else setMicBlocked(true);
+  };
+  const showEvidence = Boolean(onPickPhoto || voiceRecorder);
   const [lines, setLines] = useState<QuoteDraftLine[]>(
     initialLines && initialLines.length > 0 ? initialLines : [emptyLine(1)]
   );
@@ -199,10 +245,13 @@ export function ProQuoteBuilderBody({
    * refuses an empty line list; this refuses to SEND one, which is the
    * same rule said earlier and more kindly.
    */
-  const sendable =
+  const linesOk =
     lines.length > 0 &&
     lines.every((l) => l.description.trim().length > 0) &&
     lines.some((l) => l.unitPriceMinorUnits > 0);
+  /* Far away, they decide from what he shows and says: a photo and his words are required (Amit, 2026-10-01). */
+  const evidenceMissing = forOrderer ? [photos.length === 0 ? "תמונה של התקלה" : null, notes.trim().length < 4 ? "מה מצאת, במילים" : null].filter((x): x is string => Boolean(x)) : [];
+  const sendable = linesOk && evidenceMissing.length === 0;
 
   const patch = (id: string, next: Partial<QuoteDraftLine>) =>
     setLines((cur) => cur.map((l) => (l.id === id ? { ...l, ...next } : l)));
@@ -211,10 +260,10 @@ export function ProQuoteBuilderBody({
     <View style={[styles.screen, { width, height }]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>
-          {initialLines && initialLines.length > 0 ? "עדכון הצעת מחיר" : "הצעת מחיר"} ·{" "}
+          {(updating ?? Boolean(initialLines && initialLines.length > 0)) ? "עדכון הצעת מחיר" : "הצעת מחיר"} ·{" "}
           {serviceNameHe}
         </Text>
-        {initialLines && initialLines.length > 0 ? (
+        {(updating ?? Boolean(initialLines && initialLines.length > 0)) ? (
           /*
            * Said once, here. A new version supersedes the old one and the
            * customer approves the new hash — so a professional editing
@@ -224,6 +273,15 @@ export function ProQuoteBuilderBody({
           <Text style={styles.replacing}>
             ההצעה הקודמת תתבטל והלקוח יקבל את זו לאישור.
           </Text>
+        ) : null}
+
+        {forOrderer ? (
+          <View style={styles.orderer}>
+            <Text style={styles.ordererTitle}>ההצעה נשלחת ל{forOrderer.ordererHe}</Text>
+            <Text style={styles.ordererSub}>
+              הקריאה הוזמנה על ידי {forOrderer.ordererHe} עבור {forOrderer.onSiteHe}. רק שם מאשרים את המחיר — אצל {forOrderer.onSiteHe} לא סוגרים מחיר. את הסכום שאושר משלמים לך ישירות, כרגיל.
+            </Text>
+          </View>
         ) : null}
 
         {/* What the customer said, so the quote answers it. */}
@@ -462,17 +520,55 @@ export function ProQuoteBuilderBody({
           </>
         )}
 
-        <SectionHeader title="הערה ללקוח" colors={colors} />
+        <SectionHeader title={forOrderer ? "מה מצאת — במילים" : "הערה ללקוח"} colors={colors} />
         <TextInput
           value={notes}
           onChangeText={setNotes}
-          placeholder="למה זה מה שצריך, ומה קורה אם לא — זה מה שמונע ויכוח אחר כך"
-          accessibilityLabel="הערה ללקוח"
+          placeholder={forOrderer ? "מה התקלה, מה צריך לעשות ולמה — כדי שיבינו מרחוק" : "למה זה מה שצריך, ומה קורה אם לא — זה מה שמונע ויכוח אחר כך"}
+          accessibilityLabel={forOrderer ? "מה מצאת, במילים" : "הערה ללקוח"}
           placeholderTextColor={colors.textSecondary}
           multiline
           style={styles.notes}
           textAlign="right"
         />
+
+        {showEvidence ? (
+          <>
+            <SectionHeader title="התקלה בתמונות ובקול" colors={colors} />
+            <Text style={styles.evidenceHint}>{forOrderer ? "כדי שיראו מרחוק בדיוק מה ראית." : "כדי שהלקוח יראה מה ראית."}</Text>
+            <View style={styles.evidenceRow}>
+              {photos.map((u) => (
+                <View key={u} style={styles.evidenceThumb}>
+                  <Image source={{ uri: u }} style={{ width: "100%", height: "100%" }} />
+                  {/* Only the small × removes it — tapping the picture used to delete it (Amit). */}
+                  <Pressable onPress={() => setPhotos((p) => p.filter((x) => x !== u))} accessibilityRole="button" accessibilityLabel="הסרת התמונה" hitSlop={6} style={styles.evidenceXBtn}>
+                    <Text style={styles.evidenceX}>×</Text>
+                  </Pressable>
+                </View>
+              ))}
+              {onPickPhoto && photos.length < 4 ? (
+                <Pressable
+                  onPress={async () => {
+                    const u = await onPickPhoto();
+                    if (u) setPhotos((p) => [...p, u]);
+                  }}
+                  accessibilityRole="button"
+                  style={styles.evidenceAdd}
+                >
+                  <Text style={styles.evidenceAddText}>+ צילום התקלה</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {voiceRecorder ? (
+              <Pressable onPress={toggleRecord} accessibilityRole="button" accessibilityLabel={recording ? "עצירת ההקלטה" : voice ? "הקלטה מחדש" : "הקלטה קולית"} style={[styles.recBtn, recording && styles.recOn]}>
+                <Text style={styles.recText}>
+                  {recording ? `■ עצירה · ${recSeconds} שנ׳` : voice ? `✓ הוקלט · ${voice.seconds} שנ׳ · הקלטה מחדש` : "🎙  הקלטה קולית (לא חובה)"}
+                </Text>
+              </Pressable>
+            ) : null}
+            {micBlocked ? <Text style={styles.evidenceHint}>המיקרופון לא זמין כאן — אפשר להמשיך בלי הקלטה.</Text> : null}
+          </>
+        ) : null}
 
         {usualUpToMinorUnits !== null && usualSampleSize > 0 ? (
           <Text style={styles.usual}>
@@ -516,23 +612,25 @@ export function ProQuoteBuilderBody({
           <Text style={styles.serverNote}>דמי הביקור כלולים בהצעה: אם הלקוח יאשר, זה כל מה שישולם על העבודה.</Text>
         ) : null}
         <Text style={styles.serverNote}>
-          {paidDirectly
-            ? "הלקוח יראה בדיוק את ההצעה הזו. באפליקציה לא עובר כסף — הסכום משולם לך ישירות."
-            : "הלקוח יראה ויאשר בדיוק את ההצעה הזו."}
+          {forOrderer
+            ? `ההצעה הזו בדיוק מגיעה ל${forOrderer.ordererHe} לאישור.`
+            : paidDirectly
+              ? "הלקוח יראה בדיוק את ההצעה הזו. באפליקציה לא עובר כסף — הסכום משולם לך ישירות."
+              : "הלקוח יראה ויאשר בדיוק את ההצעה הזו."}
         </Text>
 
         <Pressable
-          onPress={() => (sendable ? onSend?.({ lines, notesHe: notes.trim() }) : undefined)}
-          disabled={!sendable}
+          onPress={() => (sendable && !recording ? onSend?.({ lines, notesHe: notes.trim(), media: { photos, voice } }) : undefined)}
+          disabled={!sendable || recording}
           accessibilityRole="button"
-          accessibilityLabel="שליחת הצעת המחיר ללקוח"
-          style={({ pressed }) => [styles.send, !sendable && { opacity: 0.4 }, pressed && { opacity: 0.9 }]}
+          accessibilityLabel={forOrderer ? `שליחת הצעת המחיר ל${forOrderer.ordererHe}` : "שליחת הצעת המחיר ללקוח"}
+          style={({ pressed }) => [styles.send, (!sendable || recording) && { opacity: 0.4 }, pressed && { opacity: 0.9 }]}
         >
-          <Text style={styles.sendText}>שליחה ללקוח</Text>
+          <Text style={styles.sendText}>{forOrderer ? `שליחה ל${forOrderer.ordererHe} לאישור` : "שליחה ללקוח"}</Text>
         </Pressable>
 
         {!sendable ? (
-          <Text style={styles.why}>{detailed ? "צריך תיאור לכל שורה, ולפחות שורה אחת עם מחיר." : "רושמים מחיר — ואז שולחים."}</Text>
+          <Text style={styles.why}>{!linesOk ? (detailed ? "צריך תיאור לכל שורה, ולפחות שורה אחת עם מחיר." : "רושמים מחיר — ואז שולחים.") : `חסר: ${evidenceMissing.join(" ו")}`}</Text>
         ) : null}
 
         {onBack ? (
@@ -546,6 +644,19 @@ export function ProQuoteBuilderBody({
 }
 
 const styles = StyleSheet.create({
+  orderer: { marginHorizontal: spacing.lg, marginTop: spacing.md, padding: spacing.md, borderRadius: radii.md, backgroundColor: "rgba(124,92,255,0.16)", borderWidth: 1, borderColor: "rgba(124,92,255,0.5)" },
+  ordererTitle: { color: colors.textPrimary, fontSize: scale.body, fontWeight: "900", textAlign: "right", writingDirection: "rtl" },
+  ordererSub: { color: colors.textSecondary, fontSize: scale.meta, textAlign: "right", writingDirection: "rtl", marginTop: 4, lineHeight: 20 },
+  evidenceHint: { color: colors.textSecondary, fontSize: scale.meta, textAlign: "right", writingDirection: "rtl", marginHorizontal: spacing.lg, marginTop: -4 },
+  evidenceRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: spacing.sm, marginHorizontal: spacing.lg, marginTop: spacing.sm },
+  evidenceThumb: { width: 72, height: 72, borderRadius: radii.md, overflow: "hidden" },
+  evidenceXBtn: { position: "absolute", top: 4, left: 4, width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
+  evidenceX: { color: "#fff", fontSize: scale.meta, fontWeight: "900", lineHeight: 16 },
+  evidenceAdd: { minWidth: 120, height: 72, borderRadius: radii.md, borderWidth: 1.5, borderStyle: "dashed", borderColor: "rgba(247,243,250,0.35)", alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.md },
+  evidenceAddText: { color: colors.textPrimary, fontSize: scale.meta, fontWeight: "800" },
+  recBtn: { marginHorizontal: spacing.lg, marginTop: spacing.sm, minHeight: 48, borderRadius: radii.md, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.md },
+  recOn: { backgroundColor: "rgba(255,92,56,0.25)" },
+  recText: { color: colors.textPrimary, fontSize: scale.meta, fontWeight: "800", writingDirection: "rtl" },
   simpleRow: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 4, marginBottom: 8, paddingVertical: 10, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.05)", borderWidth: 1, borderColor: "rgba(47,191,138,0.45)" },
   simpleCurrency: { color: "rgba(247,243,250,0.7)", fontSize: scale.section, fontWeight: "800" },
   simpleAmount: { minWidth: 140, color: "#FFFFFF", fontSize: scale.hero, fontWeight: "900", paddingVertical: 4 },

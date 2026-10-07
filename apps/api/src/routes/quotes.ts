@@ -21,6 +21,29 @@ export default async function quotesRoutes(app: FastifyInstance) {
 
     assertTransition(job.status, "WAITING_QUOTE_APPROVAL", "PROFESSIONAL");
 
+    /*
+     * ORDERED FOR SOMEONE ELSE (docs/18, 2026-10-01; Dvir, 2026-10-07):
+     * the person who ordered decides from afar, so the quote shows what was
+     * found: at least one photo of the fault and the finding in words; a
+     * voice note may join them. Only the professional's own ready uploads.
+     */
+    const forSomeoneElse = Boolean(job.onSiteName);
+    const mediaIds = [...new Set(body.mediaRefs)];
+    const uploads = mediaIds.length
+      ? await app.prisma.upload.findMany({
+          where: { id: { in: mediaIds }, ownerId: req.user!.userId, status: "READY", kind: { in: ["PHOTO", "VOICE_NOTE"] } },
+        })
+      : [];
+    if (uploads.length !== mediaIds.length) {
+      return reply.status(422).send({ code: "UPLOADS_NOT_READY", message: "Every attachment must be a ready upload of this professional" });
+    }
+    if (forSomeoneElse && (!uploads.some((u) => u.kind === "PHOTO") || (body.notes ?? "").trim().length < 4)) {
+      return reply.status(422).send({
+        code: "QUOTE_EVIDENCE_REQUIRED",
+        message: "A quote for someone else needs a photo of the fault and what was found, in words",
+      });
+    }
+
     const latestVersion = await app.prisma.quote.count({ where: { jobId } });
     // Total and hash are built together so the hash can never bind a total
     // different from the one stored — see domain/pricing/quote-hash.ts.
@@ -44,6 +67,7 @@ export default async function quotesRoutes(app: FastifyInstance) {
             kind: li.kind,
           })),
         },
+        media: { create: uploads.map((u) => ({ jobId, kind: u.kind, storageRef: u.storageKey, uploadId: u.id })) },
       },
       include: { lineItems: true },
     });
@@ -56,10 +80,14 @@ export default async function quotesRoutes(app: FastifyInstance) {
     /*
      * APPROVED ON SENDING, WHILE NO MONEY MOVES (docs/21 §5 D1). The quote
      * is the record of what was agreed at the door; the customer pays the
-     * professional directly. "Only the orderer approves" returns with
-     * in-app payments, and this route then waits for them again.
+     * professional directly.
+     *
+     * Except when it was ordered for someone else: nobody at the door
+     * decides, so the quote waits for the person who ordered to approve it
+     * (Dvir, 2026-10-07). Still no money in the app: the person at home
+     * pays the professional directly, the amount that was approved.
      */
-    if (app.config.IN_APP_PAYMENTS === "off") {
+    if (app.config.IN_APP_PAYMENTS === "off" && !forSomeoneElse) {
       await approveQuote(app, { quoteId: quote.id, jobId, jobStatus: "WAITING_QUOTE_APPROVAL", actor: "SYSTEM", metadata: { auto: true, rule: "D1" } });
       return reply.send({ quote: { ...quote, status: "APPROVED" }, autoApproved: true });
     }
@@ -89,13 +117,14 @@ export default async function quotesRoutes(app: FastifyInstance) {
       return reply.status(409).send({ code: "QUOTE_NOT_PENDING", message: `Quote status is ${quote.status}` });
     }
 
-    await approveQuote(app, {
+    const approved = await approveQuote(app, {
       quoteId,
       jobId: quote.jobId,
       jobStatus: quote.job.status,
       actor: "CUSTOMER",
       metadata: { idempotencyKey },
     });
+    if (!approved) return reply.status(409).send({ code: "QUOTE_NOT_PENDING", message: "The quote was already decided" });
     return reply.send({ ok: true });
   });
 }
@@ -103,11 +132,14 @@ export default async function quotesRoutes(app: FastifyInstance) {
 async function approveQuote(
   app: FastifyInstance,
   a: { quoteId: string; jobId: string; jobStatus: JobState; actor: "CUSTOMER" | "SYSTEM"; metadata: Record<string, unknown> }
-) {
+): Promise<boolean> {
   assertTransition(a.jobStatus, "IN_PROGRESS", a.actor);
-  await app.prisma.quote.update({ where: { id: a.quoteId }, data: { status: "APPROVED" } });
+  // Once: of two approvals at the same moment, one finds the quote still SENT.
+  const { count } = await app.prisma.quote.updateMany({ where: { id: a.quoteId, status: "SENT" }, data: { status: "APPROVED" } });
+  if (count === 0) return false;
   await app.prisma.job.update({ where: { id: a.jobId }, data: { status: "IN_PROGRESS", approvedQuoteId: a.quoteId } });
   await app.prisma.jobEvent.create({
     data: { jobId: a.jobId, type: "QUOTE_APPROVED", actor: a.actor, metadata: { quoteId: a.quoteId, ...a.metadata } },
   });
+  return true;
 }

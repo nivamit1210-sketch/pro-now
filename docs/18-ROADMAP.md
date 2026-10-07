@@ -158,6 +158,13 @@ when the orderer approves ("עמית אישר ושילם … אין צורך ל�
 Ordering for yourself is unchanged. Real SMS needs the notification vendor
 (TBD, `NotificationProvider`).
 
+**In the product (2026-10-07, Dvir: still no payment integration):** all of
+it but the money. The quote needs a photo and the finding (a voice note
+optional), only the orderer approves it in the app, and the professional
+starts after that. The person at home's link page says the price was
+approved by the orderer and is paid directly, never the amount. Paying in
+the app waits for the payment provider (Open decisions).
+
 ### BUILT 2026-10-01 (demo, Amit) — identity check before work: ID card, face, match
 
 Amit, after joining Lime: the join photographs the ID card, shows it being

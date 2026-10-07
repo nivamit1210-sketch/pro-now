@@ -85,6 +85,8 @@ describe("ordering for someone else", () => {
     expect(res.json()).toEqual({
       ordererNameHe: "יוסי",
       onSiteNameHe: "סבא יוסף",
+      quote: null,
+      paidDirectly: true,
       serviceNameHe: expect.any(String),
       serviceCode: expect.any(String),
       stage: "searching",

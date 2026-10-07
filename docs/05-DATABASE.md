@@ -125,7 +125,11 @@ silent failure.
 A sent `Quote` is immutable; edits create a new version. The customer
 approves an exact quote version/hash; `Job.approved_quote_id` records it.
 Line items are re-validated server-side; the client never has total
-authority.
+authority. A job ordered for someone else attaches what the professional
+found to the quote: `job_media.quote_id` (a photo of the fault is required,
+a voice note optional). Customer attachments keep `quote_id` null. Approval
+is one `SENT → APPROVED` conditional update, so two approvals at once
+approve once.
 
 ## Hourly timer
 Server stores `service_started_at`, `accumulated_seconds`, and allowed

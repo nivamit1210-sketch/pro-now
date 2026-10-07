@@ -79,6 +79,8 @@ export default async function onSiteRoutes(app: FastifyInstance) {
       // The orderer's first name only: the person at home knows who they are.
       ordererNameHe: (job.customer.fullName ?? job.customer.user.name ?? "").trim().split(/\s+/)[0] || "מי שהזמין",
       onSiteNameHe: job.onSiteName,
+      quote: job.status === "WAITING_QUOTE_APPROVAL" ? "WAITING" : job.approvedQuoteId ? "APPROVED" : null,
+      paidDirectly: app.config.IN_APP_PAYMENTS === "off",
       serviceNameHe: jobServiceNameHe(job),
       serviceCode: job.service.code,
       stage: STAGE[job.status] ?? "coming",

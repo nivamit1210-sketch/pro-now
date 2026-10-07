@@ -47,6 +47,14 @@ export interface OnSiteBodyProps {
   /** The code the professional says at the door. */
   codeHe: string | null;
   vehicleHe?: string | null;
+  /** The repair's price, by the person who ordered: waiting for them, or approved by them. Never the amount. */
+  priceState?: "WAITING" | "APPROVED" | null;
+  /**
+   * No money moves through the app (docs/21 §5 D1): the person at home pays
+   * the professional the approved amount directly. Without it the page
+   * says the orderer pays, which only in-app payments make true.
+   */
+  paidDirectly?: boolean;
   onCallOrderer?: () => void;
   onCallPro?: () => void;
   onHelp?: () => void;
@@ -68,6 +76,8 @@ export function OnSiteBody({
   minutesAway = null,
   codeHe,
   vehicleHe = null,
+  priceState = null,
+  paidDirectly = false,
   onCallOrderer,
   onCallPro,
   onHelp,
@@ -96,8 +106,12 @@ export function OnSiteBody({
       : stage === "at_door"
         ? `לפני שפותחים — בקשו ${g("ממנו", "ממנה")} את הקוד`
         : stage === "inside"
-          ? `${ordererNameHe} רואה הכול ומאשר את המחיר מהטלפון שלו`
-          : `${ordererNameHe} אישר ושילם. אין צורך לעשות דבר.`;
+          ? priceState === "APPROVED"
+            ? `${ordererNameHe} אישר את המחיר — ${proFirst} ${g("מתחיל", "מתחילה")} לעבוד`
+            : `${ordererNameHe} רואה הכול ומאשר את המחיר מהטלפון שלו`
+          : paidDirectly
+            ? `את הסכום ש${ordererNameHe} אישר משלמים ל${proFirst} ישירות.`
+            : `${ordererNameHe} אישר ושילם. אין צורך לעשות דבר.`;
 
   return (
     <View style={[styles.screen, { width, height }]}>
@@ -149,7 +163,9 @@ export function OnSiteBody({
 
         <View style={styles.noteBox}>
           <Text style={styles.note}>
-            אין צורך לשלם כלום ולא לאשר כלום. המחיר, האישור והתשלום — אצל {ordererNameHe}.
+            {paidDirectly
+              ? `לא מתמקחים ולא מאשרים כלום: את המחיר מאשר ${ordererNameHe}. את הסכום שאושר משלמים ל${proFirst} ישירות, כרגיל.`
+              : `אין צורך לשלם כלום ולא לאשר כלום. המחיר, האישור והתשלום — אצל ${ordererNameHe}.`}
           </Text>
         </View>
 

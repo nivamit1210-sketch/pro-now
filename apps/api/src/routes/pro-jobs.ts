@@ -42,7 +42,8 @@ export default async function proJobsRoutes(app: FastifyInstance) {
         service: true,
         address: true,
         customer: { include: { user: { select: { name: true } } } },
-        media: { include: { upload: true }, orderBy: { createdAt: "asc" } },
+        // The customer's own attachments; what the professional sent with a quote stays with the quote.
+        media: { where: { quoteId: null }, include: { upload: true }, orderBy: { createdAt: "asc" } },
         offers: { where: { status: "ACCEPTED" }, orderBy: { offeredAt: "desc" }, take: 1 },
         quotes: { orderBy: { version: "desc" }, include: { lineItems: true } },
       },

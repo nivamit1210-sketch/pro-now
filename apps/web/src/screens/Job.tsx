@@ -8,6 +8,9 @@ import {
   ArrivalVerifyBody,
   JobClosedBody,
   JobCompleteBody,
+  FocusSheet,
+  QuoteApprovalBody,
+  type QuotePriceContext,
   priceExplainer,
   OrdersDock,
   PrimaryAction,
@@ -35,6 +38,7 @@ import { SafetySheet } from "./SafetySheet";
 import { liveEtaClock, matchRevealState, onTheWayState, revealFigure } from "./matchReveal";
 import { severalOrders } from "../orders";
 import { useOrders } from "../useOrders";
+import { useVoicePlayer } from "../useVoicePlayer";
 
 /**
  * One job, from "looking for a professional" to the review (docs/21 W6).
@@ -118,6 +122,8 @@ function JobScreen() {
   // On the way: the street is the screen (the demo's), and the tracking card
   // is its "פרטי ההזמנה" — open while this is true.
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // The quote sheet, put aside; it opens again the next time the job does.
+  const [quoteDismissed, setQuoteDismissed] = useState(false);
   const addresses = useQuery({ queryKey: ["addresses"], queryFn: api.getAddresses });
   const me = useMe();
   // Into the street and back to this job; without a figure, the picker first (the demo's strollDoor).
@@ -135,6 +141,9 @@ function JobScreen() {
   useJobSocket(id, () => {
     void queryClient.invalidateQueries({ queryKey: jobKey(id) });
   }, Boolean(status) && status !== "CLOSED" && status !== "CANCELLED");
+  // A voice note sent with a quote waiting for this orderer (ordered for someone else).
+  const voiceOfQuote = job.data?.job.quotes?.find((q) => q.status === "SENT")?.media?.find((x) => x.kind === "VOICE_NOTE" && x.uploadId);
+  const quoteVoice = useVoicePlayer(voiceOfQuote ? `/api/v1/media/${encodeURIComponent(voiceOfQuote.uploadId!)}` : null);
 
   if (job.isPending) return <LoadingScreen />;
   if (job.isError) {
@@ -464,6 +473,43 @@ function JobScreen() {
     </Pressable>
   ) : null;
 
+  /*
+   * ORDERED FOR SOMEONE ELSE: THE PRICE IS DECIDED HERE (the demo's quote
+   * sheet over the visit; Dvir, 2026-10-07). What the professional found,
+   * in photos and words, then what it includes, then the sum; approving
+   * lets them start. No money in the app (D1): at home they pay the
+   * approved amount directly. Declining is the job's own cancellation.
+   */
+  const pendingQuote = data.status === "WAITING_QUOTE_APPROVAL" && onSite ? (data.quotes?.find((q) => q.status === "SENT") ?? null) : null;
+  const quoteSheet =
+    pendingQuote && !quoteDismissed ? (
+      <FocusSheet
+        visible
+        heightFraction={0.94}
+        titleHe={`${professional.displayName} ${professionalFemale ? "שלחה" : "שלח"} הצעת מחיר`}
+        onDismiss={() => setQuoteDismissed(true)}
+        width={width}
+        height={height}
+      >
+        <QuoteApprovalBody
+          quote={pendingQuote}
+          includesVisitFee={data.service.priceModel === "VISIT_QUOTE"}
+          serviceNameHe={serviceNameHe}
+          professionalDisplayName={professional.displayName}
+          professionalPhotoUrl={professional.profilePhotoUrl}
+          priceContext={job.data.priceContext as QuotePriceContext | null}
+          photos={(pendingQuote.media ?? []).filter((x) => x.kind === "PHOTO" && x.uploadId).map((x) => `/api/v1/media/${encodeURIComponent(x.uploadId!)}`)}
+          forOnSiteHe={onSite!.name}
+          voiceNote={quoteVoice}
+          paidDirectly={!job.data.paymentsInApp}
+          onApprove={(hash) => void act(() => api.approveQuote(pendingQuote.id, hash, `approve-${pendingQuote.id}-${hash}`))()}
+          onDecline={cancel}
+          width={width}
+          height={Math.round(height * 0.94) - 56}
+        />
+      </FocusSheet>
+    ) : null;
+
   return withError(
     <TrackingBody
       backdrop={<JobWorldBackdrop status={data.status} match={m} departmentCode={departmentCode} serviceId={pilotId} fallback={<CityHero />} />}
@@ -490,7 +536,10 @@ function JobScreen() {
       width={width}
       height={height}
     />,
-    strollPill
+    <>
+      {strollPill}
+      {quoteSheet}
+    </>
   );
 }
 

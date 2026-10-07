@@ -140,6 +140,8 @@ export const quoteLineItemSchema = z.object({
 export const createQuoteSchema = z.object({
   lineItems: z.array(quoteLineItemSchema).min(1),
   notes: z.string().max(1000).optional(),
+  /** What the professional found: their own ready uploads (photos, a voice note). Required for a job ordered for someone else. */
+  mediaRefs: z.array(z.string().min(1)).max(6).default([]),
 });
 export type CreateQuoteInput = z.infer<typeof createQuoteSchema>;
 

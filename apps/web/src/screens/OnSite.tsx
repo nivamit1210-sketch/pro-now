@@ -13,7 +13,9 @@ import { ErrorScreen, LoadingScreen } from "../states";
  * The page the person at home opens (docs/21 W6): no account, no app. Who
  * is coming, what was checked, when, and the one thing to do — ask for the
  * code before opening the door. It has no address and no price, and
- * nothing on it approves or pays; that belongs to whoever ordered.
+ * nothing on it approves; that belongs to whoever ordered. It says whether
+ * they approved the price, and that the approved amount is paid to the
+ * professional directly (no money in the app, D1).
  *
  * It has no socket (nobody is signed in), so it re-reads every 15 s.
  */
@@ -61,6 +63,8 @@ export function OnSite() {
       proPhotoUri={v.professional.portraitKind === "CHARACTER" ? tradeCharacterFor(v.serviceCode) : v.professional.photoUrl}
       verifiedHe={verifiedHe}
       stage={v.stage}
+      priceState={v.quote}
+      paidDirectly={v.paidDirectly}
       minutesAway={v.etaSeconds === null ? null : Math.max(1, Math.round(v.etaSeconds / 60))}
       codeHe={v.doorCode}
       // The car to look out for, as in the demo (audit v2 #8a); the server sends it only while the visit is on.
